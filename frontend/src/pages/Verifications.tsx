@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
-import { verificationApi, accountApi } from '@/services/api'
+import { verificationApi, accountApi, companyApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification } from '@/types'
 
 export default function Verifications() {
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
-  const [companyId] = useState(1) // Single company mode for MVP
+  const [companyId, setCompanyId] = useState<number | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
 
@@ -17,9 +17,18 @@ export default function Verifications() {
 
   const loadData = async () => {
     try {
+      // Get the first company (single-company mode)
+      const companiesRes = await companyApi.list()
+      if (companiesRes.data.length === 0) {
+        setLoading(false)
+        return
+      }
+      const company = companiesRes.data[0]
+      setCompanyId(company.id)
+
       const [verificationsRes, accountsRes] = await Promise.all([
-        verificationApi.list(companyId),
-        accountApi.list(companyId),
+        verificationApi.list(company.id),
+        accountApi.list(company.id),
       ])
       setVerifications(verificationsRes.data)
       setAccounts(accountsRes.data)
@@ -162,7 +171,7 @@ export default function Verifications() {
       )}
 
       {/* Create/Edit Modal */}
-      {showCreateModal && (
+      {showCreateModal && companyId && (
         <CreateVerificationModal
           companyId={companyId}
           accounts={accounts}

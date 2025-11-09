@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
-import { invoiceApi, customerApi, supplierInvoiceApi, supplierApi } from '@/services/api'
+import { invoiceApi, companyApi, supplierInvoiceApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem } from '@/types'
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoiceListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [companyId] = useState(1) // Single company mode for MVP
+  const [companyId, setCompanyId] = useState<number | null>(null)
 
   useEffect(() => {
     loadInvoices()
@@ -15,9 +15,18 @@ export default function Invoices() {
 
   const loadInvoices = async () => {
     try {
+      // Get the first company (single-company mode)
+      const companiesRes = await companyApi.list()
+      if (companiesRes.data.length === 0) {
+        setLoading(false)
+        return
+      }
+      const company = companiesRes.data[0]
+      setCompanyId(company.id)
+
       const [outgoingRes, incomingRes] = await Promise.all([
-        invoiceApi.list(companyId),
-        supplierInvoiceApi.list(companyId),
+        invoiceApi.list(company.id),
+        supplierInvoiceApi.list(company.id),
       ])
       setInvoices(outgoingRes.data)
       setSupplierInvoices(incomingRes.data)
