@@ -45,7 +45,7 @@ class Invoice(Base):
     net_amount = Column(Numeric(15, 2), nullable=False)  # Excluding VAT
 
     # Payment
-    status = Column(SQLEnum(InvoiceStatus), default=InvoiceStatus.DRAFT, nullable=False, index=True)
+    status = Column(SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]), default=InvoiceStatus.DRAFT, nullable=False, index=True)
     paid_amount = Column(Numeric(15, 2), default=0, nullable=False)
 
     # Notes
@@ -135,7 +135,7 @@ class SupplierInvoice(Base):
     net_amount = Column(Numeric(15, 2), nullable=False)
 
     # Payment
-    status = Column(SQLEnum(InvoiceStatus), default=InvoiceStatus.DRAFT, nullable=False, index=True)
+    status = Column(SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]), default=InvoiceStatus.DRAFT, nullable=False, index=True)
     paid_amount = Column(Numeric(15, 2), default=0, nullable=False)
 
     # OCR/Reference

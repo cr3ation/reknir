@@ -29,7 +29,7 @@ class Account(Base):
     description = Column(String, nullable=True)  # Optional detailed description
 
     # Account classification
-    account_type = Column(SQLEnum(AccountType), nullable=False)
+    account_type = Column(SQLEnum(AccountType, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     # Balance tracking
     opening_balance = Column(Numeric(15, 2), default=0, nullable=False)  # Ingående balans (IB)

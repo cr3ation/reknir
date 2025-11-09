@@ -15,16 +15,16 @@ down_revision = '001'
 branch_labels = None
 depends_on = None
 
+# Create the enum type instance that will be reused
+invoice_status_enum = postgresql.ENUM(
+    'draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled',
+    name='invoicestatus',
+    create_type=False
+)
 
 def upgrade() -> None:
-    # Create invoice status enum (if it doesn't exist)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE invoicestatus AS ENUM ('draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
+    # Create invoice status enum type
+    invoice_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Create customers table
     op.create_table(
@@ -86,7 +86,7 @@ def upgrade() -> None:
         sa.Column('total_amount', sa.Numeric(precision=15, scale=2), nullable=False),
         sa.Column('vat_amount', sa.Numeric(precision=15, scale=2), nullable=False),
         sa.Column('net_amount', sa.Numeric(precision=15, scale=2), nullable=False),
-        sa.Column('status', sa.Enum('draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled', name='invoicestatus', create_type=False), nullable=False, server_default='draft'),
+        sa.Column('status', invoice_status_enum, nullable=False, server_default='draft'),
         sa.Column('paid_amount', sa.Numeric(precision=15, scale=2), nullable=False, server_default='0'),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('message', sa.Text(), nullable=True),
@@ -141,7 +141,7 @@ def upgrade() -> None:
         sa.Column('total_amount', sa.Numeric(precision=15, scale=2), nullable=False),
         sa.Column('vat_amount', sa.Numeric(precision=15, scale=2), nullable=False),
         sa.Column('net_amount', sa.Numeric(precision=15, scale=2), nullable=False),
-        sa.Column('status', sa.Enum('draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled', name='invoicestatus', create_type=False), nullable=False, server_default='draft'),
+        sa.Column('status', invoice_status_enum, nullable=False, server_default='draft'),
         sa.Column('paid_amount', sa.Numeric(precision=15, scale=2), nullable=False, server_default='0'),
         sa.Column('ocr_number', sa.String(), nullable=True),
         sa.Column('reference', sa.String(), nullable=True),
@@ -201,4 +201,4 @@ def downgrade() -> None:
     op.drop_table('suppliers')
     op.drop_index(op.f('ix_customers_id'), table_name='customers')
     op.drop_table('customers')
-    op.execute('DROP TYPE invoicestatus')
+    invoice_status_enum.drop(op.get_bind(), checkfirst=True)

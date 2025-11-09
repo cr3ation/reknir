@@ -24,7 +24,7 @@ class Company(Base):
 
     # Accounting settings
     accounting_basis = Column(
-        SQLEnum(AccountingBasis),
+        SQLEnum(AccountingBasis, values_callable=lambda x: [e.value for e in x]),
         default=AccountingBasis.ACCRUAL,
         nullable=False
     )
