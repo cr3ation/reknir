@@ -19,7 +19,7 @@ function App() {
 
   const checkSetupStatus = async () => {
     try {
-      const response = await api.get('/companies/')
+      const response = await api.get('/api/companies/')
       setSetupComplete(response.data.length > 0)
     } catch (error) {
       console.error('Error checking setup status:', error)
