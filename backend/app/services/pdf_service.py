@@ -3,6 +3,7 @@ from weasyprint import HTML
 from pathlib import Path
 import os
 from typing import BinaryIO
+from fastapi import HTTPException
 from app.models.invoice import Invoice
 from app.models.customer import Customer
 from app.models.company import Company
@@ -20,33 +21,46 @@ def generate_invoice_pdf(invoice: Invoice, customer: Customer, company: Company)
     Returns:
         bytes: PDF file content
     """
-    try:
-        # Get template directory
-        template_dir = Path(__file__).parent.parent / "templates"
+    import traceback
 
-        # Setup Jinja2 environment
+    try:
+        # Test with simple HTML first
+        simple_html = "<html><body><h1>Test PDF</h1></body></html>"
+
+        print("Attempting to create simple PDF...")
+        test_pdf = HTML(string=simple_html)
+        print("HTML object created successfully")
+
+        test_bytes = test_pdf.write_pdf()
+        print(f"Simple PDF generated: {len(test_bytes)} bytes")
+
+        # Now try with template
+        template_dir = Path(__file__).parent.parent / "templates"
+        print(f"Template directory: {template_dir}")
+
         env = Environment(loader=FileSystemLoader(str(template_dir)))
         template = env.get_template("invoice_template.html")
+        print("Template loaded successfully")
 
-        # Render HTML with data
         html_content = template.render(
             invoice=invoice,
             customer=customer,
             company=company
         )
+        print(f"Template rendered: {len(html_content)} chars")
 
-        # Generate PDF from HTML
-        # Note: WeasyPrint HTML class expects string parameter
-        html_obj = HTML(string=html_content)
-        pdf_bytes = html_obj.write_pdf()
+        # Generate PDF
+        pdf_bytes = HTML(string=html_content).write_pdf()
+        print(f"Invoice PDF generated: {len(pdf_bytes)} bytes")
 
         return pdf_bytes
     except Exception as e:
-        # Log the full error for debugging
-        import traceback
         print(f"PDF generation error: {str(e)}")
         print(traceback.format_exc())
-        raise RuntimeError(f"Failed to generate PDF: {str(e)}") from e
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF generation failed: {str(e)}"
+        )
 
 
 def save_invoice_pdf(invoice: Invoice, customer: Customer, company: Company, output_dir: str = "/tmp") -> str:
