@@ -55,6 +55,32 @@ export default function Invoices() {
     window.open(url, '_blank')
   }
 
+  const sendInvoice = async (invoiceId: number) => {
+    if (!confirm('Skicka denna faktura? En verifikation kommer att skapas.')) return
+
+    try {
+      await invoiceApi.send(invoiceId)
+      await loadInvoices()
+      alert('Fakturan har skickats och bokförts!')
+    } catch (error) {
+      console.error('Failed to send invoice:', error)
+      alert('Kunde inte skicka fakturan')
+    }
+  }
+
+  const registerSupplierInvoice = async (invoiceId: number) => {
+    if (!confirm('Bokför denna leverantörsfaktura? En verifikation kommer att skapas.')) return
+
+    try {
+      await supplierInvoiceApi.register(invoiceId)
+      await loadInvoices()
+      alert('Leverantörsfakturan har bokförts!')
+    } catch (error) {
+      console.error('Failed to register supplier invoice:', error)
+      alert('Kunde inte bokföra leverantörsfakturan')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const colors = {
       draft: 'bg-gray-200 text-gray-800',
@@ -150,14 +176,25 @@ export default function Invoices() {
                       })}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => downloadInvoicePdf(invoice.id, invoice.invoice_number.toString(), invoice.invoice_series)}
-                        className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
-                        title="Ladda ner PDF"
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        PDF
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => sendInvoice(invoice.id)}
+                            className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            title="Skicka och bokför faktura"
+                          >
+                            Skicka
+                          </button>
+                        )}
+                        <button
+                          onClick={() => downloadInvoicePdf(invoice.id, invoice.invoice_number.toString(), invoice.invoice_series)}
+                          className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                          title="Ladda ner PDF"
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          PDF
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -207,6 +244,9 @@ export default function Invoices() {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Betalt
                   </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    Åtgärder
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -229,6 +269,17 @@ export default function Invoices() {
                         style: 'currency',
                         currency: 'SEK',
                       })}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {invoice.status === 'draft' && (
+                        <button
+                          onClick={() => registerSupplierInvoice(invoice.id)}
+                          className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                          title="Bokför faktura"
+                        >
+                          Bokför
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
