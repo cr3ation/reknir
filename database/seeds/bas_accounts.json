@@ -1,0 +1,248 @@
+[
+  {
+    "account_number": 1010,
+    "name": "Utvecklingsutgifter",
+    "account_type": "asset",
+    "description": "Balanserade utgifter för utveckling"
+  },
+  {
+    "account_number": 1110,
+    "name": "Byggnader",
+    "account_type": "asset",
+    "description": "Byggnader och mark"
+  },
+  {
+    "account_number": 1220,
+    "name": "Inventarier och verktyg",
+    "account_type": "asset",
+    "description": "Maskiner och inventarier"
+  },
+  {
+    "account_number": 1510,
+    "name": "Kundfordringar",
+    "account_type": "asset",
+    "description": "Fordringar på kunder"
+  },
+  {
+    "account_number": 1630,
+    "name": "Skattekonto",
+    "account_type": "asset",
+    "description": "Fordran/skuld hos Skatteverket"
+  },
+  {
+    "account_number": 1910,
+    "name": "Kassa",
+    "account_type": "asset",
+    "description": "Kassa"
+  },
+  {
+    "account_number": 1930,
+    "name": "Företagskonto/checked",
+    "account_type": "asset",
+    "description": "Företagskonto i bank"
+  },
+  {
+    "account_number": 2010,
+    "name": "Aktiekapital",
+    "account_type": "equity_liability",
+    "description": "Eget kapital - aktier"
+  },
+  {
+    "account_number": 2091,
+    "name": "Balanserad vinst eller förlust",
+    "account_type": "equity_liability",
+    "description": "Ackumulerat resultat"
+  },
+  {
+    "account_number": 2099,
+    "name": "Årets resultat",
+    "account_type": "equity_liability",
+    "description": "Innevarande års resultat"
+  },
+  {
+    "account_number": 2330,
+    "name": "Checkräkningskredit",
+    "account_type": "equity_liability",
+    "description": "Checkkredit hos bank"
+  },
+  {
+    "account_number": 2440,
+    "name": "Leverantörsskulder",
+    "account_type": "equity_liability",
+    "description": "Skulder till leverantörer"
+  },
+  {
+    "account_number": 2510,
+    "name": "Skatteskulder",
+    "account_type": "equity_liability",
+    "description": "Skuld för skatter"
+  },
+  {
+    "account_number": 2611,
+    "name": "Utgående moms, 25%",
+    "account_type": "equity_liability",
+    "description": "Utgående moms 25%"
+  },
+  {
+    "account_number": 2612,
+    "name": "Utgående moms, 12%",
+    "account_type": "equity_liability",
+    "description": "Utgående moms 12%"
+  },
+  {
+    "account_number": 2613,
+    "name": "Utgående moms, 6%",
+    "account_type": "equity_liability",
+    "description": "Utgående moms 6%"
+  },
+  {
+    "account_number": 2640,
+    "name": "Ingående moms",
+    "account_type": "equity_liability",
+    "description": "Avdragsgill moms på inköp"
+  },
+  {
+    "account_number": 2710,
+    "name": "Personalskatt",
+    "account_type": "equity_liability",
+    "description": "Innehållen skatt på löner"
+  },
+  {
+    "account_number": 2730,
+    "name": "Avräkning för socialavgifter",
+    "account_type": "equity_liability",
+    "description": "Arbetsgivaravgifter"
+  },
+  {
+    "account_number": 3000,
+    "name": "Försäljning varor och tjänster, 25% moms",
+    "account_type": "revenue",
+    "description": "Intäkter med full moms"
+  },
+  {
+    "account_number": 3001,
+    "name": "Försäljning varor och tjänster, 12% moms",
+    "account_type": "revenue",
+    "description": "Intäkter med reducerad moms 12%"
+  },
+  {
+    "account_number": 3002,
+    "name": "Försäljning varor och tjänster, 6% moms",
+    "account_type": "revenue",
+    "description": "Intäkter med reducerad moms 6%"
+  },
+  {
+    "account_number": 3100,
+    "name": "Försäljning tjänster utanför Sverige, momsfritt",
+    "account_type": "revenue",
+    "description": "Export av tjänster"
+  },
+  {
+    "account_number": 4000,
+    "name": "Inköp varor och material",
+    "account_type": "cost_goods",
+    "description": "Kostnader för inköp av varor"
+  },
+  {
+    "account_number": 5010,
+    "name": "Lokalhyra",
+    "account_type": "cost_local",
+    "description": "Hyra för lokaler"
+  },
+  {
+    "account_number": 5410,
+    "name": "Förbrukningsinventarier",
+    "account_type": "cost_local",
+    "description": "Mindre inventarier"
+  },
+  {
+    "account_number": 5460,
+    "name": "Förvaltningskostnader",
+    "account_type": "cost_local",
+    "description": "Kostnader för fastighetsförvaltning"
+  },
+  {
+    "account_number": 6000,
+    "name": "Upphandlade tjänster",
+    "account_type": "cost_other",
+    "description": "Köp av externa tjänster"
+  },
+  {
+    "account_number": 6071,
+    "name": "Konsulttjänster",
+    "account_type": "cost_other",
+    "description": "Konsultkostnader"
+  },
+  {
+    "account_number": 6100,
+    "name": "Kontorsmaterial",
+    "account_type": "cost_other",
+    "description": "Kontorsmaterial och förbrukning"
+  },
+  {
+    "account_number": 6210,
+    "name": "Telekommunikation",
+    "account_type": "cost_other",
+    "description": "Telefon, internet, etc"
+  },
+  {
+    "account_number": 6540,
+    "name": "IT-tjänster",
+    "account_type": "cost_other",
+    "description": "IT-drift och tjänster"
+  },
+  {
+    "account_number": 6570,
+    "name": "Bankkostnader",
+    "account_type": "cost_other",
+    "description": "Avgifter till banker"
+  },
+  {
+    "account_number": 6970,
+    "name": "Tidningar, facklitteratur",
+    "account_type": "cost_other",
+    "description": "Litteratur och prenumerationer"
+  },
+  {
+    "account_number": 7010,
+    "name": "Löner till kollektivanställda",
+    "account_type": "cost_personnel",
+    "description": "Lönekostnader personal"
+  },
+  {
+    "account_number": 7210,
+    "name": "Löner till tjänstemän",
+    "account_type": "cost_personnel",
+    "description": "Lönekostnader tjänstemän"
+  },
+  {
+    "account_number": 7510,
+    "name": "Arbetsgivaravgifter",
+    "account_type": "cost_personnel",
+    "description": "Lagstadgade arbetsgivaravgifter"
+  },
+  {
+    "account_number": 7610,
+    "name": "Utbildning",
+    "account_type": "cost_personnel",
+    "description": "Personalutbildning"
+  },
+  {
+    "account_number": 8300,
+    "name": "Ränteintäkter",
+    "account_type": "cost_misc",
+    "description": "Intäkter från räntor (negativ kostnad)"
+  },
+  {
+    "account_number": 8400,
+    "name": "Räntekostnader",
+    "account_type": "cost_misc",
+    "description": "Kostnader för räntor"
+  },
+  {
+    "account_number": 8910,
+    "name": "Periodiseringsfond",
+    "account_type": "cost_misc",
+    "description": "Avsättning till periodiseringsfond"
+  }
+]

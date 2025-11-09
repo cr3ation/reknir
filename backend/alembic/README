@@ -1,0 +1,10 @@
+Generic single-database configuration for Alembic with Swedish bookkeeping models.
+
+To create a new migration:
+    alembic revision --autogenerate -m "description"
+
+To apply migrations:
+    alembic upgrade head
+
+To rollback one migration:
+    alembic downgrade -1
