@@ -11,6 +11,8 @@ export default function Customers() {
   const [companyId, setCompanyId] = useState<number | null>(null)
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false)
   const [showCreateSupplierModal, setShowCreateSupplierModal] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers'>('customers')
 
   useEffect(() => {
@@ -166,13 +168,22 @@ export default function Customers() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => deleteCustomer(customer.id)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Ta bort"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => setEditingCustomer(customer)}
+                            className="text-indigo-600 hover:text-indigo-800 p-1"
+                            title="Redigera"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteCustomer(customer.id)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Ta bort"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -247,13 +258,22 @@ export default function Customers() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => deleteSupplier(supplier.id)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Ta bort"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => setEditingSupplier(supplier)}
+                            className="text-indigo-600 hover:text-indigo-800 p-1"
+                            title="Redigera"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteSupplier(supplier.id)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Ta bort"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -264,25 +284,35 @@ export default function Customers() {
         </div>
       )}
 
-      {/* Create Customer Modal */}
-      {showCreateCustomerModal && companyId && (
+      {/* Create/Edit Customer Modal */}
+      {(showCreateCustomerModal || editingCustomer) && companyId && (
         <CreateCustomerModal
           companyId={companyId}
-          onClose={() => setShowCreateCustomerModal(false)}
+          customer={editingCustomer}
+          onClose={() => {
+            setShowCreateCustomerModal(false)
+            setEditingCustomer(null)
+          }}
           onSuccess={() => {
             setShowCreateCustomerModal(false)
+            setEditingCustomer(null)
             loadData()
           }}
         />
       )}
 
-      {/* Create Supplier Modal */}
-      {showCreateSupplierModal && companyId && (
+      {/* Create/Edit Supplier Modal */}
+      {(showCreateSupplierModal || editingSupplier) && companyId && (
         <CreateSupplierModal
           companyId={companyId}
-          onClose={() => setShowCreateSupplierModal(false)}
+          supplier={editingSupplier}
+          onClose={() => {
+            setShowCreateSupplierModal(false)
+            setEditingSupplier(null)
+          }}
           onSuccess={() => {
             setShowCreateSupplierModal(false)
+            setEditingSupplier(null)
             loadData()
           }}
         />
@@ -291,28 +321,31 @@ export default function Customers() {
   )
 }
 
-// Create Customer Modal
+// Create/Edit Customer Modal
 interface CreateCustomerModalProps {
   companyId: number
+  customer?: Customer | null
   onClose: () => void
   onSuccess: () => void
 }
 
-function CreateCustomerModal({ companyId, onClose, onSuccess }: CreateCustomerModalProps) {
+function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: CreateCustomerModalProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    org_number: '',
-    contact_person: '',
-    email: '',
-    phone: '',
-    address: '',
-    postal_code: '',
-    city: '',
-    country: 'Sverige',
-    payment_terms_days: 30,
+    name: customer?.name || '',
+    org_number: customer?.org_number || '',
+    contact_person: customer?.contact_person || '',
+    email: customer?.email || '',
+    phone: customer?.phone || '',
+    address: customer?.address || '',
+    postal_code: customer?.postal_code || '',
+    city: customer?.city || '',
+    country: customer?.country || 'Sverige',
+    payment_terms_days: customer?.payment_terms_days || 30,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isEditing = !!customer
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -320,14 +353,30 @@ function CreateCustomerModal({ companyId, onClose, onSuccess }: CreateCustomerMo
     setError(null)
 
     try {
-      await customerApi.create({
-        company_id: companyId,
-        ...formData,
-      })
+      // Convert empty strings to undefined for optional fields
+      const payload: any = {
+        name: formData.name,
+        org_number: formData.org_number || undefined,
+        contact_person: formData.contact_person || undefined,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        address: formData.address || undefined,
+        postal_code: formData.postal_code || undefined,
+        city: formData.city || undefined,
+        country: formData.country,
+        payment_terms_days: formData.payment_terms_days,
+      }
+
+      if (isEditing) {
+        await customerApi.update(customer!.id, payload)
+      } else {
+        payload.company_id = companyId
+        await customerApi.create(payload)
+      }
       onSuccess()
     } catch (err: any) {
-      console.error('Failed to create customer:', err)
-      setError(getErrorMessage(err, 'Kunde inte skapa kund'))
+      console.error(`Failed to ${isEditing ? 'update' : 'create'} customer:`, err)
+      setError(getErrorMessage(err, `Kunde inte ${isEditing ? 'uppdatera' : 'skapa'} kund`))
     } finally {
       setSaving(false)
     }
@@ -337,7 +386,7 @@ function CreateCustomerModal({ companyId, onClose, onSuccess }: CreateCustomerMo
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Ny kund</h2>
+          <h2 className="text-2xl font-bold">{isEditing ? 'Redigera kund' : 'Ny kund'}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X className="w-6 h-6" />
           </button>
@@ -489,7 +538,7 @@ function CreateCustomerModal({ companyId, onClose, onSuccess }: CreateCustomerMo
               disabled={saving}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
             >
-              {saving ? 'Skapar...' : 'Skapa kund'}
+              {saving ? (isEditing ? 'Uppdaterar...' : 'Skapar...') : (isEditing ? 'Uppdatera' : 'Skapa kund')}
             </button>
           </div>
         </form>
@@ -498,30 +547,33 @@ function CreateCustomerModal({ companyId, onClose, onSuccess }: CreateCustomerMo
   )
 }
 
-// Create Supplier Modal
+// Create/Edit Supplier Modal
 interface CreateSupplierModalProps {
   companyId: number
+  supplier?: Supplier | null
   onClose: () => void
   onSuccess: () => void
 }
 
-function CreateSupplierModal({ companyId, onClose, onSuccess }: CreateSupplierModalProps) {
+function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: CreateSupplierModalProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    org_number: '',
-    contact_person: '',
-    email: '',
-    phone: '',
-    address: '',
-    postal_code: '',
-    city: '',
-    country: 'Sverige',
-    payment_terms_days: 30,
-    bank_account: '',
-    bank_name: '',
+    name: supplier?.name || '',
+    org_number: supplier?.org_number || '',
+    contact_person: supplier?.contact_person || '',
+    email: supplier?.email || '',
+    phone: supplier?.phone || '',
+    address: supplier?.address || '',
+    postal_code: supplier?.postal_code || '',
+    city: supplier?.city || '',
+    country: supplier?.country || 'Sverige',
+    payment_terms_days: supplier?.payment_terms_days || 30,
+    bank_account: supplier?.bank_account || '',
+    bank_name: supplier?.bank_name || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isEditing = !!supplier
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -529,14 +581,32 @@ function CreateSupplierModal({ companyId, onClose, onSuccess }: CreateSupplierMo
     setError(null)
 
     try {
-      await supplierApi.create({
-        company_id: companyId,
-        ...formData,
-      })
+      // Convert empty strings to undefined for optional fields
+      const payload: any = {
+        name: formData.name,
+        org_number: formData.org_number || undefined,
+        contact_person: formData.contact_person || undefined,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        address: formData.address || undefined,
+        postal_code: formData.postal_code || undefined,
+        city: formData.city || undefined,
+        country: formData.country,
+        payment_terms_days: formData.payment_terms_days,
+        bank_account: formData.bank_account || undefined,
+        bank_name: formData.bank_name || undefined,
+      }
+
+      if (isEditing) {
+        await supplierApi.update(supplier!.id, payload)
+      } else {
+        payload.company_id = companyId
+        await supplierApi.create(payload)
+      }
       onSuccess()
     } catch (err: any) {
-      console.error('Failed to create supplier:', err)
-      setError(getErrorMessage(err, 'Kunde inte skapa leverantör'))
+      console.error(`Failed to ${isEditing ? 'update' : 'create'} supplier:`, err)
+      setError(getErrorMessage(err, `Kunde inte ${isEditing ? 'uppdatera' : 'skapa'} leverantör`))
     } finally {
       setSaving(false)
     }
@@ -546,7 +616,7 @@ function CreateSupplierModal({ companyId, onClose, onSuccess }: CreateSupplierMo
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Ny leverantör</h2>
+          <h2 className="text-2xl font-bold">{isEditing ? 'Redigera leverantör' : 'Ny leverantör'}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X className="w-6 h-6" />
           </button>
@@ -722,7 +792,7 @@ function CreateSupplierModal({ companyId, onClose, onSuccess }: CreateSupplierMo
               disabled={saving}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
             >
-              {saving ? 'Skapar...' : 'Skapa leverantör'}
+              {saving ? (isEditing ? 'Uppdaterar...' : 'Skapar...') : (isEditing ? 'Uppdatera' : 'Skapa leverantör')}
             </button>
           </div>
         </form>
