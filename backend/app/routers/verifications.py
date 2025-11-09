@@ -7,6 +7,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models.verification import Verification, TransactionLine
 from app.models.account import Account
+from app.models.invoice import Invoice, SupplierInvoice
 from app.schemas.verification import (
     VerificationCreate,
     VerificationResponse,
@@ -218,6 +219,33 @@ def delete_verification(verification_id: int, db: Session = Depends(get_db)):
         account = db.query(Account).filter(Account.id == line.account_id).first()
         net_change = line.debit - line.credit
         account.current_balance -= net_change
+
+    # Remove foreign key references from invoices before deletion
+    # Customer invoices - reset to DRAFT if this was the invoice verification
+    from app.models.invoice import InvoiceStatus
+    invoices_to_reset = db.query(Invoice).filter(Invoice.invoice_verification_id == verification_id).all()
+    for inv in invoices_to_reset:
+        inv.invoice_verification_id = None
+        inv.status = InvoiceStatus.DRAFT
+        inv.sent_at = None
+
+    # Customer invoices - remove payment verification reference
+    db.query(Invoice).filter(Invoice.payment_verification_id == verification_id).update(
+        {"payment_verification_id": None}
+    )
+
+    # Supplier invoices - reset to DRAFT if this was the invoice verification
+    supplier_invoices_to_reset = db.query(SupplierInvoice).filter(
+        SupplierInvoice.invoice_verification_id == verification_id
+    ).all()
+    for inv in supplier_invoices_to_reset:
+        inv.invoice_verification_id = None
+        inv.status = InvoiceStatus.DRAFT
+
+    # Supplier invoices - remove payment verification reference
+    db.query(SupplierInvoice).filter(SupplierInvoice.payment_verification_id == verification_id).update(
+        {"payment_verification_id": None}
+    )
 
     # Delete verification (cascade will delete lines)
     db.delete(verification)
