@@ -1,12 +1,53 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
 import { Home, FileText, PieChart, Settings, Receipt } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
 import Invoices from './pages/Invoices'
 import Reports from './pages/Reports'
 import SettingsPage from './pages/Settings'
+import Setup from './pages/Setup'
+import api from './services/api'
 
 function App() {
+  const [setupComplete, setSetupComplete] = useState<boolean | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    checkSetupStatus()
+  }, [])
+
+  const checkSetupStatus = async () => {
+    try {
+      const response = await api.get('/companies/')
+      setSetupComplete(response.data.length > 0)
+    } catch (error) {
+      console.error('Error checking setup status:', error)
+      setSetupComplete(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    )
+  }
+
+  if (!setupComplete) {
+    return (
+      <Router>
+        <Routes>
+          <Route path="/setup" element={<Setup />} />
+          <Route path="*" element={<Navigate to="/setup" replace />} />
+        </Routes>
+      </Router>
+    )
+  }
+
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">

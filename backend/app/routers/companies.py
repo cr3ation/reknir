@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+import json
+import os
 from app.database import get_db
 from app.models.company import Company
+from app.models.account import Account
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
 
 router = APIRouter()
@@ -81,3 +84,55 @@ def delete_company(company_id: int, db: Session = Depends(get_db)):
     db.delete(company)
     db.commit()
     return None
+
+
+@router.post("/{company_id}/seed-bas", status_code=status.HTTP_200_OK)
+def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
+    """Seed BAS 2024 kontoplan for a company"""
+    # Check if company exists
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company {company_id} not found"
+        )
+
+    # Check if accounts already exist
+    existing_count = db.query(Account).filter(Account.company_id == company_id).count()
+    if existing_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Company already has {existing_count} accounts. Delete them first if you want to re-seed."
+        )
+
+    # Load BAS accounts from JSON
+    bas_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'bas_2024.json')
+    if not os.path.exists(bas_file):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="BAS 2024 data file not found"
+        )
+
+    with open(bas_file, 'r', encoding='utf-8') as f:
+        bas_data = json.load(f)
+
+    # Create accounts
+    created_accounts = []
+    for account_data in bas_data['accounts']:
+        account = Account(
+            company_id=company_id,
+            account_number=account_data['account_number'],
+            name=account_data['name'],
+            account_type=account_data['account_type'],
+            description=account_data.get('description'),
+            active=True
+        )
+        db.add(account)
+        created_accounts.append(account)
+
+    db.commit()
+
+    return {
+        "message": f"Successfully seeded {len(created_accounts)} BAS 2024 accounts",
+        "count": len(created_accounts)
+    }
