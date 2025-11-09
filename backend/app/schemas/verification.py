@@ -34,6 +34,9 @@ class TransactionLineResponse(TransactionLineBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class VerificationBase(BaseModel):
@@ -84,6 +87,9 @@ class VerificationResponse(VerificationBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class VerificationListItem(BaseModel):
@@ -98,3 +104,6 @@ class VerificationListItem(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }

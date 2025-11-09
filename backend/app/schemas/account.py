@@ -37,6 +37,9 @@ class AccountResponse(AccountBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class AccountBalance(BaseModel):
@@ -50,3 +53,6 @@ class AccountBalance(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }

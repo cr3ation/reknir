@@ -30,6 +30,9 @@ class InvoiceLineResponse(InvoiceLineBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class InvoiceBase(BaseModel):
@@ -90,6 +93,9 @@ class InvoiceResponse(InvoiceBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class InvoiceListItem(BaseModel):
@@ -107,6 +113,9 @@ class InvoiceListItem(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class SupplierInvoiceLineBase(BaseModel):
@@ -133,6 +142,9 @@ class SupplierInvoiceLineResponse(SupplierInvoiceLineBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class SupplierInvoiceBase(BaseModel):
@@ -190,6 +202,9 @@ class SupplierInvoiceResponse(SupplierInvoiceBase):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class SupplierInvoiceListItem(BaseModel):
@@ -207,6 +222,9 @@ class SupplierInvoiceListItem(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            Decimal: float
+        }
 
 
 class MarkPaidRequest(BaseModel):
