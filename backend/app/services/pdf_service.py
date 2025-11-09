@@ -20,25 +20,33 @@ def generate_invoice_pdf(invoice: Invoice, customer: Customer, company: Company)
     Returns:
         bytes: PDF file content
     """
+    try:
+        # Get template directory
+        template_dir = Path(__file__).parent.parent / "templates"
 
-    # Get template directory
-    template_dir = Path(__file__).parent.parent / "templates"
+        # Setup Jinja2 environment
+        env = Environment(loader=FileSystemLoader(str(template_dir)))
+        template = env.get_template("invoice_template.html")
 
-    # Setup Jinja2 environment
-    env = Environment(loader=FileSystemLoader(str(template_dir)))
-    template = env.get_template("invoice_template.html")
+        # Render HTML with data
+        html_content = template.render(
+            invoice=invoice,
+            customer=customer,
+            company=company
+        )
 
-    # Render HTML with data
-    html_content = template.render(
-        invoice=invoice,
-        customer=customer,
-        company=company
-    )
+        # Generate PDF from HTML
+        # Note: WeasyPrint HTML class expects string parameter
+        html_obj = HTML(string=html_content)
+        pdf_bytes = html_obj.write_pdf()
 
-    # Generate PDF from HTML
-    pdf_bytes = HTML(string=html_content).write_pdf()
-
-    return pdf_bytes
+        return pdf_bytes
+    except Exception as e:
+        # Log the full error for debugging
+        import traceback
+        print(f"PDF generation error: {str(e)}")
+        print(traceback.format_exc())
+        raise RuntimeError(f"Failed to generate PDF: {str(e)}") from e
 
 
 def save_invoice_pdf(invoice: Invoice, customer: Customer, company: Company, output_dir: str = "/tmp") -> str:
