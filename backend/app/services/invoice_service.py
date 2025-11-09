@@ -59,20 +59,20 @@ def create_invoice_verification(
     vat_by_rate = {}  # Track VAT amounts by rate
 
     for line in invoice.invoice_lines:
-        # Revenue account - use line's account or default to 3011 based on VAT rate
+        # Revenue account - use line's account or default based on VAT rate
         if line.account_id:
             account_id = line.account_id
         else:
             # Default revenue account based on VAT rate
             vat_rate = float(line.vat_rate)
             if vat_rate == 25.0:
-                default_account_number = 3011  # Försäljning tjänster inom Sverige, 25% moms
+                default_account_number = 3001  # Försäljning varor och tjänster inom Sverige, 25% moms
             elif vat_rate == 12.0:
-                default_account_number = 3012  # Försäljning tjänster inom Sverige, 12% moms
+                default_account_number = 3002  # Försäljning varor och tjänster inom Sverige, 12% moms
             elif vat_rate == 6.0:
-                default_account_number = 3013  # Försäljning tjänster inom Sverige, 6% moms
+                default_account_number = 3003  # Försäljning varor och tjänster inom Sverige, 6% moms
             else:
-                default_account_number = 3106  # Försäljning tjänster utanför EU, 0% moms
+                default_account_number = 3106  # Försäljning tjänster utanför Sverige, omsättning utanför EU
 
             default_account = db.query(Account).filter(
                 Account.company_id == invoice.company_id,
