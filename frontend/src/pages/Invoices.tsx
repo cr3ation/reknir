@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Download } from 'lucide-react'
 import { invoiceApi, customerApi, supplierInvoiceApi, supplierApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem } from '@/types'
 
@@ -25,6 +26,12 @@ export default function Invoices() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const downloadInvoicePdf = (invoiceId: number, invoiceNumber: string, series: string) => {
+    // Open PDF download in new tab
+    const url = `http://localhost:8000/api/invoices/${invoiceId}/pdf`
+    window.open(url, '_blank')
   }
 
   const getStatusBadge = (status: string) => {
@@ -89,6 +96,9 @@ export default function Invoices() {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Betalt
                   </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    Åtgärder
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -111,6 +121,16 @@ export default function Invoices() {
                         style: 'currency',
                         currency: 'SEK',
                       })}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => downloadInvoicePdf(invoice.id, invoice.invoice_number.toString(), invoice.invoice_series)}
+                        className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                        title="Ladda ner PDF"
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        PDF
+                      </button>
                     </td>
                   </tr>
                 ))}

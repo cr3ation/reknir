@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Faktura {{ invoice.invoice_series }}{{ invoice.invoice_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #333;
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .company-info {
+            font-size: 18pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .invoice-title {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #0066cc;
+            margin: 30px 0 20px 0;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+
+        .info-box {
+            border: 1px solid #ddd;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 12pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .info-box p {
+            margin: 3px 0;
+        }
+
+        .invoice-details {
+            margin: 20px 0;
+        }
+
+        .invoice-details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .invoice-details td {
+            padding: 5px 0;
+        }
+
+        .invoice-details td:first-child {
+            font-weight: bold;
+            width: 150px;
+        }
+
+        table.items {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        table.items thead {
+            background: #0066cc;
+            color: white;
+        }
+
+        table.items th,
+        table.items td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table.items th {
+            font-weight: bold;
+        }
+
+        table.items td.number {
+            text-align: right;
+        }
+
+        table.items tfoot td {
+            font-weight: bold;
+            border-top: 2px solid #333;
+            border-bottom: none;
+        }
+
+        .totals {
+            margin-left: auto;
+            width: 300px;
+            margin-top: 20px;
+        }
+
+        .totals table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .totals td {
+            padding: 8px 0;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .totals td:last-child {
+            text-align: right;
+            font-weight: bold;
+        }
+
+        .totals .total-row {
+            font-size: 14pt;
+            color: #0066cc;
+            border-top: 2px solid #333;
+            border-bottom: 3px double #333;
+        }
+
+        .payment-info {
+            margin-top: 40px;
+            padding: 20px;
+            background: #f0f8ff;
+            border-left: 4px solid #0066cc;
+        }
+
+        .payment-info h3 {
+            margin: 0 0 10px 0;
+            color: #0066cc;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 9pt;
+            color: #666;
+            text-align: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 3px;
+            font-size: 10pt;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status-paid {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-sent {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-draft {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="company-info">{{ company.name }}</div>
+        <div>Org.nr: {{ company.org_number }}</div>
+    </div>
+
+    <!-- Invoice Title -->
+    <div class="invoice-title">
+        FAKTURA
+        {% if invoice.status == 'paid' %}
+        <span class="status-badge status-paid">BETALD</span>
+        {% elif invoice.status == 'sent' %}
+        <span class="status-badge status-sent">SKICKAD</span>
+        {% elif invoice.status == 'draft' %}
+        <span class="status-badge status-draft">UTKAST</span>
+        {% endif %}
+    </div>
+
+    <!-- Info Grid -->
+    <div class="info-grid">
+        <!-- Customer Info -->
+        <div class="info-box">
+            <h3>Kund</h3>
+            <p><strong>{{ customer.name }}</strong></p>
+            {% if customer.org_number %}
+            <p>Org.nr: {{ customer.org_number }}</p>
+            {% endif %}
+            {% if customer.address %}
+            <p>{{ customer.address }}</p>
+            {% endif %}
+            {% if customer.postal_code or customer.city %}
+            <p>{{ customer.postal_code }} {{ customer.city }}</p>
+            {% endif %}
+            {% if customer.contact_person %}
+            <p>Kontakt: {{ customer.contact_person }}</p>
+            {% endif %}
+            {% if customer.email %}
+            <p>{{ customer.email }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Invoice Details -->
+        <div class="info-box">
+            <h3>Fakturadetaljer</h3>
+            <table class="invoice-details">
+                <tr>
+                    <td>Fakturanummer:</td>
+                    <td>{{ invoice.invoice_series }}{{ invoice.invoice_number }}</td>
+                </tr>
+                <tr>
+                    <td>Fakturadatum:</td>
+                    <td>{{ invoice.invoice_date }}</td>
+                </tr>
+                <tr>
+                    <td>Förfallodatum:</td>
+                    <td>{{ invoice.due_date }}</td>
+                </tr>
+                {% if invoice.our_reference %}
+                <tr>
+                    <td>Vår referens:</td>
+                    <td>{{ invoice.our_reference }}</td>
+                </tr>
+                {% endif %}
+                {% if invoice.reference %}
+                <tr>
+                    <td>Er referens:</td>
+                    <td>{{ invoice.reference }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td>Betalningsvillkor:</td>
+                    <td>{{ customer.payment_terms_days }} dagar netto</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Message to customer -->
+    {% if invoice.message %}
+    <div style="margin: 20px 0; padding: 15px; background: #fffbf0; border-left: 3px solid #ffcc00;">
+        {{ invoice.message }}
+    </div>
+    {% endif %}
+
+    <!-- Invoice Items -->
+    <table class="items">
+        <thead>
+            <tr>
+                <th>Beskrivning</th>
+                <th style="text-align: center;">Antal</th>
+                <th style="text-align: center;">Enhet</th>
+                <th class="number">À-pris</th>
+                <th class="number">Moms</th>
+                <th class="number">Belopp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in invoice.invoice_lines %}
+            <tr>
+                <td>{{ line.description }}</td>
+                <td style="text-align: center;">{{ "%.2f"|format(line.quantity) }}</td>
+                <td style="text-align: center;">{{ line.unit }}</td>
+                <td class="number">{{ "%.2f"|format(line.unit_price) }} kr</td>
+                <td class="number">{{ "%.0f"|format(line.vat_rate) }}%</td>
+                <td class="number">{{ "%.2f"|format(line.net_amount) }} kr</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="totals">
+        <table>
+            <tr>
+                <td>Netto:</td>
+                <td>{{ "%.2f"|format(invoice.net_amount) }} kr</td>
+            </tr>
+            <tr>
+                <td>Moms:</td>
+                <td>{{ "%.2f"|format(invoice.vat_amount) }} kr</td>
+            </tr>
+            <tr class="total-row">
+                <td>ATT BETALA:</td>
+                <td>{{ "%.2f"|format(invoice.total_amount) }} kr</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Payment Info -->
+    <div class="payment-info">
+        <h3>Betalningsinformation</h3>
+        <p><strong>Belopp att betala: {{ "%.2f"|format(invoice.total_amount) }} kr</strong></p>
+        <p>Förfallodatum: {{ invoice.due_date }}</p>
+        {% if invoice.status == 'paid' %}
+        <p style="color: green;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
+        {% else %}
+        <p>Vänligen ange fakturanummer {{ invoice.invoice_series }}{{ invoice.invoice_number }} som referens vid betalning.</p>
+        {% endif %}
+    </div>
+
+    <!-- Notes -->
+    {% if invoice.notes %}
+    <div style="margin-top: 30px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd;">
+        <h4 style="margin: 0 0 10px 0;">Anteckningar</h4>
+        <p style="margin: 0;">{{ invoice.notes }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>{{ company.name }} | Org.nr: {{ company.org_number }}</p>
+        <p>Denna faktura är skapad elektroniskt och är giltig utan signatur</p>
+    </div>
+</body>
+</html>

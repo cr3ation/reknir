@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -7,6 +8,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models.invoice import Invoice, InvoiceLine, InvoiceStatus
 from app.models.customer import Customer
+from app.models.company import Company
 from app.schemas.invoice import (
     InvoiceCreate,
     InvoiceResponse,
@@ -15,6 +17,7 @@ from app.schemas.invoice import (
     MarkPaidRequest
 )
 from app.services.invoice_service import create_invoice_verification, create_invoice_payment_verification
+from app.services.pdf_service import generate_invoice_pdf
 
 router = APIRouter()
 
@@ -255,6 +258,50 @@ def mark_invoice_paid(invoice_id: int, payment: MarkPaidRequest, db: Session = D
     db.refresh(invoice)
 
     return invoice
+
+
+@router.get("/{invoice_id}/pdf")
+def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
+    """
+    Download invoice as PDF
+
+    Returns a professionally formatted Swedish invoice PDF
+    """
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invoice {invoice_id} not found"
+        )
+
+    # Get customer and company
+    customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
+    company = db.query(Company).filter(Company.id == invoice.company_id).first()
+
+    if not customer or not company:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load invoice data"
+        )
+
+    # Generate PDF
+    try:
+        pdf_bytes = generate_invoice_pdf(invoice, customer, company)
+
+        # Return PDF as download
+        filename = f"faktura_{invoice.invoice_series}{invoice.invoice_number}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF: {str(e)}"
+        )
 
 
 @router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
