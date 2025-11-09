@@ -59,18 +59,41 @@ def create_invoice_verification(
     vat_by_rate = {}  # Track VAT amounts by rate
 
     for line in invoice.invoice_lines:
-        # Revenue account
+        # Revenue account - use line's account or default to 3011 based on VAT rate
         if line.account_id:
-            account = db.query(Account).filter(Account.id == line.account_id).first()
-            credit_line = TransactionLine(
-                verification_id=verification.id,
-                account_id=line.account_id,
-                debit=Decimal("0"),
-                credit=line.net_amount,
-                description=line.description
-            )
-            db.add(credit_line)
-            account.current_balance -= line.net_amount  # Revenue decreases account balance
+            account_id = line.account_id
+        else:
+            # Default revenue account based on VAT rate
+            vat_rate = float(line.vat_rate)
+            if vat_rate == 25.0:
+                default_account_number = 3011  # Försäljning tjänster inom Sverige, 25% moms
+            elif vat_rate == 12.0:
+                default_account_number = 3012  # Försäljning tjänster inom Sverige, 12% moms
+            elif vat_rate == 6.0:
+                default_account_number = 3013  # Försäljning tjänster inom Sverige, 6% moms
+            else:
+                default_account_number = 3106  # Försäljning tjänster utanför EU, 0% moms
+
+            default_account = db.query(Account).filter(
+                Account.company_id == invoice.company_id,
+                Account.account_number == default_account_number
+            ).first()
+
+            if not default_account:
+                raise ValueError(f"Default revenue account {default_account_number} not found. Please import BAS accounts first.")
+
+            account_id = default_account.id
+
+        account = db.query(Account).filter(Account.id == account_id).first()
+        credit_line = TransactionLine(
+            verification_id=verification.id,
+            account_id=account_id,
+            debit=Decimal("0"),
+            credit=line.net_amount,
+            description=line.description
+        )
+        db.add(credit_line)
+        account.current_balance -= line.net_amount  # Revenue decreases account balance
 
         # Accumulate VAT by rate
         vat_rate = float(line.vat_rate)
@@ -213,17 +236,31 @@ def create_supplier_invoice_verification(
     total_vat = Decimal("0")
 
     for line in supplier_invoice.supplier_invoice_lines:
+        # Expense account - use line's account or default to 6570 (General expenses)
         if line.account_id:
-            account = db.query(Account).filter(Account.id == line.account_id).first()
-            debit_line = TransactionLine(
-                verification_id=verification.id,
-                account_id=line.account_id,
-                debit=line.net_amount,
-                credit=Decimal("0"),
-                description=line.description
-            )
-            db.add(debit_line)
-            account.current_balance += line.net_amount  # Expense increases account balance
+            account_id = line.account_id
+        else:
+            # Default to general expenses account
+            default_account = db.query(Account).filter(
+                Account.company_id == supplier_invoice.company_id,
+                Account.account_number == 6570  # Övriga externa tjänster
+            ).first()
+
+            if not default_account:
+                raise ValueError("Default expense account 6570 not found. Please import BAS accounts first.")
+
+            account_id = default_account.id
+
+        account = db.query(Account).filter(Account.id == account_id).first()
+        debit_line = TransactionLine(
+            verification_id=verification.id,
+            account_id=account_id,
+            debit=line.net_amount,
+            credit=Decimal("0"),
+            description=line.description
+        )
+        db.add(debit_line)
+        account.current_balance += line.net_amount  # Expense increases account balance
 
         total_vat += line.vat_amount
 
