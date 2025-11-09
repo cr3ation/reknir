@@ -3,6 +3,7 @@ from app.models.verification import Verification, TransactionLine
 from app.models.company import Company
 from app.models.customer import Customer, Supplier
 from app.models.invoice import Invoice, InvoiceLine, SupplierInvoice, SupplierInvoiceLine
+from app.models.default_account import DefaultAccount
 
 __all__ = [
     "Account",
@@ -15,4 +16,5 @@ __all__ = [
     "InvoiceLine",
     "SupplierInvoice",
     "SupplierInvoiceLine",
+    "DefaultAccount",
 ]

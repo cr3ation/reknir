@@ -6,7 +6,9 @@ import os
 from app.database import get_db
 from app.models.company import Company
 from app.models.account import Account
+from app.models.default_account import DefaultAccount
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
+from app.services import default_account_service
 
 router = APIRouter()
 
@@ -132,7 +134,42 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
 
     db.commit()
 
+    # Also initialize default account mappings
+    default_account_service.initialize_default_accounts_from_existing(db, company_id)
+
+    defaults_count = db.query(DefaultAccount).filter(
+        DefaultAccount.company_id == company_id
+    ).count()
+
     return {
-        "message": f"Successfully seeded {len(created_accounts)} BAS 2024 accounts",
-        "count": len(created_accounts)
+        "message": f"Successfully seeded {len(created_accounts)} BAS 2024 accounts and configured {defaults_count} default account mappings",
+        "accounts_created": len(created_accounts),
+        "default_accounts_configured": defaults_count
+    }
+
+
+@router.post("/{company_id}/initialize-defaults", status_code=status.HTTP_200_OK)
+def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
+    """
+    Initialize default account mappings for a company based on existing accounts.
+    This is useful after importing SIE4 or when setting up an existing company.
+    """
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company {company_id} not found"
+        )
+
+    # Initialize defaults
+    default_account_service.initialize_default_accounts_from_existing(db, company_id)
+
+    # Count configured defaults
+    defaults_count = db.query(DefaultAccount).filter(
+        DefaultAccount.company_id == company_id
+    ).count()
+
+    return {
+        "message": f"Successfully initialized {defaults_count} default account mappings",
+        "default_accounts_configured": defaults_count
     }

@@ -32,6 +32,7 @@ class Company(Base):
     # Relationships
     accounts = relationship("Account", back_populates="company", cascade="all, delete-orphan")
     verifications = relationship("Verification", back_populates="company", cascade="all, delete-orphan")
+    default_accounts = relationship("DefaultAccount", back_populates="company", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Company {self.name} ({self.org_number})>"

@@ -4,6 +4,8 @@ from datetime import date
 from app.models.invoice import Invoice, InvoiceLine, SupplierInvoice, SupplierInvoiceLine, InvoiceStatus
 from app.models.verification import Verification, TransactionLine
 from app.models.account import Account
+from app.models.default_account import DefaultAccountType
+from app.services import default_account_service
 from typing import Optional
 
 
@@ -36,14 +38,13 @@ def create_invoice_verification(
     db.add(verification)
     db.flush()
 
-    # Debit: Customer receivables (1510)
-    receivables_account = db.query(Account).filter(
-        Account.company_id == invoice.company_id,
-        Account.account_number == 1510
-    ).first()
+    # Debit: Customer receivables
+    receivables_account = default_account_service.get_default_account(
+        db, invoice.company_id, DefaultAccountType.ACCOUNTS_RECEIVABLE
+    )
 
     if not receivables_account:
-        raise ValueError("Account 1510 (Kundfordringar) not found. Please import BAS accounts first.")
+        raise ValueError("Default accounts receivable account not configured. Please configure default accounts or import BAS accounts.")
 
     debit_line = TransactionLine(
         verification_id=verification.id,
@@ -61,33 +62,19 @@ def create_invoice_verification(
     for line in invoice.invoice_lines:
         # Revenue account - use line's account or default based on VAT rate
         if line.account_id:
-            account_id = line.account_id
+            account = db.query(Account).filter(Account.id == line.account_id).first()
         else:
-            # Default revenue account based on VAT rate
-            vat_rate = float(line.vat_rate)
-            if vat_rate == 25.0:
-                default_account_number = 3001  # Försäljning varor och tjänster inom Sverige, 25% moms
-            elif vat_rate == 12.0:
-                default_account_number = 3002  # Försäljning varor och tjänster inom Sverige, 12% moms
-            elif vat_rate == 6.0:
-                default_account_number = 3003  # Försäljning varor och tjänster inom Sverige, 6% moms
-            else:
-                default_account_number = 3106  # Försäljning tjänster utanför Sverige, omsättning utanför EU
+            # Get default revenue account based on VAT rate
+            account = default_account_service.get_revenue_account_for_vat_rate(
+                db, invoice.company_id, line.vat_rate
+            )
 
-            default_account = db.query(Account).filter(
-                Account.company_id == invoice.company_id,
-                Account.account_number == default_account_number
-            ).first()
+            if not account:
+                raise ValueError(f"Default revenue account for VAT rate {line.vat_rate}% not configured. Please configure default accounts or import BAS accounts.")
 
-            if not default_account:
-                raise ValueError(f"Default revenue account {default_account_number} not found. Please import BAS accounts first.")
-
-            account_id = default_account.id
-
-        account = db.query(Account).filter(Account.id == account_id).first()
         credit_line = TransactionLine(
             verification_id=verification.id,
-            account_id=account_id,
+            account_id=account.id,
             debit=Decimal("0"),
             credit=line.net_amount,
             description=line.description
@@ -103,30 +90,21 @@ def create_invoice_verification(
             vat_by_rate[vat_rate] += line.vat_amount
 
     # Credit: VAT accounts
-    vat_account_mapping = {
-        25.0: 2611,  # Utgående moms 25%
-        12.0: 2612,  # Utgående moms 12%
-        6.0: 2613,   # Utgående moms 6%
-    }
-
     for vat_rate, vat_amount in vat_by_rate.items():
-        vat_account_number = vat_account_mapping.get(vat_rate)
-        if vat_account_number:
-            vat_account = db.query(Account).filter(
-                Account.company_id == invoice.company_id,
-                Account.account_number == vat_account_number
-            ).first()
+        vat_account = default_account_service.get_vat_outgoing_account_for_rate(
+            db, invoice.company_id, Decimal(str(vat_rate))
+        )
 
-            if vat_account:
-                vat_line = TransactionLine(
-                    verification_id=verification.id,
-                    account_id=vat_account.id,
-                    debit=Decimal("0"),
-                    credit=vat_amount,
-                    description=f"Utgående moms {int(vat_rate)}%"
-                )
-                db.add(vat_line)
-                vat_account.current_balance -= vat_amount
+        if vat_account:
+            vat_line = TransactionLine(
+                verification_id=verification.id,
+                account_id=vat_account.id,
+                debit=Decimal("0"),
+                credit=vat_amount,
+                description=f"Utgående moms {int(vat_rate)}%"
+            )
+            db.add(vat_line)
+            vat_account.current_balance -= vat_amount
 
     db.commit()
     db.refresh(verification)
@@ -185,10 +163,12 @@ def create_invoice_payment_verification(
     bank_account.current_balance += paid_amount
 
     # Credit: Customer receivables
-    receivables_account = db.query(Account).filter(
-        Account.company_id == invoice.company_id,
-        Account.account_number == 1510
-    ).first()
+    receivables_account = default_account_service.get_default_account(
+        db, invoice.company_id, DefaultAccountType.ACCOUNTS_RECEIVABLE
+    )
+
+    if not receivables_account:
+        raise ValueError("Default accounts receivable account not configured.")
 
     credit_line = TransactionLine(
         verification_id=verification.id,
@@ -236,25 +216,21 @@ def create_supplier_invoice_verification(
     total_vat = Decimal("0")
 
     for line in supplier_invoice.supplier_invoice_lines:
-        # Expense account - use line's account or default to 6570 (General expenses)
+        # Expense account - use line's account or default
         if line.account_id:
-            account_id = line.account_id
+            account = db.query(Account).filter(Account.id == line.account_id).first()
         else:
-            # Default to general expenses account
-            default_account = db.query(Account).filter(
-                Account.company_id == supplier_invoice.company_id,
-                Account.account_number == 6570  # Övriga externa tjänster
-            ).first()
+            # Get default expense account
+            account = default_account_service.get_default_account(
+                db, supplier_invoice.company_id, DefaultAccountType.EXPENSE_DEFAULT
+            )
 
-            if not default_account:
-                raise ValueError("Default expense account 6570 not found. Please import BAS accounts first.")
+            if not account:
+                raise ValueError("Default expense account not configured. Please configure default accounts or import BAS accounts.")
 
-            account_id = default_account.id
-
-        account = db.query(Account).filter(Account.id == account_id).first()
         debit_line = TransactionLine(
             verification_id=verification.id,
-            account_id=account_id,
+            account_id=account.id,
             debit=line.net_amount,
             credit=Decimal("0"),
             description=line.description
@@ -264,12 +240,13 @@ def create_supplier_invoice_verification(
 
         total_vat += line.vat_amount
 
-    # Debit: Input VAT (2640)
+    # Debit: Input VAT
     if total_vat > 0:
-        vat_account = db.query(Account).filter(
-            Account.company_id == supplier_invoice.company_id,
-            Account.account_number == 2640
-        ).first()
+        # Use 25% incoming VAT account as default for now
+        # TODO: Track VAT by rate in supplier invoices too
+        vat_account = default_account_service.get_default_account(
+            db, supplier_invoice.company_id, DefaultAccountType.VAT_INCOMING_25
+        )
 
         if vat_account:
             vat_line = TransactionLine(
@@ -282,14 +259,13 @@ def create_supplier_invoice_verification(
             db.add(vat_line)
             vat_account.current_balance += total_vat
 
-    # Credit: Accounts payable (2440)
-    payables_account = db.query(Account).filter(
-        Account.company_id == supplier_invoice.company_id,
-        Account.account_number == 2440
-    ).first()
+    # Credit: Accounts payable
+    payables_account = default_account_service.get_default_account(
+        db, supplier_invoice.company_id, DefaultAccountType.ACCOUNTS_PAYABLE
+    )
 
     if not payables_account:
-        raise ValueError("Account 2440 (Leverantörsskulder) not found. Please import BAS accounts first.")
+        raise ValueError("Default accounts payable account not configured. Please configure default accounts or import BAS accounts.")
 
     credit_line = TransactionLine(
         verification_id=verification.id,
@@ -335,10 +311,12 @@ def create_supplier_invoice_payment_verification(
     db.flush()
 
     # Debit: Accounts payable
-    payables_account = db.query(Account).filter(
-        Account.company_id == supplier_invoice.company_id,
-        Account.account_number == 2440
-    ).first()
+    payables_account = default_account_service.get_default_account(
+        db, supplier_invoice.company_id, DefaultAccountType.ACCOUNTS_PAYABLE
+    )
+
+    if not payables_account:
+        raise ValueError("Default accounts payable account not configured.")
 
     debit_line = TransactionLine(
         verification_id=verification.id,
