@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi } from '@/services/api'
-import type { Account, DefaultAccount } from '@/types'
-
-const COMPANY_ID = 1 // TODO: Get from context/state
+import type { Account, DefaultAccount, Company } from '@/types'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -21,6 +19,7 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
 }
 
 export default function SettingsPage() {
+  const [company, setCompany] = useState<Company | null>(null)
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(false)
@@ -34,9 +33,21 @@ export default function SettingsPage() {
   const loadData = async () => {
     try {
       setLoading(true)
+
+      // Get first company (single-company mode for MVP)
+      const companiesRes = await companyApi.list()
+      if (companiesRes.data.length === 0) {
+        showMessage('Inget företag hittat. Skapa ett företag först.', 'error')
+        setLoading(false)
+        return
+      }
+
+      const comp = companiesRes.data[0]
+      setCompany(comp)
+
       const [defaultsRes, accountsRes] = await Promise.all([
-        defaultAccountApi.list(COMPANY_ID).catch(() => ({ data: [] })),
-        accountApi.list(COMPANY_ID),
+        defaultAccountApi.list(comp.id).catch(() => ({ data: [] })),
+        accountApi.list(comp.id),
       ])
       setDefaultAccounts(defaultsRes.data)
       setAllAccounts(accountsRes.data)
@@ -55,9 +66,11 @@ export default function SettingsPage() {
   }
 
   const handleInitializeDefaults = async () => {
+    if (!company) return
+
     try {
       setLoading(true)
-      const response = await companyApi.initializeDefaults(COMPANY_ID)
+      const response = await companyApi.initializeDefaults(company.id)
       showMessage(response.data.message, 'success')
       await loadData()
     } catch (error: any) {
@@ -72,12 +85,14 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!company) return
+
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
       setLoading(true)
-      const response = await sie4Api.import(COMPANY_ID, file)
+      const response = await sie4Api.import(company.id, file)
       showMessage(
         `Import lyckades! ${response.data.accounts_created} konton skapade, ${response.data.default_accounts_configured} standardkonton konfigurerade.`,
         'success'
@@ -94,9 +109,11 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Export = async (includeVerifications: boolean) => {
+    if (!company) return
+
     try {
       setLoading(true)
-      const response = await sie4Api.export(COMPANY_ID, includeVerifications)
+      const response = await sie4Api.export(company.id, includeVerifications)
 
       // Create download link
       const blob = new Blob([response.data], { type: 'text/plain' })
@@ -125,6 +142,17 @@ export default function SettingsPage() {
   const getAccountDisplay = (accountId: number): string => {
     const account = allAccounts.find((a) => a.id === accountId)
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
+  }
+
+  if (!company && !loading) {
+    return (
+      <div className="card">
+        <h2 className="text-2xl font-bold mb-4">Företagsinställningar</h2>
+        <p className="text-gray-600">
+          Inget företag hittat. Skapa ett företag först.
+        </p>
+      </div>
+    )
   }
 
   return (
