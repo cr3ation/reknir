@@ -17,8 +17,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create invoice status enum
-    op.execute("CREATE TYPE invoicestatus AS ENUM ('draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled')")
+    # Create invoice status enum (if it doesn't exist)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE invoicestatus AS ENUM ('draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
 
     # Create customers table
     op.create_table(
