@@ -66,53 +66,21 @@ Save the `id` from the response (e.g., `"id": 1`).
 
 ### 4. Import BAS Kontoplan
 
-You can import the BAS accounts manually or via script. Here's a simple Python script:
+Import the BAS 2024 kontoplan using the CLI:
 
 ```bash
-# Enter the backend container
-docker-compose exec backend bash
+# Seed BAS accounts for company ID 1 (default)
+docker-compose exec backend python -m app.cli seed-bas
 
-# Create a seed script
-cat > seed_bas.py << 'EOF'
-import json
-from app.database import SessionLocal
-from app.models import Account
-
-# Read BAS accounts
-with open('/app/../database/seeds/bas_accounts.json') as f:
-    accounts_data = json.load(f)
-
-# Create session
-db = SessionLocal()
-
-# Import accounts for company ID 1
-company_id = 1
-
-for acc_data in accounts_data:
-    account = Account(
-        company_id=company_id,
-        account_number=acc_data['account_number'],
-        name=acc_data['name'],
-        description=acc_data.get('description'),
-        account_type=acc_data['account_type'],
-        opening_balance=0,
-        current_balance=0,
-        is_bas_account=True,
-        active=True
-    )
-    db.add(account)
-
-db.commit()
-print(f"Imported {len(accounts_data)} BAS accounts")
-db.close()
-EOF
-
-# Run the seed script
-python seed_bas.py
-
-# Exit container
-exit
+# Or for a specific company
+docker-compose exec backend python -m app.cli seed-bas 2
 ```
+
+The CLI will:
+- Check if the company exists
+- Skip accounts that already exist
+- Import all 43 BAS core accounts
+- Show progress with ✓ for each account
 
 ### 5. Verify Setup
 
