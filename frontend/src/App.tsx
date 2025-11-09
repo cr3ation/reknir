@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings } from 'lucide-react'
+import { Home, FileText, PieChart, Settings, Receipt } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
+import Invoices from './pages/Invoices'
 import Reports from './pages/Reports'
 import SettingsPage from './pages/Settings'
 
@@ -24,6 +25,13 @@ function App() {
                   >
                     <Home className="w-4 h-4 mr-2" />
                     Översikt
+                  </Link>
+                  <Link
+                    to="/invoices"
+                    className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-900 hover:border-gray-300 border-b-2 border-transparent"
+                  >
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Fakturor
                   </Link>
                   <Link
                     to="/verifications"
@@ -56,6 +64,7 @@ function App() {
         <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/invoices" element={<Invoices />} />
             <Route path="/verifications" element={<Verifications />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<SettingsPage />} />

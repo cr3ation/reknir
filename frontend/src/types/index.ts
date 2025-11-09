@@ -107,3 +107,140 @@ export interface IncomeStatement {
   }
   profit_loss: number
 }
+
+// Invoice management types
+
+export enum InvoiceStatus {
+  DRAFT = 'draft',
+  SENT = 'sent',
+  PAID = 'paid',
+  PARTIAL = 'partial',
+  OVERDUE = 'overdue',
+  CANCELLED = 'cancelled',
+}
+
+export interface Customer {
+  id: number
+  company_id: number
+  name: string
+  org_number?: string
+  contact_person?: string
+  email?: string
+  phone?: string
+  address?: string
+  postal_code?: string
+  city?: string
+  country: string
+  payment_terms_days: number
+  active: boolean
+}
+
+export interface Supplier {
+  id: number
+  company_id: number
+  name: string
+  org_number?: string
+  contact_person?: string
+  email?: string
+  phone?: string
+  address?: string
+  postal_code?: string
+  city?: string
+  country: string
+  payment_terms_days: number
+  bank_account?: string
+  bank_name?: string
+  active: boolean
+}
+
+export interface InvoiceLine {
+  id?: number
+  invoice_id?: number
+  description: string
+  quantity: number
+  unit: string
+  unit_price: number
+  vat_rate: number
+  account_id?: number
+  net_amount?: number
+  vat_amount?: number
+  total_amount?: number
+}
+
+export interface Invoice {
+  id: number
+  company_id: number
+  customer_id: number
+  invoice_number: number
+  invoice_series: string
+  invoice_date: string
+  due_date: string
+  paid_date?: string
+  reference?: string
+  our_reference?: string
+  total_amount: number
+  vat_amount: number
+  net_amount: number
+  status: InvoiceStatus
+  paid_amount: number
+  notes?: string
+  message?: string
+  invoice_verification_id?: number
+  payment_verification_id?: number
+  pdf_path?: string
+  created_at: string
+  updated_at: string
+  sent_at?: string
+  invoice_lines: InvoiceLine[]
+}
+
+export interface InvoiceListItem {
+  id: number
+  invoice_number: number
+  invoice_series: string
+  invoice_date: string
+  due_date: string
+  customer_id: number
+  customer_name: string
+  total_amount: number
+  status: InvoiceStatus
+  paid_amount: number
+}
+
+export interface SupplierInvoice {
+  id: number
+  company_id: number
+  supplier_id: number
+  supplier_invoice_number: string
+  our_invoice_number?: number
+  invoice_date: string
+  due_date: string
+  paid_date?: string
+  total_amount: number
+  vat_amount: number
+  net_amount: number
+  status: InvoiceStatus
+  paid_amount: number
+  ocr_number?: string
+  reference?: string
+  notes?: string
+  invoice_verification_id?: number
+  payment_verification_id?: number
+  attachment_path?: string
+  created_at: string
+  updated_at: string
+  supplier_invoice_lines: InvoiceLine[]
+}
+
+export interface SupplierInvoiceListItem {
+  id: number
+  our_invoice_number?: number
+  supplier_invoice_number: string
+  invoice_date: string
+  due_date: string
+  supplier_id: number
+  supplier_name: string
+  total_amount: number
+  status: InvoiceStatus
+  paid_amount: number
+}

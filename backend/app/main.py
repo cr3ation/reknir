@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import accounts, verifications, companies, reports
+from app.routers import accounts, verifications, companies, reports, customers, suppliers, invoices, supplier_invoices
 
 # Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
-    description="Modern Swedish bookkeeping system with BAS kontoplan support",
-    version="0.1.0",
+    description="Modern Swedish bookkeeping system with BAS kontoplan support and invoice management",
+    version="0.2.0",
 )
 
 # Configure CORS
@@ -25,13 +25,26 @@ app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(verifications.router, prefix="/api/verifications", tags=["verifications"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 
+# Invoice management routers
+app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
+app.include_router(suppliers.router, prefix="/api/suppliers", tags=["suppliers"])
+app.include_router(invoices.router, prefix="/api/invoices", tags=["invoices"])
+app.include_router(supplier_invoices.router, prefix="/api/supplier-invoices", tags=["supplier-invoices"])
+
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
         "message": "Reknir API",
-        "version": "0.1.0",
+        "version": "0.2.0",
+        "features": [
+            "Swedish BAS kontoplan",
+            "Double-entry bookkeeping",
+            "Invoice management (outgoing & incoming)",
+            "Automatic verification creation",
+            "Reports"
+        ],
         "docs": "/docs"
     }
 

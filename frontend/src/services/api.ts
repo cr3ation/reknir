@@ -6,6 +6,12 @@ import type {
   VerificationListItem,
   BalanceSheet,
   IncomeStatement,
+  Customer,
+  Supplier,
+  Invoice,
+  InvoiceListItem,
+  SupplierInvoice,
+  SupplierInvoiceListItem,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -66,6 +72,53 @@ export const reportApi = {
     api.get<IncomeStatement>('/api/reports/income-statement', {
       params: { company_id: companyId },
     }),
+}
+
+// Customers
+export const customerApi = {
+  list: (companyId: number, activeOnly = true) =>
+    api.get<Customer[]>('/api/customers/', { params: { company_id: companyId, active_only: activeOnly } }),
+  get: (id: number) => api.get<Customer>(`/api/customers/${id}`),
+  create: (data: Omit<Customer, 'id' | 'active'>) => api.post<Customer>('/api/customers/', data),
+  update: (id: number, data: Partial<Customer>) => api.patch<Customer>(`/api/customers/${id}`, data),
+  delete: (id: number) => api.delete(`/api/customers/${id}`),
+}
+
+// Suppliers
+export const supplierApi = {
+  list: (companyId: number, activeOnly = true) =>
+    api.get<Supplier[]>('/api/suppliers/', { params: { company_id: companyId, active_only: activeOnly } }),
+  get: (id: number) => api.get<Supplier>(`/api/suppliers/${id}`),
+  create: (data: Omit<Supplier, 'id' | 'active'>) => api.post<Supplier>('/api/suppliers/', data),
+  update: (id: number, data: Partial<Supplier>) => api.patch<Supplier>(`/api/suppliers/${id}`, data),
+  delete: (id: number) => api.delete(`/api/suppliers/${id}`),
+}
+
+// Invoices (Outgoing)
+export const invoiceApi = {
+  list: (companyId: number, params?: { customer_id?: number; status?: string }) =>
+    api.get<InvoiceListItem[]>('/api/invoices/', { params: { company_id: companyId, ...params } }),
+  get: (id: number) => api.get<Invoice>(`/api/invoices/${id}`),
+  create: (data: any) => api.post<Invoice>('/api/invoices/', data),
+  update: (id: number, data: Partial<Invoice>) => api.patch<Invoice>(`/api/invoices/${id}`, data),
+  send: (id: number) => api.post<Invoice>(`/api/invoices/${id}/send`),
+  markPaid: (id: number, data: { paid_date: string; paid_amount?: number }) =>
+    api.post<Invoice>(`/api/invoices/${id}/mark-paid`, data),
+  delete: (id: number) => api.delete(`/api/invoices/${id}`),
+}
+
+// Supplier Invoices (Incoming)
+export const supplierInvoiceApi = {
+  list: (companyId: number, params?: { supplier_id?: number; status?: string }) =>
+    api.get<SupplierInvoiceListItem[]>('/api/supplier-invoices/', { params: { company_id: companyId, ...params } }),
+  get: (id: number) => api.get<SupplierInvoice>(`/api/supplier-invoices/${id}`),
+  create: (data: any) => api.post<SupplierInvoice>('/api/supplier-invoices/', data),
+  update: (id: number, data: Partial<SupplierInvoice>) =>
+    api.patch<SupplierInvoice>(`/api/supplier-invoices/${id}`, data),
+  register: (id: number) => api.post<SupplierInvoice>(`/api/supplier-invoices/${id}/register`),
+  markPaid: (id: number, data: { paid_date: string; paid_amount?: number }) =>
+    api.post<SupplierInvoice>(`/api/supplier-invoices/${id}/mark-paid`, data),
+  delete: (id: number) => api.delete(`/api/supplier-invoices/${id}`),
 }
 
 export default api

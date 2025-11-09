@@ -18,17 +18,22 @@ from app.schemas.verification import (
 router = APIRouter()
 
 
+def get_next_verification_number(db: Session, company_id: int, series: str) -> int:
+    """Helper function to get next verification number for a series"""
+    last_ver = db.query(Verification).filter(
+        Verification.company_id == company_id,
+        Verification.series == series
+    ).order_by(desc(Verification.verification_number)).first()
+
+    return (last_ver.verification_number + 1) if last_ver else 1
+
+
 @router.post("/", response_model=VerificationResponse, status_code=status.HTTP_201_CREATED)
 def create_verification(verification: VerificationCreate, db: Session = Depends(get_db)):
     """Create a new verification (verifikation)"""
 
     # Get next verification number for this series
-    last_ver = db.query(Verification).filter(
-        Verification.company_id == verification.company_id,
-        Verification.series == verification.series
-    ).order_by(desc(Verification.verification_number)).first()
-
-    next_number = (last_ver.verification_number + 1) if last_ver else 1
+    next_number = get_next_verification_number(db, verification.company_id, verification.series)
 
     # Create verification
     db_verification = Verification(
