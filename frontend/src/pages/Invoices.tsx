@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Download } from 'lucide-react'
-import { invoiceApi, companyApi, supplierInvoiceApi } from '@/services/api'
-import type { InvoiceListItem, SupplierInvoiceListItem } from '@/types'
+import { Download, Plus, X } from 'lucide-react'
+import { invoiceApi, companyApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
+import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoiceListItem[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<number | null>(null)
+  const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false)
+  const [showCreateSupplierInvoiceModal, setShowCreateSupplierInvoiceModal] = useState(false)
 
   useEffect(() => {
     loadInvoices()
@@ -24,12 +29,18 @@ export default function Invoices() {
       const company = companiesRes.data[0]
       setCompanyId(company.id)
 
-      const [outgoingRes, incomingRes] = await Promise.all([
+      const [outgoingRes, incomingRes, customersRes, suppliersRes, accountsRes] = await Promise.all([
         invoiceApi.list(company.id),
         supplierInvoiceApi.list(company.id),
+        customerApi.list(company.id),
+        supplierApi.list(company.id),
+        accountApi.list(company.id),
       ])
       setInvoices(outgoingRes.data)
       setSupplierInvoices(incomingRes.data)
+      setCustomers(customersRes.data)
+      setSuppliers(suppliersRes.data)
+      setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load invoices:', error)
     } finally {
@@ -75,7 +86,13 @@ export default function Invoices() {
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Kundfakturor (Utgående)</h2>
-          <button className="btn btn-primary">+ Ny faktura</button>
+          <button
+            onClick={() => setShowCreateInvoiceModal(true)}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Ny faktura
+          </button>
         </div>
 
         {invoices.length === 0 ? (
@@ -153,7 +170,13 @@ export default function Invoices() {
       <div>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Leverantörsfakturor (Inkommande)</h2>
-          <button className="btn btn-primary">+ Registrera faktura</button>
+          <button
+            onClick={() => setShowCreateSupplierInvoiceModal(true)}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Registrera faktura
+          </button>
         </div>
 
         {supplierInvoices.length === 0 ? (
@@ -212,6 +235,720 @@ export default function Invoices() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Create Invoice Modal */}
+      {showCreateInvoiceModal && companyId && (
+        <CreateInvoiceModal
+          companyId={companyId}
+          customers={customers}
+          accounts={accounts}
+          onClose={() => setShowCreateInvoiceModal(false)}
+          onSuccess={() => {
+            setShowCreateInvoiceModal(false)
+            loadInvoices()
+          }}
+        />
+      )}
+
+      {/* Create Supplier Invoice Modal */}
+      {showCreateSupplierInvoiceModal && companyId && (
+        <CreateSupplierInvoiceModal
+          companyId={companyId}
+          suppliers={suppliers}
+          accounts={accounts}
+          onClose={() => setShowCreateSupplierInvoiceModal(false)}
+          onSuccess={() => {
+            setShowCreateSupplierInvoiceModal(false)
+            loadInvoices()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Create Invoice Modal Component
+interface CreateInvoiceModalProps {
+  companyId: number
+  customers: Customer[]
+  accounts: Account[]
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess }: CreateInvoiceModalProps) {
+  const [customerId, setCustomerId] = useState<number>(0)
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState('')
+  const [reference, setReference] = useState('')
+  const [ourReference, setOurReference] = useState('')
+  const [message, setMessage] = useState('')
+  const [lines, setLines] = useState<InvoiceLine[]>([
+    { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }
+  ])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Update due date when customer changes
+  useEffect(() => {
+    if (customerId > 0) {
+      const customer = customers.find(c => c.id === customerId)
+      if (customer) {
+        const date = new Date(invoiceDate)
+        date.setDate(date.getDate() + customer.payment_terms_days)
+        setDueDate(date.toISOString().split('T')[0])
+      }
+    }
+  }, [customerId, invoiceDate, customers])
+
+  const addLine = () => {
+    setLines([...lines, { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }])
+  }
+
+  const removeLine = (index: number) => {
+    if (lines.length > 1) {
+      setLines(lines.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateLine = (index: number, field: keyof InvoiceLine, value: any) => {
+    const newLines = [...lines]
+    newLines[index] = { ...newLines[index], [field]: value }
+    setLines(newLines)
+  }
+
+  const calculateLineTotal = (line: InvoiceLine) => {
+    const net = line.quantity * line.unit_price
+    const vat = net * (line.vat_rate / 100)
+    return net + vat
+  }
+
+  const calculateTotals = () => {
+    let totalNet = 0
+    let totalVat = 0
+    lines.forEach(line => {
+      const net = line.quantity * line.unit_price
+      const vat = net * (line.vat_rate / 100)
+      totalNet += net
+      totalVat += vat
+    })
+    return { totalNet, totalVat, totalAmount: totalNet + totalVat }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (customerId === 0) {
+      setError('Välj en kund')
+      return
+    }
+
+    if (lines.some(l => !l.description)) {
+      setError('Alla rader måste ha en beskrivning')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      await invoiceApi.create({
+        company_id: companyId,
+        customer_id: customerId,
+        invoice_date: invoiceDate,
+        due_date: dueDate,
+        reference,
+        our_reference: ourReference,
+        message,
+        invoice_series: 'F',
+        invoice_lines: lines.map(line => ({
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_price: line.unit_price,
+          vat_rate: line.vat_rate,
+          account_id: line.account_id,
+        })),
+      })
+      onSuccess()
+    } catch (err: any) {
+      console.error('Failed to create invoice:', err)
+      setError(err.response?.data?.detail || 'Kunde inte skapa faktura')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const totals = calculateTotals()
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Ny kundfaktura</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          {/* Customer and dates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Kund *
+              </label>
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(parseInt(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                required
+              >
+                <option value={0}>Välj kund...</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fakturadatum *
+              </label>
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Förfallodatum *
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Er referens
+              </label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Vår referens
+              </label>
+              <input
+                type="text"
+                value={ourReference}
+                onChange={(e) => setOurReference(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Invoice lines */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold">Fakturarader</h3>
+              <button
+                type="button"
+                onClick={addLine}
+                className="text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                + Lägg till rad
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {lines.map((line, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded">
+                  <div className="col-span-12 md:col-span-4">
+                    <input
+                      type="text"
+                      placeholder="Beskrivning *"
+                      value={line.description}
+                      onChange={(e) => updateLine(index, 'description', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-3 md:col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Antal"
+                      value={line.quantity}
+                      onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      min="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-3 md:col-span-1">
+                    <input
+                      type="text"
+                      placeholder="Enhet"
+                      value={line.unit}
+                      onChange={(e) => updateLine(index, 'unit', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="col-span-3 md:col-span-2">
+                    <input
+                      type="number"
+                      placeholder="À-pris"
+                      value={line.unit_price}
+                      onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      min="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <select
+                      value={line.vat_rate}
+                      onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value={0}>0%</option>
+                      <option value={6}>6%</option>
+                      <option value={12}>12%</option>
+                      <option value={25}>25%</option>
+                    </select>
+                  </div>
+                  <div className="col-span-11 md:col-span-1 text-right font-mono text-sm pt-2">
+                    {calculateLineTotal(line).toLocaleString('sv-SE')} kr
+                  </div>
+                  <div className="col-span-1 md:col-span-1 text-right">
+                    {lines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(index)}
+                        className="text-red-600 hover:text-red-800 p-2"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="bg-gray-50 p-4 rounded mb-6">
+            <div className="flex justify-between text-sm mb-1">
+              <span>Netto:</span>
+              <span className="font-mono">{totals.totalNet.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
+            </div>
+            <div className="flex justify-between text-sm mb-2">
+              <span>Moms:</span>
+              <span className="font-mono">{totals.totalVat.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold border-t pt-2">
+              <span>Totalt:</span>
+              <span className="font-mono">{totals.totalAmount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
+            </div>
+          </div>
+
+          {/* Message */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Meddelande (visas på fakturan)
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              placeholder="T.ex. betalningsvillkor eller övrig information..."
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Avbryt
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {saving ? 'Skapar...' : 'Skapa faktura'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// Create Supplier Invoice Modal Component
+interface CreateSupplierInvoiceModalProps {
+  companyId: number
+  suppliers: Supplier[]
+  accounts: Account[]
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, onSuccess }: CreateSupplierInvoiceModalProps) {
+  const [supplierId, setSupplierId] = useState<number>(0)
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState('')
+  const [ocrNumber, setOcrNumber] = useState('')
+  const [reference, setReference] = useState('')
+  const [lines, setLines] = useState<InvoiceLine[]>([
+    { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }
+  ])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Update due date when supplier changes
+  useEffect(() => {
+    if (supplierId > 0) {
+      const supplier = suppliers.find(s => s.id === supplierId)
+      if (supplier) {
+        const date = new Date(invoiceDate)
+        date.setDate(date.getDate() + supplier.payment_terms_days)
+        setDueDate(date.toISOString().split('T')[0])
+      }
+    }
+  }, [supplierId, invoiceDate, suppliers])
+
+  const addLine = () => {
+    setLines([...lines, { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }])
+  }
+
+  const removeLine = (index: number) => {
+    if (lines.length > 1) {
+      setLines(lines.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateLine = (index: number, field: keyof InvoiceLine, value: any) => {
+    const newLines = [...lines]
+    newLines[index] = { ...newLines[index], [field]: value }
+    setLines(newLines)
+  }
+
+  const calculateLineTotal = (line: InvoiceLine) => {
+    const net = line.quantity * line.unit_price
+    const vat = net * (line.vat_rate / 100)
+    return net + vat
+  }
+
+  const calculateTotals = () => {
+    let totalNet = 0
+    let totalVat = 0
+    lines.forEach(line => {
+      const net = line.quantity * line.unit_price
+      const vat = net * (line.vat_rate / 100)
+      totalNet += net
+      totalVat += vat
+    })
+    return { totalNet, totalVat, totalAmount: totalNet + totalVat }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (supplierId === 0) {
+      setError('Välj en leverantör')
+      return
+    }
+
+    if (!supplierInvoiceNumber) {
+      setError('Ange leverantörens fakturanummer')
+      return
+    }
+
+    if (lines.some(l => !l.description)) {
+      setError('Alla rader måste ha en beskrivning')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      await supplierInvoiceApi.create({
+        company_id: companyId,
+        supplier_id: supplierId,
+        supplier_invoice_number: supplierInvoiceNumber,
+        invoice_date: invoiceDate,
+        due_date: dueDate,
+        ocr_number: ocrNumber || undefined,
+        reference: reference || undefined,
+        supplier_invoice_lines: lines.map(line => ({
+          description: line.description,
+          quantity: line.quantity,
+          unit_price: line.unit_price,
+          vat_rate: line.vat_rate,
+          account_id: line.account_id,
+        })),
+      })
+      onSuccess()
+    } catch (err: any) {
+      console.error('Failed to create supplier invoice:', err)
+      setError(err.response?.data?.detail || 'Kunde inte skapa leverantörsfaktura')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const totals = calculateTotals()
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Registrera leverantörsfaktura</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          {/* Supplier and dates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Leverantör *
+              </label>
+              <select
+                value={supplierId}
+                onChange={(e) => setSupplierId(parseInt(e.target.value))}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                required
+              >
+                <option value={0}>Välj leverantör...</option>
+                {suppliers.map(supplier => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fakturanummer *
+              </label>
+              <input
+                type="text"
+                value={supplierInvoiceNumber}
+                onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                placeholder="Leverantörens fakturanummer"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fakturadatum *
+              </label>
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Förfallodatum *
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                OCR-nummer
+              </label>
+              <input
+                type="text"
+                value={ocrNumber}
+                onChange={(e) => setOcrNumber(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Referens
+              </label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Invoice lines */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold">Fakturarader</h3>
+              <button
+                type="button"
+                onClick={addLine}
+                className="text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                + Lägg till rad
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {lines.map((line, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded">
+                  <div className="col-span-12 md:col-span-5">
+                    <input
+                      type="text"
+                      placeholder="Beskrivning *"
+                      value={line.description}
+                      onChange={(e) => updateLine(index, 'description', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-4 md:col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Antal"
+                      value={line.quantity}
+                      onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      min="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-4 md:col-span-2">
+                    <input
+                      type="number"
+                      placeholder="À-pris"
+                      value={line.unit_price}
+                      onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      step="0.01"
+                      min="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="col-span-3 md:col-span-1">
+                    <select
+                      value={line.vat_rate}
+                      onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value={0}>0%</option>
+                      <option value={6}>6%</option>
+                      <option value={12}>12%</option>
+                      <option value={25}>25%</option>
+                    </select>
+                  </div>
+                  <div className="col-span-11 md:col-span-1 text-right font-mono text-sm pt-2">
+                    {calculateLineTotal(line).toLocaleString('sv-SE')} kr
+                  </div>
+                  <div className="col-span-1 md:col-span-1 text-right">
+                    {lines.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(index)}
+                        className="text-red-600 hover:text-red-800 p-2"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="bg-gray-50 p-4 rounded mb-6">
+            <div className="flex justify-between text-sm mb-1">
+              <span>Netto:</span>
+              <span className="font-mono">{totals.totalNet.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
+            </div>
+            <div className="flex justify-between text-sm mb-2">
+              <span>Moms:</span>
+              <span className="font-mono">{totals.totalVat.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold border-t pt-2">
+              <span>Totalt:</span>
+              <span className="font-mono">{totals.totalAmount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Avbryt
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {saving ? 'Registrerar...' : 'Registrera faktura'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
