@@ -16,7 +16,7 @@ class Company(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    org_number = Column(String(10), unique=True, nullable=False, index=True)  # Organisationsnummer
+    org_number = Column(String(15), unique=True, nullable=False, index=True)  # Organisationsnummer (XXXXXX-XXXX)
 
     # Fiscal year
     fiscal_year_start = Column(Date, nullable=False)  # Räkenskapsår start
