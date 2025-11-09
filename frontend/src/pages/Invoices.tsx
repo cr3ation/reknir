@@ -538,75 +538,93 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
 
             <div className="space-y-3">
               {lines.map((line, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded">
-                  <div className="col-span-12 md:col-span-4">
-                    <input
-                      type="text"
-                      placeholder="Beskrivning *"
-                      value={line.description}
-                      onChange={(e) => updateLine(index, 'description', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      placeholder="Antal"
-                      value={line.quantity}
-                      onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-1">
-                    <input
-                      type="text"
-                      placeholder="Enhet"
-                      value={line.unit}
-                      onChange={(e) => updateLine(index, 'unit', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      placeholder="À-pris"
-                      value={line.unit_price}
-                      onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-2 md:col-span-1">
-                    <select
-                      value={line.vat_rate}
-                      onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value={0}>0%</option>
-                      <option value={6}>6%</option>
-                      <option value={12}>12%</option>
-                      <option value={25}>25%</option>
-                    </select>
-                  </div>
-                  <div className="col-span-11 md:col-span-1 text-right font-mono text-sm pt-2">
-                    {calculateLineTotal(line).toLocaleString('sv-SE')} kr
-                  </div>
-                  <div className="col-span-1 md:col-span-1 text-right">
-                    {lines.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeLine(index)}
-                        className="text-red-600 hover:text-red-800 p-2"
+                <div key={index} className="space-y-2 p-3 bg-gray-50 rounded">
+                  <div className="grid grid-cols-12 gap-2 items-start">
+                    <div className="col-span-12 md:col-span-5">
+                      <input
+                        type="text"
+                        placeholder="Beskrivning *"
+                        value={line.description}
+                        onChange={(e) => updateLine(index, 'description', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-3 md:col-span-2">
+                      <input
+                        type="number"
+                        placeholder="Antal"
+                        value={line.quantity}
+                        onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        min="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-3 md:col-span-1">
+                      <input
+                        type="text"
+                        placeholder="Enhet"
+                        value={line.unit}
+                        onChange={(e) => updateLine(index, 'unit', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div className="col-span-3 md:col-span-2">
+                      <input
+                        type="number"
+                        placeholder="À-pris"
+                        value={line.unit_price}
+                        onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        min="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-2 md:col-span-1">
+                      <select
+                        value={line.vat_rate}
+                        onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                       >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
+                        <option value={0}>0%</option>
+                        <option value={6}>6%</option>
+                        <option value={12}>12%</option>
+                        <option value={25}>25%</option>
+                      </select>
+                    </div>
+                    <div className="col-span-11 md:col-span-1 text-right">
+                      {lines.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeLine(index)}
+                          className="text-red-600 hover:text-red-800 p-2"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-12 md:col-span-5">
+                      <select
+                        value={line.account_id || ''}
+                        onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-sm"
+                      >
+                        <option value="">Auto (baserat på moms)</option>
+                        {accounts.filter(a => a.account_number >= 3000 && a.account_number < 4000).map(account => (
+                          <option key={account.id} value={account.id}>
+                            {account.account_number} - {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-12 md:col-span-6 text-right font-mono text-sm">
+                      Totalt: {calculateLineTotal(line).toLocaleString('sv-SE')} kr
+                    </div>
                   </div>
                 </div>
               ))}
@@ -901,66 +919,84 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
 
             <div className="space-y-3">
               {lines.map((line, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 rounded">
-                  <div className="col-span-12 md:col-span-5">
-                    <input
-                      type="text"
-                      placeholder="Beskrivning *"
-                      value={line.description}
-                      onChange={(e) => updateLine(index, 'description', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-2">
-                    <input
-                      type="number"
-                      placeholder="Antal"
-                      value={line.quantity}
-                      onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-2">
-                    <input
-                      type="number"
-                      placeholder="À-pris"
-                      value={line.unit_price}
-                      onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-1">
-                    <select
-                      value={line.vat_rate}
-                      onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value={0}>0%</option>
-                      <option value={6}>6%</option>
-                      <option value={12}>12%</option>
-                      <option value={25}>25%</option>
-                    </select>
-                  </div>
-                  <div className="col-span-11 md:col-span-1 text-right font-mono text-sm pt-2">
-                    {calculateLineTotal(line).toLocaleString('sv-SE')} kr
-                  </div>
-                  <div className="col-span-1 md:col-span-1 text-right">
-                    {lines.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeLine(index)}
-                        className="text-red-600 hover:text-red-800 p-2"
+                <div key={index} className="space-y-2 p-3 bg-gray-50 rounded">
+                  <div className="grid grid-cols-12 gap-2 items-start">
+                    <div className="col-span-12 md:col-span-6">
+                      <input
+                        type="text"
+                        placeholder="Beskrivning *"
+                        value={line.description}
+                        onChange={(e) => updateLine(index, 'description', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                      <input
+                        type="number"
+                        placeholder="Antal"
+                        value={line.quantity}
+                        onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        min="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                      <input
+                        type="number"
+                        placeholder="À-pris"
+                        value={line.unit_price}
+                        onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        min="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-3 md:col-span-1">
+                      <select
+                        value={line.vat_rate}
+                        onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                       >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
+                        <option value={0}>0%</option>
+                        <option value={6}>6%</option>
+                        <option value={12}>12%</option>
+                        <option value={25}>25%</option>
+                      </select>
+                    </div>
+                    <div className="col-span-1 md:col-span-1 text-right">
+                      {lines.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeLine(index)}
+                          className="text-red-600 hover:text-red-800 p-2"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-12 md:col-span-6">
+                      <select
+                        value={line.account_id || ''}
+                        onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-sm"
+                      >
+                        <option value="">Auto (6570 - Övriga externa tjänster)</option>
+                        {accounts.filter(a => a.account_number >= 4000 && a.account_number < 8000).map(account => (
+                          <option key={account.id} value={account.id}>
+                            {account.account_number} - {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-12 md:col-span-5 text-right font-mono text-sm">
+                      Totalt: {calculateLineTotal(line).toLocaleString('sv-SE')} kr
+                    </div>
                   </div>
                 </div>
               ))}
