@@ -31,14 +31,14 @@ const Setup: React.FC = () => {
 
     try {
       // Create company
-      const response = await api.post('/companies/', formData);
+      const response = await api.post('/api/companies/', formData);
       const companyId = response.data.id;
 
       setStep('seeding');
 
       // Seed BAS accounts
       try {
-        await api.post(`/companies/${companyId}/seed-bas`);
+        await api.post(`/api/companies/${companyId}/seed-bas`);
       } catch (err) {
         console.error('Failed to seed BAS accounts:', err);
         // Continue anyway - user can seed later
