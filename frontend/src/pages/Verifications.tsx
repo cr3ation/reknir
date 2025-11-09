@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
 import { verificationApi, accountApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification } from '@/types'
 
@@ -182,6 +182,72 @@ export default function Verifications() {
   )
 }
 
+// Common verification templates
+interface VerificationTemplate {
+  name: string
+  description: string
+  lines: Array<{
+    accountNumber: number
+    debit: boolean // true for debit, false for credit
+    description: string
+  }>
+}
+
+const TEMPLATES: VerificationTemplate[] = [
+  {
+    name: 'Inköp med 25% moms',
+    description: 'Inköp av varor/tjänster med 25% moms',
+    lines: [
+      { accountNumber: 4000, debit: true, description: 'Inköp varor' },
+      { accountNumber: 2640, debit: true, description: 'Ingående moms 25%' },
+      { accountNumber: 2440, debit: false, description: 'Leverantörsskuld' },
+    ],
+  },
+  {
+    name: 'Försäljning med 25% moms',
+    description: 'Försäljning av varor/tjänster med 25% moms',
+    lines: [
+      { accountNumber: 1510, debit: true, description: 'Kundfordran' },
+      { accountNumber: 3001, debit: false, description: 'Försäljning 25% moms' },
+      { accountNumber: 2611, debit: false, description: 'Utgående moms 25%' },
+    ],
+  },
+  {
+    name: 'Betalning till leverantör',
+    description: 'Betala leverantörsfaktura från bank',
+    lines: [
+      { accountNumber: 2440, debit: true, description: 'Leverantörsskuld' },
+      { accountNumber: 1930, debit: false, description: 'Betalning från bankkonto' },
+    ],
+  },
+  {
+    name: 'Betalning från kund',
+    description: 'Kundfaktura betalad till bank',
+    lines: [
+      { accountNumber: 1930, debit: true, description: 'Inbetalning till bankkonto' },
+      { accountNumber: 1510, debit: false, description: 'Kundfordran' },
+    ],
+  },
+  {
+    name: 'Lokalhyra',
+    description: 'Betala hyra för lokaler',
+    lines: [
+      { accountNumber: 5010, debit: true, description: 'Lokalhyra' },
+      { accountNumber: 1930, debit: false, description: 'Betalning från bankkonto' },
+    ],
+  },
+  {
+    name: 'Lön och avgifter',
+    description: 'Löneutbetalning med arbetsgivaravgifter',
+    lines: [
+      { accountNumber: 7210, debit: true, description: 'Lön tjänstemän' },
+      { accountNumber: 7510, debit: true, description: 'Arbetsgivaravgifter' },
+      { accountNumber: 2710, debit: false, description: 'Personalskatt' },
+      { accountNumber: 1930, debit: false, description: 'Utbetalning från bankkonto' },
+    ],
+  },
+]
+
 // Create/Edit Verification Modal Component
 interface CreateVerificationModalProps {
   companyId: number
@@ -215,6 +281,51 @@ function CreateVerificationModal({
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+
+  // Helper to find account by account number
+  const findAccountByNumber = (accountNumber: number): Account | undefined => {
+    return accounts.find((acc) => acc.account_number === accountNumber)
+  }
+
+  // Apply template
+  const applyTemplate = (template: VerificationTemplate, amount: number) => {
+    setFormData({ ...formData, description: template.description })
+
+    // Calculate amounts based on template structure
+    const newLines = template.lines.map((line) => {
+      const account = findAccountByNumber(line.accountNumber)
+      let lineAmount = 0
+
+      // Simple amount distribution
+      if (template.name.includes('moms')) {
+        // For VAT transactions
+        if (line.accountNumber === 2640 || line.accountNumber === 2611) {
+          // VAT is 20% of the amount (25% VAT means amount/(1+0.25) * 0.25)
+          lineAmount = amount * 0.2
+        } else if (line.accountNumber === 4000 || line.accountNumber === 3001) {
+          // Net amount is 80% of the amount
+          lineAmount = amount * 0.8
+        } else {
+          // Total amount (including VAT)
+          lineAmount = amount
+        }
+      } else {
+        // For non-VAT transactions, use the full amount
+        lineAmount = amount
+      }
+
+      return {
+        account_id: account?.id || 0,
+        debit: line.debit ? lineAmount : 0,
+        credit: line.debit ? 0 : lineAmount,
+        description: line.description,
+      }
+    })
+
+    setLines(newLines)
+    setShowTemplates(false)
+  }
 
   const addLine = () => {
     setLines([...lines, { account_id: 0, debit: 0, credit: 0, description: '' }])
@@ -276,8 +387,8 @@ function CreateVerificationModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full my-8">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full my-8 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
           <h2 className="text-2xl font-bold">
             {isEditing ? 'Redigera verifikation' : 'Ny verifikation'}
           </h2>
@@ -288,6 +399,57 @@ function CreateVerificationModal({
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-center">
               <AlertCircle className="w-5 h-5 mr-2" />
               {error}
+            </div>
+          )}
+
+          {/* Template Selection */}
+          {!isEditing && accounts.length > 0 && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <FileText className="w-5 h-5 text-blue-600 mr-2" />
+                  <h3 className="font-medium text-blue-900">Mallar för vanliga transaktioner</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {showTemplates ? 'Dölj mallar' : 'Visa mallar'}
+                </button>
+              </div>
+
+              {showTemplates && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {TEMPLATES.map((template, idx) => (
+                    <div key={idx} className="bg-white p-3 rounded border border-blue-200">
+                      <h4 className="font-medium text-sm mb-1">{template.name}</h4>
+                      <p className="text-xs text-gray-600 mb-2">{template.description}</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          placeholder="Belopp"
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                          id={`template-amount-${idx}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const amountInput = document.getElementById(
+                              `template-amount-${idx}`
+                            ) as HTMLInputElement
+                            const amount = Number(amountInput.value) || 1000
+                            applyTemplate(template, amount)
+                          }}
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Använd
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -347,6 +509,14 @@ function CreateVerificationModal({
                 + Lägg till rad
               </button>
             </div>
+
+            {accounts.length === 0 && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-yellow-800 text-sm">
+                  ⚠️ Inga konton hittades. Kontrollera att BAS-kontoplanen är importerad.
+                </p>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="min-w-full border border-gray-200">
@@ -470,7 +640,7 @@ function CreateVerificationModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 sticky bottom-0 bg-white">
             <button
               type="button"
               onClick={onClose}
