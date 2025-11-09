@@ -244,3 +244,39 @@ export interface SupplierInvoiceListItem {
   status: InvoiceStatus
   paid_amount: number
 }
+
+// Default Accounts & SIE4
+
+export enum DefaultAccountType {
+  REVENUE_25 = 'revenue_25',
+  REVENUE_12 = 'revenue_12',
+  REVENUE_6 = 'revenue_6',
+  REVENUE_0 = 'revenue_0',
+  VAT_OUTGOING_25 = 'vat_outgoing_25',
+  VAT_OUTGOING_12 = 'vat_outgoing_12',
+  VAT_OUTGOING_6 = 'vat_outgoing_6',
+  VAT_INCOMING_25 = 'vat_incoming_25',
+  VAT_INCOMING_12 = 'vat_incoming_12',
+  VAT_INCOMING_6 = 'vat_incoming_6',
+  ACCOUNTS_RECEIVABLE = 'accounts_receivable',
+  ACCOUNTS_PAYABLE = 'accounts_payable',
+  EXPENSE_DEFAULT = 'expense_default',
+}
+
+export interface DefaultAccount {
+  id: number
+  company_id: number
+  account_type: DefaultAccountType
+  account_id: number
+  account_number?: number
+  account_name?: string
+}
+
+export interface SIE4ImportResponse {
+  success: boolean
+  message: string
+  accounts_created: number
+  accounts_updated: number
+  verifications_created: number
+  default_accounts_configured: number
+}

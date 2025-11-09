@@ -12,6 +12,8 @@ import type {
   InvoiceListItem,
   SupplierInvoice,
   SupplierInvoiceListItem,
+  DefaultAccount,
+  SIE4ImportResponse,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -30,6 +32,10 @@ export const companyApi = {
   create: (data: Omit<Company, 'id'>) => api.post<Company>('/api/companies/', data),
   update: (id: number, data: Partial<Company>) => api.patch<Company>(`/api/companies/${id}`, data),
   delete: (id: number) => api.delete(`/api/companies/${id}`),
+  initializeDefaults: (id: number) =>
+    api.post<{ message: string; default_accounts_configured: number }>(
+      `/api/companies/${id}/initialize-defaults`
+    ),
 }
 
 // Accounts
@@ -119,6 +125,37 @@ export const supplierInvoiceApi = {
   markPaid: (id: number, data: { paid_date: string; paid_amount?: number }) =>
     api.post<SupplierInvoice>(`/api/supplier-invoices/${id}/mark-paid`, data),
   delete: (id: number) => api.delete(`/api/supplier-invoices/${id}`),
+}
+
+// SIE4 Import/Export
+export const sie4Api = {
+  import: (companyId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<SIE4ImportResponse>(`/api/sie4/import/${companyId}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+  export: (companyId: number, includeVerifications: boolean = true) => {
+    return api.get(`/api/sie4/export/${companyId}`, {
+      params: { include_verifications: includeVerifications },
+      responseType: 'blob',
+    })
+  },
+}
+
+// Default Accounts
+export const defaultAccountApi = {
+  list: (companyId: number) =>
+    api.get<DefaultAccount[]>('/api/default-accounts/', { params: { company_id: companyId } }),
+  update: (companyId: number, accountType: string, accountId: number) =>
+    api.post<DefaultAccount>('/api/default-accounts/', {
+      company_id: companyId,
+      account_type: accountType,
+      account_id: accountId,
+    }),
 }
 
 export default api
