@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Download, Plus, X } from 'lucide-react'
 import { invoiceApi, companyApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
+import { getErrorMessage } from '@/utils/errors'
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
@@ -374,7 +375,7 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
       onSuccess()
     } catch (err: any) {
       console.error('Failed to create invoice:', err)
-      setError(err.response?.data?.detail || 'Kunde inte skapa faktura')
+      setError(getErrorMessage(err, 'Kunde inte skapa faktura'))
     } finally {
       setSaving(false)
     }
@@ -723,7 +724,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
       onSuccess()
     } catch (err: any) {
       console.error('Failed to create supplier invoice:', err)
-      setError(err.response?.data?.detail || 'Kunde inte skapa leverantörsfaktura')
+      setError(getErrorMessage(err, 'Kunde inte skapa leverantörsfaktura'))
     } finally {
       setSaving(false)
     }

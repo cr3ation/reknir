@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Edit2, Trash2, X, Save } from 'lucide-react'
 import { customerApi, supplierApi, companyApi } from '@/services/api'
 import type { Customer, Supplier } from '@/types'
+import { getErrorMessage } from '@/utils/errors'
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -326,7 +327,7 @@ function CreateCustomerModal({ companyId, onClose, onSuccess }: CreateCustomerMo
       onSuccess()
     } catch (err: any) {
       console.error('Failed to create customer:', err)
-      setError(err.response?.data?.detail || 'Kunde inte skapa kund')
+      setError(getErrorMessage(err, 'Kunde inte skapa kund'))
     } finally {
       setSaving(false)
     }
@@ -535,7 +536,7 @@ function CreateSupplierModal({ companyId, onClose, onSuccess }: CreateSupplierMo
       onSuccess()
     } catch (err: any) {
       console.error('Failed to create supplier:', err)
-      setError(err.response?.data?.detail || 'Kunde inte skapa leverantör')
+      setError(getErrorMessage(err, 'Kunde inte skapa leverantör'))
     } finally {
       setSaving(false)
     }
