@@ -46,9 +46,9 @@ const Setup: React.FC = () => {
 
       setStep('complete');
 
-      // Redirect to dashboard after 2 seconds
+      // Redirect to dashboard after 2 seconds (force page reload to update App state)
       setTimeout(() => {
-        navigate('/');
+        window.location.href = '/';
       }, 2000);
 
     } catch (err: any) {
