@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -8,8 +9,8 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://reknir:reknir@localhost:5432/reknir"
 
-    # CORS
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS (can be comma-separated string or JSON array)
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     # Application
     app_name: str = "Reknir - Swedish Bookkeeping"
@@ -18,6 +19,13 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS origins as list"""
+        if isinstance(self.cors_origins, str):
+            return [origin.strip() for origin in self.cors_origins.split(',')]
+        return self.cors_origins
 
 
 settings = Settings()
