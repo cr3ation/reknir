@@ -40,14 +40,19 @@ export default function Verifications() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Är du säker på att du vill radera denna verifikation?')) return
+    if (!confirm(
+      'VARNING: Radering av verifikationer är endast tillåtet i utvecklingsläge!\n\n' +
+      'I produktion ska du istället använda korrigerande verifikationer enligt god redovisningssed.\n\n' +
+      'Är du säker på att du vill radera denna verifikation?'
+    )) return
 
     try {
       await verificationApi.delete(id)
       await loadData()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete verification:', error)
-      alert('Kunde inte radera verifikationen')
+      const errorMsg = error.response?.data?.detail || 'Kunde inte radera verifikationen'
+      alert(errorMsg)
     }
   }
 

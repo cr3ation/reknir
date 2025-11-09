@@ -14,6 +14,7 @@ from app.schemas.verification import (
     VerificationListItem,
     TransactionLineResponse
 )
+from app.config import settings
 
 router = APIRouter()
 
@@ -185,7 +186,20 @@ def update_verification(
 
 @router.delete("/{verification_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_verification(verification_id: int, db: Session = Depends(get_db)):
-    """Delete a verification (only if not locked, reverses account balances)"""
+    """
+    Delete a verification (only allowed in development mode)
+
+    WARNING: In production, verifications should NEVER be deleted.
+    Instead, use correcting entries (reversal verifications).
+    This endpoint is only available when DEBUG=True for development/testing.
+    """
+    # Only allow deletion in debug mode
+    if not settings.debug:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Radering av verifikationer är inte tillåtet i produktionsläge. Använd istället korrigerande verifikationer."
+        )
+
     verification = db.query(Verification).filter(Verification.id == verification_id).first()
     if not verification:
         raise HTTPException(
