@@ -39,9 +39,13 @@ class Expense(Base):
     
     # Receipt file
     receipt_filename = Column(String(500), nullable=True)
-    
+
     # Status and workflow
-    status = Column(SQLEnum(ExpenseStatus), nullable=False, default=ExpenseStatus.DRAFT)
+    status = Column(
+        SQLEnum(ExpenseStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ExpenseStatus.DRAFT
+    )
     
     # When approved/paid
     approved_date = Column(DateTime, nullable=True)
