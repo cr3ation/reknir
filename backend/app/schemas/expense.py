@@ -9,8 +9,8 @@ class ExpenseBase(BaseModel):
     employee_name: str = Field(..., min_length=1, max_length=200)
     expense_date: date
     description: str = Field(..., min_length=1, max_length=500)
-    amount: Decimal = Field(..., ge=0, decimal_places=2)
-    vat_amount: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    amount: Decimal = Field(..., ge=0)
+    vat_amount: Decimal = Field(default=Decimal("0"), ge=0)
     expense_account_id: Optional[int] = None
     vat_account_id: Optional[int] = None
     receipt_filename: Optional[str] = None
@@ -26,8 +26,8 @@ class ExpenseUpdate(BaseModel):
     employee_name: Optional[str] = Field(None, min_length=1, max_length=200)
     expense_date: Optional[date] = None
     description: Optional[str] = Field(None, min_length=1, max_length=500)
-    amount: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
-    vat_amount: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    amount: Optional[Decimal] = Field(None, ge=0)
+    vat_amount: Optional[Decimal] = Field(None, ge=0)
     expense_account_id: Optional[int] = None
     vat_account_id: Optional[int] = None
     receipt_filename: Optional[str] = None
