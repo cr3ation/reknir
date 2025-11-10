@@ -196,19 +196,23 @@ def get_vat_report(
     If no dates provided, shows all-time totals.
     """
 
-    # Outgoing VAT account numbers (from sales) - 2611, 2612, 2613
-    outgoing_vat_account_numbers = [2611, 2612, 2613]
-
-    # Incoming VAT account numbers (from purchases) - 2641, 2642, 2643
-    incoming_vat_account_numbers = [2641, 2642, 2643]
-
-    # Get all VAT accounts
-    all_vat_account_numbers = outgoing_vat_account_numbers + incoming_vat_account_numbers
+    # Get all VAT accounts according to Swedish BAS account plan:
+    # - Outgoing VAT (from sales): 2610-2619
+    # - Incoming VAT (from purchases): 2640-2649
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
-        Account.account_number.in_(all_vat_account_numbers),
-        Account.active == True
+        Account.active == True,
+        (
+            # Outgoing VAT accounts
+            ((Account.account_number >= 2610) & (Account.account_number <= 2619)) |
+            # Incoming VAT accounts
+            ((Account.account_number >= 2640) & (Account.account_number <= 2649))
+        )
     ).all()
+
+    # Categorize accounts
+    outgoing_vat_accounts = [acc for acc in vat_accounts if 2610 <= acc.account_number <= 2619]
+    incoming_vat_accounts = [acc for acc in vat_accounts if 2640 <= acc.account_number <= 2649]
 
     # Create lookup dict
     accounts_by_number = {acc.account_number: acc for acc in vat_accounts}
@@ -239,10 +243,7 @@ def get_vat_report(
     outgoing_vat = []
     total_outgoing = Decimal("0")
 
-    for account in vat_accounts:
-        if account.account_number not in outgoing_vat_account_numbers:
-            continue
-
+    for account in outgoing_vat_accounts:
         # Find transactions for this account
         trans = next((t for t in transactions if t.account_id == account.id), None)
 
@@ -262,10 +263,7 @@ def get_vat_report(
     incoming_vat = []
     total_incoming = Decimal("0")
 
-    for account in vat_accounts:
-        if account.account_number not in incoming_vat_account_numbers:
-            continue
-
+    for account in incoming_vat_accounts:
         # Find transactions for this account
         trans = next((t for t in transactions if t.account_id == account.id), None)
 

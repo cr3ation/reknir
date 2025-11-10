@@ -491,8 +491,8 @@ export default function Reports() {
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
             <h4 className="text-sm font-semibold text-blue-900 mb-2">Om momsrapporten</h4>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Utgående moms kommer från försäljningsfakturor (konto 2611-2613)</li>
-              <li>• Ingående moms kommer från inköpsfakturor (konto 2641-2643)</li>
+              <li>• Utgående moms kommer från försäljningsfakturor (konto 2610-2619)</li>
+              <li>• Ingående moms kommer från inköpsfakturor (konto 2640-2649)</li>
               <li>
                 • Nettomoms = Utgående moms - Ingående moms (positivt värde = betala, negativt =
                 återfå)
