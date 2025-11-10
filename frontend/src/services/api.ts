@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type {
   Company,
+  FiscalYear,
   Account,
   Verification,
   VerificationListItem,
@@ -38,6 +39,17 @@ export const companyApi = {
     api.post<{ message: string; default_accounts_configured: number }>(
       `/api/companies/${id}/initialize-defaults`
     ),
+}
+
+// Fiscal Years
+export const fiscalYearApi = {
+  list: (companyId: number) => api.get<FiscalYear[]>('/api/fiscal-years/', { params: { company_id: companyId } }),
+  get: (id: number) => api.get<FiscalYear>(`/api/fiscal-years/${id}`),
+  getCurrent: (companyId: number) => api.get<FiscalYear | null>(`/api/fiscal-years/current/by-company/${companyId}`),
+  create: (data: Omit<FiscalYear, 'id' | 'is_current'>) => api.post<FiscalYear>('/api/fiscal-years/', data),
+  update: (id: number, data: Partial<FiscalYear>) => api.patch<FiscalYear>(`/api/fiscal-years/${id}`, data),
+  delete: (id: number) => api.delete(`/api/fiscal-years/${id}`),
+  assignVerifications: (id: number) => api.post<{ message: string; verifications_assigned: number }>(`/api/fiscal-years/${id}/assign-verifications`),
 }
 
 // Accounts

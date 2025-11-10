@@ -13,6 +13,7 @@ class Verification(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    fiscal_year_id = Column(Integer, ForeignKey("fiscal_years.id"), nullable=True)  # Nullable for backwards compatibility
 
     # Verification identity
     verification_number = Column(Integer, nullable=False, index=True)  # Löpnummer
@@ -34,6 +35,7 @@ class Verification(Base):
 
     # Relationships
     company = relationship("Company", back_populates="verifications")
+    fiscal_year = relationship("FiscalYear", back_populates="verifications")
     transaction_lines = relationship(
         "TransactionLine",
         back_populates="verification",

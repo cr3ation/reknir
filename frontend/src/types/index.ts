@@ -32,6 +32,17 @@ export interface Company {
   vat_reporting_period: VATReportingPeriod
 }
 
+export interface FiscalYear {
+  id: number
+  company_id: number
+  year: number
+  label: string
+  start_date: string
+  end_date: string
+  is_closed: boolean
+  is_current: boolean
+}
+
 export interface Account {
   id: number
   company_id: number
