@@ -210,9 +210,19 @@ def get_vat_report(
         )
     ).all()
 
+    # Debug logging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"VAT Report - Found {len(vat_accounts)} VAT accounts for company {company_id}")
+    for acc in vat_accounts:
+        logger.info(f"  VAT Account: {acc.account_number} - {acc.name}")
+
     # Categorize accounts
     outgoing_vat_accounts = [acc for acc in vat_accounts if 2610 <= acc.account_number <= 2619]
     incoming_vat_accounts = [acc for acc in vat_accounts if 2640 <= acc.account_number <= 2649]
+
+    logger.info(f"VAT Report - {len(outgoing_vat_accounts)} outgoing, {len(incoming_vat_accounts)} incoming")
+    logger.info(f"VAT Report - Date filter: {start_date} to {end_date}")
 
     # Create lookup dict
     accounts_by_number = {acc.account_number: acc for acc in vat_accounts}
@@ -238,6 +248,12 @@ def get_vat_report(
     query = query.group_by(TransactionLine.account_id)
 
     transactions = query.all()
+
+    logger.info(f"VAT Report - Found {len(transactions)} transaction groups")
+    for trans in transactions:
+        acc = next((a for a in vat_accounts if a.id == trans.account_id), None)
+        if acc:
+            logger.info(f"  Account {acc.account_number}: Debit={trans.total_debit}, Credit={trans.total_credit}")
 
     # Process outgoing VAT (credit balance = sales tax collected)
     outgoing_vat = []
@@ -298,7 +314,13 @@ def get_vat_report(
             "total": float(total_incoming)
         },
         "net_vat": float(net_vat),
-        "pay_or_refund": "pay" if net_vat > 0 else "refund" if net_vat < 0 else "zero"
+        "pay_or_refund": "pay" if net_vat > 0 else "refund" if net_vat < 0 else "zero",
+        "debug_info": {
+            "total_vat_accounts_found": len(vat_accounts),
+            "outgoing_vat_accounts": [{"number": acc.account_number, "name": acc.name} for acc in outgoing_vat_accounts],
+            "incoming_vat_accounts": [{"number": acc.account_number, "name": acc.name} for acc in incoming_vat_accounts],
+            "transaction_groups_found": len(transactions),
+        }
     }
 
 
@@ -374,4 +396,86 @@ def get_vat_periods(
         "year": year,
         "reporting_period": company.vat_reporting_period.value,
         "periods": periods
+    }
+
+
+@router.get("/vat-debug")
+def get_vat_debug(
+    company_id: int = Query(..., description="Company ID"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to see what VAT accounts and transactions exist
+    """
+    # Get all VAT accounts
+    vat_accounts = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.active == True,
+        (
+            ((Account.account_number >= 2610) & (Account.account_number <= 2619)) |
+            ((Account.account_number >= 2640) & (Account.account_number <= 2649))
+        )
+    ).all()
+
+    # Get all verifications with dates
+    query = db.query(Verification).filter(
+        Verification.company_id == company_id
+    )
+
+    if start_date:
+        query = query.filter(Verification.transaction_date >= start_date)
+    if end_date:
+        query = query.filter(Verification.transaction_date <= end_date)
+
+    verifications = query.all()
+
+    # Get transaction lines for VAT accounts
+    vat_account_ids = [acc.id for acc in vat_accounts]
+
+    trans_query = db.query(TransactionLine).join(
+        Verification, TransactionLine.verification_id == Verification.id
+    ).filter(
+        Verification.company_id == company_id,
+        TransactionLine.account_id.in_(vat_account_ids) if vat_account_ids else False
+    )
+
+    if start_date:
+        trans_query = trans_query.filter(Verification.transaction_date >= start_date)
+    if end_date:
+        trans_query = trans_query.filter(Verification.transaction_date <= end_date)
+
+    vat_transactions = trans_query.all()
+
+    return {
+        "vat_accounts": [
+            {
+                "id": acc.id,
+                "account_number": acc.account_number,
+                "name": acc.name,
+                "current_balance": float(acc.current_balance)
+            }
+            for acc in vat_accounts
+        ],
+        "total_verifications": len(verifications),
+        "verification_date_range": {
+            "earliest": min([v.transaction_date.isoformat() for v in verifications]) if verifications else None,
+            "latest": max([v.transaction_date.isoformat() for v in verifications]) if verifications else None,
+        } if verifications else None,
+        "vat_transactions": [
+            {
+                "account_id": t.account_id,
+                "verification_id": t.verification_id,
+                "debit": float(t.debit),
+                "credit": float(t.credit),
+                "verification_date": db.query(Verification).filter(Verification.id == t.verification_id).first().transaction_date.isoformat()
+            }
+            for t in vat_transactions[:50]  # Limit to first 50
+        ],
+        "total_vat_transactions": len(vat_transactions),
+        "filters": {
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+        }
     }

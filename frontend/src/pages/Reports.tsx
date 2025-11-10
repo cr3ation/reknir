@@ -407,6 +407,26 @@ export default function Reports() {
 
           {vatReport && (
             <>
+          {/* Debug Info */}
+          {vatReport.debug_info && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <h4 className="text-sm font-semibold text-yellow-900 mb-2">Debug-information:</h4>
+              <div className="text-sm text-yellow-800 space-y-1">
+                <p>Hittade {vatReport.debug_info.total_vat_accounts_found} momskonton totalt</p>
+                <p>Utgående momskonton ({vatReport.debug_info.outgoing_vat_accounts.length}):
+                  {vatReport.debug_info.outgoing_vat_accounts.length > 0
+                    ? vatReport.debug_info.outgoing_vat_accounts.map(a => ` ${a.number}`).join(',')
+                    : ' Inga'}
+                </p>
+                <p>Ingående momskonton ({vatReport.debug_info.incoming_vat_accounts.length}):
+                  {vatReport.debug_info.incoming_vat_accounts.length > 0
+                    ? vatReport.debug_info.incoming_vat_accounts.map(a => ` ${a.number}`).join(',')
+                    : ' Inga'}
+                </p>
+                <p>Transaktionsgrupper funna: {vatReport.debug_info.transaction_groups_found}</p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-8 mb-6">
             {/* Outgoing VAT */}

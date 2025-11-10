@@ -314,6 +314,12 @@ export interface VATReport {
   }
   net_vat: number
   pay_or_refund: 'pay' | 'refund' | 'zero'
+  debug_info?: {
+    total_vat_accounts_found: number
+    outgoing_vat_accounts: Array<{ number: number; name: string }>
+    incoming_vat_accounts: Array<{ number: number; name: string }>
+    transaction_groups_found: number
+  }
 }
 
 export interface VATPeriod {
