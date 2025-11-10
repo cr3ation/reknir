@@ -156,6 +156,21 @@ services:
     networks:
       - reknir-internal
 
+  # Cloudflare Tunnel (optional - for production public access)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: reknir-cloudflared
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}  # Set in .env.prod after creating tunnel
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+    depends_on:
+      - nginx
+    # Note: This container needs no exposed ports!
+    # It creates an outbound connection to Cloudflare
+
 volumes:
   postgres_data:
     driver: local
@@ -362,6 +377,9 @@ VITE_API_URL=https://your-domain.com
 
 # Backup
 BACKUP_KEEP_DAYS=2555
+
+# Cloudflare Tunnel (optional - only needed if using Cloudflare Tunnel in Docker)
+TUNNEL_TOKEN=your_tunnel_token_from_cloudflare_dashboard
 ```
 
 **Generate strong passwords:**
@@ -402,89 +420,132 @@ Cloudflare Tunnel creates a secure outbound connection from your server to Cloud
 
 ### Setup Steps
 
-#### 1. Install cloudflared
+#### Method A: Using Docker (Recommended - Everything Containerized!)
 
-**Ubuntu/Debian:**
+This method keeps cloudflared inside Docker, so you don't need to install anything on your host system.
+
+**1. Create Tunnel via Cloudflare Dashboard**
+
+Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/):
+- Navigate to **Networks** → **Tunnels**
+- Click **Create a tunnel**
+- Choose **Cloudflared**
+- Name it `reknir` and click **Save tunnel**
+- **Copy the tunnel token** (long string starting with `eyJ...`)
+
+**2. Configure DNS in Cloudflare Dashboard**
+
+In the tunnel configuration:
+- Add a **Public Hostname**:
+  - **Subdomain:** (leave empty for root domain or enter subdomain)
+  - **Domain:** your-domain.com
+  - **Type:** HTTP
+  - **URL:** nginx:80 (or http://nginx:80)
+- Click **Save**
+
+**3. Add Tunnel Token to .env.prod**
+
+Add to your `.env.prod` file:
 ```bash
-# Add Cloudflare's package repository
+TUNNEL_TOKEN=your_tunnel_token_here
+```
+
+**4. Start All Services (Including Cloudflared)**
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+```
+
+That's it! The cloudflared container will:
+- Start automatically with the rest of your services
+- Connect to Cloudflare using the tunnel token
+- Route traffic from your domain to nginx
+- No ports exposed on the host (except SSH)
+
+**5. Verify**
+
+```bash
+# Check all containers are running
+docker compose -f docker-compose.prod.yml ps
+
+# Check cloudflared logs
+docker compose -f docker-compose.prod.yml logs cloudflared
+```
+
+Visit `https://your-domain.com` - you should see Reknir!
+
+---
+
+#### Method B: Installing cloudflared on Host (Alternative)
+
+If you prefer to install cloudflared directly on the host system:
+
+**1. Install cloudflared**
+
+```bash
+# Ubuntu/Debian
 curl -L https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-archive-keyring.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/cloudflare-archive-keyring.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
-
-# Install
 sudo apt-get update
 sudo apt-get install cloudflared
 ```
 
-**Other systems:** Download from https://github.com/cloudflare/cloudflared/releases
-
-#### 2. Authenticate with Cloudflare
+**2. Authenticate and Create Tunnel**
 
 ```bash
 cloudflared tunnel login
-```
-
-This opens a browser window. Select your domain and authorize.
-
-#### 3. Create a Tunnel
-
-```bash
 cloudflared tunnel create reknir
 ```
 
-This creates a tunnel and saves credentials to `~/.cloudflared/`.
-
-**Note the Tunnel ID** from the output (e.g., `abc123def-456g-789h-012i-345jkl678mno`).
-
-#### 4. Create Tunnel Configuration
+**3. Configure Tunnel**
 
 Create `~/.cloudflared/config.yml`:
-
 ```yaml
-tunnel: abc123def-456g-789h-012i-345jkl678mno  # Your tunnel ID
-credentials-file: /home/YOUR_USERNAME/.cloudflared/abc123def-456g-789h-012i-345jkl678mno.json
+tunnel: <tunnel-id>
+credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
 
 ingress:
-  # Route your domain to local nginx
   - hostname: your-domain.com
     service: http://localhost:80
-
-  # Catch-all rule (required)
   - service: http_status:404
 ```
 
-#### 5. Configure DNS
-
-Route your domain through the tunnel:
+**4. Route DNS**
 
 ```bash
 cloudflared tunnel route dns reknir your-domain.com
 ```
 
-This creates a CNAME record in Cloudflare DNS pointing to your tunnel.
-
-#### 6. Start Services
+**5. Start Services**
 
 ```bash
-# Start Reknir services
+# Start Reknir (without cloudflared service in docker-compose)
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
-# Start cloudflared tunnel
-cloudflared tunnel run reknir
-```
-
-#### 7. Set Up cloudflared as a System Service
-
-To run cloudflared automatically:
-
-```bash
+# Install and start cloudflared as system service
 sudo cloudflared service install
 sudo systemctl start cloudflared
 sudo systemctl enable cloudflared
 ```
 
-#### 8. Verify
+**Note:** With this method, remove or comment out the `cloudflared` service from your `docker-compose.prod.yml`.
 
-Visit `https://your-domain.com` - you should see Reknir!
+---
+
+#### Verify Tunnel Status
+
+**For Docker method:**
+```bash
+docker compose -f docker-compose.prod.yml logs cloudflared
+```
+
+**For host installation:**
+```bash
+sudo systemctl status cloudflared
+sudo journalctl -u cloudflared -f
+```
+
+You should see: `Connection <UUID> registered` - this means the tunnel is active!
 
 ### Cloudflare Dashboard Settings
 
@@ -1056,24 +1117,25 @@ docker network prune
 
 ## Quick Start Checklist
 
-### For Cloudflare Tunnel:
+### For Cloudflare Tunnel (Docker Method - Recommended):
 
 - [ ] Server with Docker installed
 - [ ] Configure SSH access (key-based auth, disable password login)
-- [ ] Configure firewall: `sudo ufw allow 22/tcp && sudo ufw allow 80/tcp`
+- [ ] Configure firewall: `sudo ufw allow 22/tcp` (only SSH needed!)
 - [ ] Clone repository to `/opt/reknir`
 - [ ] Create production Dockerfiles and configs
 - [ ] Create `.env.prod` with strong passwords
-- [ ] Install cloudflared
-- [ ] Authenticate: `cloudflared tunnel login`
-- [ ] Create tunnel: `cloudflared tunnel create reknir`
-- [ ] Configure tunnel in `~/.cloudflared/config.yml`
-- [ ] Route DNS: `cloudflared tunnel route dns reknir your-domain.com`
-- [ ] Start Reknir: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
-- [ ] Start tunnel: `cloudflared service install && sudo systemctl start cloudflared`
+- [ ] Go to Cloudflare Zero Trust Dashboard → Networks → Tunnels
+- [ ] Create tunnel named `reknir` and copy the tunnel token
+- [ ] Add tunnel token to `.env.prod` as `TUNNEL_TOKEN=...`
+- [ ] Configure Public Hostname in Cloudflare: your-domain.com → http://nginx:80
+- [ ] Start all services: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
+- [ ] Verify: `docker compose -f docker-compose.prod.yml logs cloudflared`
 - [ ] Configure Cloudflare dashboard (SSL: Full, Always HTTPS: On)
 - [ ] Install fail2ban for SSH protection
 - [ ] Test: Visit `https://your-domain.com`
+
+**Note:** No need to install cloudflared on host - it runs in Docker!
 
 ### For Traditional Setup:
 
