@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { companyApi, reportApi } from '@/services/api'
-import type { Company, BalanceSheet, IncomeStatement } from '@/types'
+import type { Company, BalanceSheet, IncomeStatement, VATReport } from '@/types'
 
 type ReportTab = 'balance' | 'income' | 'vat'
 
@@ -9,6 +9,7 @@ export default function Reports() {
   const [activeTab, setActiveTab] = useState<ReportTab>('income')
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
+  const [vatReport, setVATReport] = useState<VATReport | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -29,13 +30,15 @@ export default function Reports() {
       setCompany(comp)
 
       // Load reports
-      const [balanceRes, incomeRes] = await Promise.all([
+      const [balanceRes, incomeRes, vatRes] = await Promise.all([
         reportApi.balanceSheet(comp.id),
         reportApi.incomeStatement(comp.id),
+        reportApi.vatReport(comp.id),
       ])
 
       setBalanceSheet(balanceRes.data)
       setIncomeStatement(incomeRes.data)
+      setVATReport(vatRes.data)
     } catch (error) {
       console.error('Failed to load reports:', error)
     } finally {
@@ -301,18 +304,104 @@ export default function Reports() {
       )}
 
       {/* VAT Report */}
-      {activeTab === 'vat' && (
+      {activeTab === 'vat' && vatReport && (
         <div className="card">
           <h2 className="text-2xl font-bold mb-6">Momsrapport</h2>
           <p className="text-gray-600 mb-4">
-            Momsrapport baserad på konto 2611-2613 (utgående moms) och 2641-2643 (ingående moms).
+            Sammanställning av utgående moms (försäljning) och ingående moms (inköp).
           </p>
 
-          <div className="bg-blue-50 border border-blue-200 rounded p-4">
-            <p className="text-sm text-blue-800">
-              <strong>Kommer snart!</strong> Momsrapport med sammanställning per momssats och
-              beräkning av moms att betala/återfå.
-            </p>
+          <div className="grid grid-cols-2 gap-8 mb-6">
+            {/* Outgoing VAT */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Utgående moms (försäljning)</h3>
+              <table className="min-w-full">
+                <tbody className="divide-y divide-gray-200">
+                  {vatReport.outgoing_vat.accounts.map((account) => (
+                    <tr key={account.account_number}>
+                      <td className="py-2 text-sm font-mono text-gray-500">
+                        {account.account_number}
+                      </td>
+                      <td className="py-2 text-sm text-gray-900">{account.name}</td>
+                      <td className="py-2 text-sm text-right font-mono">
+                        {formatCurrency(account.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-gray-900">
+                    <td colSpan={2} className="py-2 text-sm font-semibold">
+                      Summa utgående moms
+                    </td>
+                    <td className="py-2 text-sm text-right font-mono font-semibold">
+                      {formatCurrency(vatReport.outgoing_vat.total)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Incoming VAT */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Ingående moms (inköp)</h3>
+              <table className="min-w-full">
+                <tbody className="divide-y divide-gray-200">
+                  {vatReport.incoming_vat.accounts.map((account) => (
+                    <tr key={account.account_number}>
+                      <td className="py-2 text-sm font-mono text-gray-500">
+                        {account.account_number}
+                      </td>
+                      <td className="py-2 text-sm text-gray-900">{account.name}</td>
+                      <td className="py-2 text-sm text-right font-mono">
+                        {formatCurrency(account.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-gray-900">
+                    <td colSpan={2} className="py-2 text-sm font-semibold">
+                      Summa ingående moms
+                    </td>
+                    <td className="py-2 text-sm text-right font-mono font-semibold">
+                      {formatCurrency(vatReport.incoming_vat.total)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Net VAT */}
+          <div className="border-t-4 border-gray-900 pt-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xl font-bold">
+                {vatReport.pay_or_refund === 'pay' && 'Moms att betala till Skatteverket'}
+                {vatReport.pay_or_refund === 'refund' && 'Moms att få tillbaka från Skatteverket'}
+                {vatReport.pay_or_refund === 'zero' && 'Ingen moms att betala eller få tillbaka'}
+              </span>
+              <span
+                className={`text-xl font-bold font-mono ${
+                  vatReport.pay_or_refund === 'pay'
+                    ? 'text-red-600'
+                    : vatReport.pay_or_refund === 'refund'
+                    ? 'text-green-600'
+                    : 'text-gray-600'
+                }`}
+              >
+                {formatCurrency(Math.abs(vatReport.net_vat))}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
+            <h4 className="text-sm font-semibold text-blue-900 mb-2">Om momsrapporten</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• Utgående moms kommer från försäljningsfakturor (konto 2611-2613)</li>
+              <li>• Ingående moms kommer från inköpsfakturor (konto 2641-2643)</li>
+              <li>
+                • Nettomoms = Utgående moms - Ingående moms (positivt värde = betala, negativt =
+                återfå)
+              </li>
+              <li>• Använd denna rapport som underlag för din momsdeklaration</li>
+            </ul>
           </div>
         </div>
       )}

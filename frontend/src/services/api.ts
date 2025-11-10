@@ -14,6 +14,7 @@ import type {
   SupplierInvoiceListItem,
   DefaultAccount,
   SIE4ImportResponse,
+  VATReport,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -78,6 +79,8 @@ export const reportApi = {
     api.get<IncomeStatement>('/api/reports/income-statement', {
       params: { company_id: companyId },
     }),
+  vatReport: (companyId: number) =>
+    api.get<VATReport>('/api/reports/vat-report', { params: { company_id: companyId } }),
 }
 
 // Customers

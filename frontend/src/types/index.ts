@@ -280,3 +280,18 @@ export interface SIE4ImportResponse {
   verifications_created: number
   default_accounts_configured: number
 }
+
+export interface VATReport {
+  company_id: number
+  report_type: string
+  outgoing_vat: {
+    accounts: Array<{ account_number: number; name: string; amount: number }>
+    total: number
+  }
+  incoming_vat: {
+    accounts: Array<{ account_number: number; name: string; amount: number }>
+    total: number
+  }
+  net_vat: number
+  pay_or_refund: 'pay' | 'refund' | 'zero'
+}

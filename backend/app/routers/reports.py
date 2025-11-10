@@ -178,3 +178,74 @@ def get_trial_balance(
         "total_credit": float(total_credit),
         "balanced": abs(total_debit - total_credit) < 0.01
     }
+
+
+@router.get("/vat-report")
+def get_vat_report(
+    company_id: int = Query(..., description="Company ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate VAT Report (Momsrapport)
+    Shows outgoing VAT (sales) and incoming VAT (purchases) with net amount to pay/refund
+    """
+
+    # Outgoing VAT accounts (from sales) - 2611, 2612, 2613
+    outgoing_vat_accounts = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.account_number.in_([2611, 2612, 2613]),
+        Account.active == True
+    ).all()
+
+    # Incoming VAT accounts (from purchases) - 2641, 2642, 2643
+    incoming_vat_accounts = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.account_number.in_([2641, 2642, 2643]),
+        Account.active == True
+    ).all()
+
+    outgoing_vat = []
+    total_outgoing = Decimal("0")
+
+    for account in outgoing_vat_accounts:
+        # Outgoing VAT has negative balance (credit)
+        vat_amount = abs(account.current_balance)
+        outgoing_vat.append({
+            "account_number": account.account_number,
+            "name": account.name,
+            "amount": float(vat_amount)
+        })
+        total_outgoing += vat_amount
+
+    incoming_vat = []
+    total_incoming = Decimal("0")
+
+    for account in incoming_vat_accounts:
+        # Incoming VAT has positive balance (debit)
+        vat_amount = account.current_balance
+        incoming_vat.append({
+            "account_number": account.account_number,
+            "name": account.name,
+            "amount": float(vat_amount)
+        })
+        total_incoming += vat_amount
+
+    # Net VAT = Outgoing - Incoming
+    # Positive = Pay to Skatteverket
+    # Negative = Refund from Skatteverket
+    net_vat = total_outgoing - total_incoming
+
+    return {
+        "company_id": company_id,
+        "report_type": "vat_report",
+        "outgoing_vat": {
+            "accounts": outgoing_vat,
+            "total": float(total_outgoing)
+        },
+        "incoming_vat": {
+            "accounts": incoming_vat,
+            "total": float(total_incoming)
+        },
+        "net_vat": float(net_vat),
+        "pay_or_refund": "pay" if net_vat > 0 else "refund" if net_vat < 0 else "zero"
+    }
