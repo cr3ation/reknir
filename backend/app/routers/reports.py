@@ -250,10 +250,16 @@ def get_vat_report(
     transactions = query.all()
 
     logger.info(f"VAT Report - Found {len(transactions)} transaction groups")
+
+    # Get account details for all transactions (even those not in our VAT ranges)
+    all_account_ids = [t.account_id for t in transactions]
+    all_trans_accounts = db.query(Account).filter(Account.id.in_(all_account_ids)).all()
+    trans_accounts_by_id = {acc.id: acc for acc in all_trans_accounts}
+
     for trans in transactions:
-        acc = next((a for a in vat_accounts if a.id == trans.account_id), None)
+        acc = trans_accounts_by_id.get(trans.account_id)
         if acc:
-            logger.info(f"  Account {acc.account_number}: Debit={trans.total_debit}, Credit={trans.total_credit}")
+            logger.info(f"  Account {acc.account_number} ({acc.name}): Debit={trans.total_debit}, Credit={trans.total_credit}")
 
     # Process outgoing VAT (credit balance = sales tax collected)
     outgoing_vat = []
@@ -320,6 +326,15 @@ def get_vat_report(
             "outgoing_vat_accounts": [{"number": acc.account_number, "name": acc.name} for acc in outgoing_vat_accounts],
             "incoming_vat_accounts": [{"number": acc.account_number, "name": acc.name} for acc in incoming_vat_accounts],
             "transaction_groups_found": len(transactions),
+            "accounts_with_transactions": [
+                {
+                    "number": trans_accounts_by_id[t.account_id].account_number,
+                    "name": trans_accounts_by_id[t.account_id].name,
+                    "debit": float(t.total_debit or 0),
+                    "credit": float(t.total_credit or 0)
+                }
+                for t in transactions if t.account_id in trans_accounts_by_id
+            ]
         }
     }
 

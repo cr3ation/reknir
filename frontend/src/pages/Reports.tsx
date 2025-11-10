@@ -411,7 +411,7 @@ export default function Reports() {
           {vatReport.debug_info && (
             <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
               <h4 className="text-sm font-semibold text-yellow-900 mb-2">Debug-information:</h4>
-              <div className="text-sm text-yellow-800 space-y-1">
+              <div className="text-sm text-yellow-800 space-y-2">
                 <p>Hittade {vatReport.debug_info.total_vat_accounts_found} momskonton totalt</p>
                 <p>Utgående momskonton ({vatReport.debug_info.outgoing_vat_accounts.length}):
                   {vatReport.debug_info.outgoing_vat_accounts.length > 0
@@ -424,6 +424,22 @@ export default function Reports() {
                     : ' Inga'}
                 </p>
                 <p>Transaktionsgrupper funna: {vatReport.debug_info.transaction_groups_found}</p>
+
+                {vatReport.debug_info.accounts_with_transactions && vatReport.debug_info.accounts_with_transactions.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-yellow-300">
+                    <p className="font-semibold mb-2">⚠️ Konton som HAR transaktioner men INTE räknas som moms:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      {vatReport.debug_info.accounts_with_transactions.map((acc, idx) => (
+                        <li key={idx}>
+                          <strong>{acc.number}</strong> - {acc.name}
+                          <span className="ml-2 text-xs">
+                            (Debet: {formatCurrency(acc.debit)}, Kredit: {formatCurrency(acc.credit)})
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           )}

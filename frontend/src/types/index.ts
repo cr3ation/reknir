@@ -319,6 +319,12 @@ export interface VATReport {
     outgoing_vat_accounts: Array<{ number: number; name: string }>
     incoming_vat_accounts: Array<{ number: number; name: string }>
     transaction_groups_found: number
+    accounts_with_transactions: Array<{
+      number: number
+      name: string
+      debit: number
+      credit: number
+    }>
   }
 }
 
