@@ -44,7 +44,18 @@ async def import_sie4_file(
     try:
         # Read file content
         content = await file.read()
-        file_content = content.decode('utf-8')
+
+        # Try different encodings (SIE files can use various encodings)
+        file_content = None
+        for encoding in ['cp437', 'iso-8859-1', 'windows-1252', 'utf-8']:
+            try:
+                file_content = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if file_content is None:
+            raise ValueError("Could not decode SIE4 file. Unsupported encoding.")
 
         # Import
         stats = sie4_service.import_sie4(db, company_id, file_content)
