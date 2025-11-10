@@ -37,6 +37,8 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.prod
+*.env.prod
 backend/.env
 frontend/.env
 
@@ -76,6 +78,15 @@ coverage.xml
 
 # Docker
 .docker/
+
+# Production
+docker-compose.prod.yml
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Cloudflare
+.cloudflared/
 
 # OS
 Thumbs.db
