@@ -16,6 +16,12 @@ export enum AccountingBasis {
   CASH = 'cash',
 }
 
+export enum VATReportingPeriod {
+  MONTHLY = 'monthly',
+  QUARTERLY = 'quarterly',
+  YEARLY = 'yearly',
+}
+
 export interface Company {
   id: number
   name: string
@@ -23,6 +29,7 @@ export interface Company {
   fiscal_year_start: string
   fiscal_year_end: string
   accounting_basis: AccountingBasis
+  vat_reporting_period: VATReportingPeriod
 }
 
 export interface Account {
@@ -284,6 +291,8 @@ export interface SIE4ImportResponse {
 export interface VATReport {
   company_id: number
   report_type: string
+  start_date: string | null
+  end_date: string | null
   outgoing_vat: {
     accounts: Array<{ account_number: number; name: string; amount: number }>
     total: number
@@ -294,4 +303,18 @@ export interface VATReport {
   }
   net_vat: number
   pay_or_refund: 'pay' | 'refund' | 'zero'
+}
+
+export interface VATPeriod {
+  name: string
+  start_date: string
+  end_date: string
+  period_type: 'monthly' | 'quarterly' | 'yearly'
+}
+
+export interface VATPeriodsResponse {
+  company_id: number
+  year: number
+  reporting_period: string
+  periods: VATPeriod[]
 }

@@ -10,6 +10,13 @@ class AccountingBasis(str, enum.Enum):
     CASH = "cash"  # Kontantmetoden
 
 
+class VATReportingPeriod(str, enum.Enum):
+    """VAT reporting period frequency"""
+    MONTHLY = "monthly"      # Månatlig (omsättning > 40M SEK/år)
+    QUARTERLY = "quarterly"  # Kvartalsvis (vanligast för små företag)
+    YEARLY = "yearly"        # Årlig (omsättning < 1M SEK/år)
+
+
 class Company(Base):
     """Company/organization information"""
     __tablename__ = "companies"
@@ -26,6 +33,13 @@ class Company(Base):
     accounting_basis = Column(
         SQLEnum(AccountingBasis, values_callable=lambda x: [e.value for e in x]),
         default=AccountingBasis.ACCRUAL,
+        nullable=False
+    )
+
+    # VAT settings
+    vat_reporting_period = Column(
+        SQLEnum(VATReportingPeriod, values_callable=lambda x: [e.value for e in x]),
+        default=VATReportingPeriod.QUARTERLY,
         nullable=False
     )
 

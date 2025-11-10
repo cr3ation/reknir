@@ -15,6 +15,7 @@ import type {
   DefaultAccount,
   SIE4ImportResponse,
   VATReport,
+  VATPeriodsResponse,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -79,8 +80,18 @@ export const reportApi = {
     api.get<IncomeStatement>('/api/reports/income-statement', {
       params: { company_id: companyId },
     }),
-  vatReport: (companyId: number) =>
-    api.get<VATReport>('/api/reports/vat-report', { params: { company_id: companyId } }),
+  vatReport: (companyId: number, startDate?: string, endDate?: string) =>
+    api.get<VATReport>('/api/reports/vat-report', {
+      params: {
+        company_id: companyId,
+        start_date: startDate,
+        end_date: endDate,
+      },
+    }),
+  vatPeriods: (companyId: number, year: number) =>
+    api.get<VATPeriodsResponse>('/api/reports/vat-periods', {
+      params: { company_id: companyId, year },
+    }),
 }
 
 // Customers
