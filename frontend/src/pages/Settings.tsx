@@ -115,10 +115,25 @@ export default function SettingsPage() {
     try {
       setLoading(true)
       const response = await sie4Api.import(company.id, file)
-      showMessage(
-        `Import lyckades! ${response.data.accounts_created} konton skapade, ${response.data.default_accounts_configured} standardkonton konfigurerade.`,
-        'success'
-      )
+
+      // Build detailed summary message
+      const parts = []
+      if (response.data.accounts_created > 0) {
+        parts.push(`${response.data.accounts_created} konton skapade`)
+      }
+      if (response.data.accounts_updated > 0) {
+        parts.push(`${response.data.accounts_updated} konton uppdaterade`)
+      }
+      if (response.data.verifications_created > 0) {
+        parts.push(`${response.data.verifications_created} verifikationer importerade`)
+      }
+      if (response.data.default_accounts_configured > 0) {
+        parts.push(`${response.data.default_accounts_configured} standardkonton konfigurerade`)
+      }
+
+      const summary = parts.length > 0 ? parts.join(', ') : 'Inga ändringar'
+      showMessage(`Import lyckades! ${summary}`, 'success')
+
       await loadData()
     } catch (error: any) {
       console.error('SIE4 import failed:', error)
