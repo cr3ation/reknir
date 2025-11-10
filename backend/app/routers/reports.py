@@ -381,21 +381,29 @@ def get_vat_report(
         ).all()
 
         for ver in verifications:
-            # Get VAT transaction lines for this verification
-            vat_trans = db.query(TransactionLine).filter(
-                TransactionLine.verification_id == ver.id,
-                TransactionLine.account_id.in_([acc.id for acc in vat_accounts])
+            # Get ALL transaction lines for this verification (not just VAT)
+            all_trans = db.query(TransactionLine).filter(
+                TransactionLine.verification_id == ver.id
             ).all()
 
-            vat_lines = []
-            for tl in vat_trans:
-                acc = next((a for a in vat_accounts if a.id == tl.account_id), None)
+            # Get all accounts for these transactions
+            all_account_ids = [tl.account_id for tl in all_trans]
+            all_accounts = db.query(Account).filter(Account.id.in_(all_account_ids)).all()
+            accounts_dict = {acc.id: acc for acc in all_accounts}
+
+            # VAT account IDs for marking
+            vat_account_ids = {acc.id for acc in vat_accounts}
+
+            transaction_lines = []
+            for tl in all_trans:
+                acc = accounts_dict.get(tl.account_id)
                 if acc:
-                    vat_lines.append({
+                    transaction_lines.append({
                         "account_number": acc.account_number,
                         "account_name": acc.name,
                         "debit": float(tl.debit),
-                        "credit": float(tl.credit)
+                        "credit": float(tl.credit),
+                        "is_vat_account": tl.account_id in vat_account_ids
                     })
 
             verification_details.append({
@@ -404,7 +412,7 @@ def get_vat_report(
                 "series": ver.series,
                 "transaction_date": ver.transaction_date.isoformat(),
                 "description": ver.description or "",
-                "vat_lines": vat_lines
+                "transaction_lines": transaction_lines
             })
 
     return {

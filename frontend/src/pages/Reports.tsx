@@ -616,9 +616,11 @@ export default function Reports() {
 
                     <p className="text-sm text-gray-700 mb-3">{ver.description}</p>
 
-                    {/* VAT Lines */}
+                    {/* All Transaction Lines */}
                     <div className="bg-gray-50 rounded p-3">
-                      <p className="text-xs font-semibold text-gray-600 mb-2">Momsrader:</p>
+                      <p className="text-xs font-semibold text-gray-600 mb-2">
+                        Alla konteringar (momskonton markerade i gult):
+                      </p>
                       <table className="min-w-full text-sm">
                         <thead>
                           <tr className="text-xs text-gray-500">
@@ -629,8 +631,13 @@ export default function Reports() {
                           </tr>
                         </thead>
                         <tbody>
-                          {ver.vat_lines.map((line, idx) => (
-                            <tr key={idx} className="border-t border-gray-200">
+                          {ver.transaction_lines.map((line, idx) => (
+                            <tr
+                              key={idx}
+                              className={`border-t border-gray-200 ${
+                                line.is_vat_account ? 'bg-yellow-100' : ''
+                              }`}
+                            >
                               <td className="py-1 font-mono">{line.account_number}</td>
                               <td className="py-1">{line.account_name}</td>
                               <td className="py-1 text-right font-mono">

@@ -331,11 +331,12 @@ export interface VATReport {
       series: string
       transaction_date: string
       description: string
-      vat_lines: Array<{
+      transaction_lines: Array<{
         account_number: number
         account_name: string
         debit: number
         credit: number
+        is_vat_account: boolean
       }>
     }>
   }
