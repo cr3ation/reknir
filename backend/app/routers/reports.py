@@ -252,15 +252,30 @@ def get_vat_report(
     # Exclude VAT settlement verifications if requested
     if exclude_vat_settlements:
         # Filter out verifications that appear to be VAT settlements/declarations
-        # These typically have descriptions containing these keywords
-        settlement_keywords = [
-            'momsrapport', 'momsavräkning', 'momsdeklaration',
-            'moms betald', 'moms redovisning', 'moms till skatteverket',
-            'vat settlement', 'vat declaration', 'skatteverket moms'
-        ]
-        # Build a condition to exclude verifications with these keywords
-        for keyword in settlement_keywords:
-            query = query.filter(~Verification.description.ilike(f'%{keyword}%'))
+        # Strategy: Exclude verifications that contain BOTH VAT accounts (2610-2649)
+        # AND VAT receivable/payable accounts (2650, 2660)
+        # These are typically used when settling VAT with Skatteverket
+
+        # Find verification IDs that contain settlement accounts
+        settlement_accounts = db.query(Account.id).filter(
+            Account.company_id == company_id,
+            Account.account_number.in_([2650, 2660])  # Momsfordran, Momsskuld
+        ).all()
+
+        if settlement_accounts:
+            settlement_account_ids = [acc.id for acc in settlement_accounts]
+
+            # Find verifications that have transactions to settlement accounts
+            settlement_verification_ids = db.query(TransactionLine.verification_id).filter(
+                TransactionLine.account_id.in_(settlement_account_ids)
+            ).distinct().all()
+
+            settlement_ver_ids = [v.verification_id for v in settlement_verification_ids]
+
+            if settlement_ver_ids:
+                # Exclude these verifications from our query
+                query = query.filter(~Verification.id.in_(settlement_ver_ids))
+                logger.info(f"VAT Report - Excluding {len(settlement_ver_ids)} settlement verifications")
 
     query = query.group_by(TransactionLine.account_id)
 
