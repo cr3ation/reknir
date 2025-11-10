@@ -94,12 +94,13 @@ export const reportApi = {
     api.get<IncomeStatement>('/api/reports/income-statement', {
       params: { company_id: companyId },
     }),
-  vatReport: (companyId: number, startDate?: string, endDate?: string) =>
+  vatReport: (companyId: number, startDate?: string, endDate?: string, excludeVatSettlements?: boolean) =>
     api.get<VATReport>('/api/reports/vat-report', {
       params: {
         company_id: companyId,
         start_date: startDate,
         end_date: endDate,
+        exclude_vat_settlements: excludeVatSettlements,
       },
     }),
   vatPeriods: (companyId: number, year: number) =>

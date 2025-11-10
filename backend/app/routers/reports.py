@@ -187,6 +187,7 @@ def get_vat_report(
     company_id: int = Query(..., description="Company ID"),
     start_date: Optional[date] = Query(None, description="Start date for VAT period (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date for VAT period (YYYY-MM-DD)"),
+    exclude_vat_settlements: bool = Query(False, description="Exclude VAT settlement/declaration entries"),
     db: Session = Depends(get_db)
 ):
     """
@@ -194,6 +195,8 @@ def get_vat_report(
     Shows outgoing VAT (sales) and incoming VAT (purchases) with net amount to pay/refund
 
     If no dates provided, shows all-time totals.
+    If exclude_vat_settlements is True, filters out verifications that appear to be VAT settlements
+    (e.g., entries that zero out VAT accounts when filing declarations).
     """
 
     # Get all VAT accounts according to Swedish BAS account plan:
@@ -245,6 +248,19 @@ def get_vat_report(
         query = query.filter(Verification.transaction_date >= start_date)
     if end_date:
         query = query.filter(Verification.transaction_date <= end_date)
+
+    # Exclude VAT settlement verifications if requested
+    if exclude_vat_settlements:
+        # Filter out verifications that appear to be VAT settlements/declarations
+        # These typically have descriptions containing these keywords
+        settlement_keywords = [
+            'momsrapport', 'momsavräkning', 'momsdeklaration',
+            'moms betald', 'moms redovisning', 'moms till skatteverket',
+            'vat settlement', 'vat declaration', 'skatteverket moms'
+        ]
+        # Build a condition to exclude verifications with these keywords
+        for keyword in settlement_keywords:
+            query = query.filter(~Verification.description.ilike(f'%{keyword}%'))
 
     query = query.group_by(TransactionLine.account_id)
 

@@ -14,6 +14,7 @@ export default function Reports() {
   const [vatPeriods, setVatPeriods] = useState<VATPeriod[]>([])
   const [selectedPeriod, setSelectedPeriod] = useState<VATPeriod | null>(null)
   const [vatYear, setVatYear] = useState(new Date().getFullYear())
+  const [excludeVatSettlements, setExcludeVatSettlements] = useState(true)
 
   useEffect(() => {
     loadData()
@@ -29,7 +30,7 @@ export default function Reports() {
     if (company && selectedPeriod) {
       loadVatReport()
     }
-  }, [selectedPeriod])
+  }, [selectedPeriod, excludeVatSettlements])
 
   const loadData = async () => {
     try {
@@ -83,7 +84,8 @@ export default function Reports() {
       const vatRes = await reportApi.vatReport(
         company.id,
         selectedPeriod.start_date,
-        selectedPeriod.end_date
+        selectedPeriod.end_date,
+        excludeVatSettlements
       )
       setVATReport(vatRes.data)
     } catch (error) {
@@ -397,6 +399,22 @@ export default function Reports() {
                   ))}
                 </select>
               </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-300">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={excludeVatSettlements}
+                  onChange={(e) => setExcludeVatSettlements(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Exkludera momsavräkningar
+                </span>
+              </label>
+              <p className="ml-6 mt-1 text-xs text-gray-500">
+                Visa endast moms från affärstransaktioner, utan momsdeklarationer som nollställer momskontona
+              </p>
             </div>
             {selectedPeriod && (
               <div className="mt-2 text-sm text-gray-600">
