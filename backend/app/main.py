@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import accounts, verifications, companies, reports, customers, suppliers, invoices, supplier_invoices, sie4, default_accounts, fiscal_years
+from app.routers import accounts, verifications, companies, reports, customers, suppliers, invoices, supplier_invoices, sie4, default_accounts, fiscal_years, expenses
 
 # Create FastAPI application
 app = FastAPI(
@@ -31,6 +31,9 @@ app.include_router(customers.router, prefix="/api/customers", tags=["customers"]
 app.include_router(suppliers.router, prefix="/api/suppliers", tags=["suppliers"])
 app.include_router(invoices.router, prefix="/api/invoices", tags=["invoices"])
 app.include_router(supplier_invoices.router, prefix="/api/supplier-invoices", tags=["supplier-invoices"])
+
+# Expense management
+app.include_router(expenses.router, prefix="/api/expenses", tags=["expenses"])
 
 # SIE4 import/export and default accounts
 app.include_router(sie4.router)

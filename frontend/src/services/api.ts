@@ -17,6 +17,7 @@ import type {
   SIE4ImportResponse,
   VATReport,
   VATPeriodsResponse,
+  Expense,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -185,6 +186,21 @@ export const defaultAccountApi = {
       account_type: accountType,
       account_id: accountId,
     }),
+}
+
+// Expenses
+export const expenseApi = {
+  list: (companyId: number, params?: { status_filter?: string; employee_name?: string; start_date?: string; end_date?: string }) =>
+    api.get<Expense[]>('/api/expenses/', { params: { company_id: companyId, ...params } }),
+  get: (id: number) => api.get<Expense>(`/api/expenses/${id}`),
+  create: (data: any) => api.post<Expense>('/api/expenses/', data),
+  update: (id: number, data: Partial<Expense>) => api.patch<Expense>(`/api/expenses/${id}`, data),
+  delete: (id: number) => api.delete(`/api/expenses/${id}`),
+  submit: (id: number) => api.post<Expense>(`/api/expenses/${id}/submit`),
+  approve: (id: number) => api.post<Expense>(`/api/expenses/${id}/approve`),
+  reject: (id: number) => api.post<Expense>(`/api/expenses/${id}/reject`),
+  markPaid: (id: number, paidDate: string) =>
+    api.post<Expense>(`/api/expenses/${id}/mark-paid`, null, { params: { paid_date: paidDate } }),
 }
 
 export default api

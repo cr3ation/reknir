@@ -48,6 +48,7 @@ class Company(Base):
     verifications = relationship("Verification", back_populates="company", cascade="all, delete-orphan")
     default_accounts = relationship("DefaultAccount", back_populates="company", cascade="all, delete-orphan")
     fiscal_years = relationship("FiscalYear", back_populates="company", cascade="all, delete-orphan")
+    expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Company {self.name} ({self.org_number})>"

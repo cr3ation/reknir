@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users } from 'lucide-react'
+import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
@@ -8,6 +8,7 @@ import Customers from './pages/Customers'
 import Accounts from './pages/Accounts'
 import AccountLedger from './pages/AccountLedger'
 import Reports from './pages/Reports'
+import Expenses from './pages/Expenses'
 import SettingsPage from './pages/Settings'
 import Setup from './pages/Setup'
 import api from './services/api'
@@ -102,6 +103,7 @@ function AppContent() {
   const menuItems = [
     { path: '/', icon: Home, label: 'Översikt' },
     { path: '/invoices', icon: Receipt, label: 'Fakturor' },
+    { path: '/expenses', icon: Wallet, label: 'Utlägg' },
     { path: '/verifications', icon: FileText, label: 'Verifikationer' },
     { path: '/customers', icon: Users, label: 'Kunder' },
     { path: '/accounts', icon: BookOpen, label: 'Kontoplan' },
@@ -157,6 +159,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/expenses" element={<Expenses />} />
               <Route path="/verifications" element={<Verifications />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/accounts" element={<Accounts />} />

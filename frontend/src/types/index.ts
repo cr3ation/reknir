@@ -383,3 +383,32 @@ export interface VATPeriodsResponse {
   reporting_period: string
   periods: VATPeriod[]
 }
+
+// Expenses
+
+export enum ExpenseStatus {
+  DRAFT = 'draft',
+  SUBMITTED = 'submitted',
+  APPROVED = 'approved',
+  PAID = 'paid',
+  REJECTED = 'rejected',
+}
+
+export interface Expense {
+  id: number
+  company_id: number
+  employee_name: string
+  expense_date: string
+  description: string
+  amount: number
+  vat_amount: number
+  expense_account_id?: number
+  vat_account_id?: number
+  receipt_filename?: string
+  status: ExpenseStatus
+  approved_date?: string
+  paid_date?: string
+  verification_id?: number
+  created_at: string
+  updated_at: string
+}
