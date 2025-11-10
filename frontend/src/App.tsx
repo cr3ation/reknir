@@ -10,6 +10,8 @@ import Reports from './pages/Reports'
 import SettingsPage from './pages/Settings'
 import Setup from './pages/Setup'
 import api from './services/api'
+import { FiscalYearProvider } from './contexts/FiscalYearContext'
+import FiscalYearSelector from './components/FiscalYearSelector'
 
 function App() {
   const [setupComplete, setSetupComplete] = useState<boolean | null>(null)
@@ -86,12 +88,13 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        {/* Navigation */}
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex">
+      <FiscalYearProvider>
+        <div className="min-h-screen bg-gray-50">
+          {/* Navigation */}
+          <nav className="bg-white shadow-sm">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between h-16">
+                <div className="flex">
                 <div className="flex-shrink-0 flex items-center">
                   <h1 className="text-2xl font-bold text-primary-600" style={{ fontFamily: "'MedievalSharp', serif" }}>REKNIR</h1>
                 </div>
@@ -147,6 +150,9 @@ function App() {
                   </Link>
                 </div>
               </div>
+              <div className="flex items-center">
+                <FiscalYearSelector />
+              </div>
             </div>
           </div>
         </nav>
@@ -163,7 +169,8 @@ function App() {
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
-      </div>
+        </div>
+      </FiscalYearProvider>
     </Router>
   )
 }

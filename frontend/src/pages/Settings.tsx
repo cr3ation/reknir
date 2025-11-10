@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, defaultAccountApi } from '@/services/api'
-import type { Account, DefaultAccount, Company, VATReportingPeriod } from '@/types'
+import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
+import type { Account, DefaultAccount, Company, VATReportingPeriod, FiscalYear } from '@/types'
+import { Plus, Trash2, Calendar } from 'lucide-react'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -22,9 +23,17 @@ export default function SettingsPage() {
   const [company, setCompany] = useState<Company | null>(null)
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
+  const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
+  const [newFiscalYear, setNewFiscalYear] = useState({
+    year: new Date().getFullYear(),
+    label: '',
+    start_date: '',
+    end_date: '',
+  })
 
   useEffect(() => {
     loadData()
@@ -45,12 +54,14 @@ export default function SettingsPage() {
       const comp = companiesRes.data[0]
       setCompany(comp)
 
-      const [defaultsRes, accountsRes] = await Promise.all([
+      const [defaultsRes, accountsRes, fiscalYearsRes] = await Promise.all([
         defaultAccountApi.list(comp.id).catch(() => ({ data: [] })),
         accountApi.list(comp.id),
+        fiscalYearApi.list(comp.id).catch(() => ({ data: [] })),
       ])
       setDefaultAccounts(defaultsRes.data)
       setAllAccounts(accountsRes.data)
+      setFiscalYears(fiscalYearsRes.data)
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
@@ -146,6 +157,77 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error('Failed to update VAT reporting period:', error)
       showMessage('Kunde inte uppdatera momsredovisningsperiod', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateFiscalYear = async () => {
+    if (!company) return
+
+    if (!newFiscalYear.label || !newFiscalYear.start_date || !newFiscalYear.end_date) {
+      showMessage('Fyll i alla fält', 'error')
+      return
+    }
+
+    try {
+      setLoading(true)
+      await fiscalYearApi.create({
+        company_id: company.id,
+        year: newFiscalYear.year,
+        label: newFiscalYear.label,
+        start_date: newFiscalYear.start_date,
+        end_date: newFiscalYear.end_date,
+        is_closed: false,
+      })
+      showMessage('Räkenskapsår skapat!', 'success')
+      await loadData()
+      setShowCreateFiscalYear(false)
+      setNewFiscalYear({
+        year: new Date().getFullYear(),
+        label: '',
+        start_date: '',
+        end_date: '',
+      })
+    } catch (error: any) {
+      console.error('Failed to create fiscal year:', error)
+      showMessage(error.response?.data?.detail || 'Kunde inte skapa räkenskapsår', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteFiscalYear = async (fiscalYearId: number, label: string) => {
+    if (!confirm(`Är du säker på att du vill radera räkenskapsåret "${label}"? Verifikationer kommer att kopplas loss.`)) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      await fiscalYearApi.delete(fiscalYearId)
+      showMessage('Räkenskapsår raderat', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to delete fiscal year:', error)
+      showMessage('Kunde inte radera räkenskapsår', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAssignVerifications = async (fiscalYearId: number, label: string) => {
+    if (!confirm(`Tilldela alla verifikationer till räkenskapsår "${label}" baserat på transaktionsdatum?`)) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      const result = await fiscalYearApi.assignVerifications(fiscalYearId)
+      showMessage(result.data.message, 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to assign verifications:', error)
+      showMessage('Kunde inte tilldela verifikationer', 'error')
     } finally {
       setLoading(false)
     }
@@ -423,6 +505,151 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Fiscal Years Section */}
+      <div className="card mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Räkenskapsår</h2>
+          <button
+            onClick={() => setShowCreateFiscalYear(!showCreateFiscalYear)}
+            disabled={loading}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Lägg till räkenskapsår
+          </button>
+        </div>
+
+        <p className="text-gray-600 mb-4">
+          Hantera räkenskapsår för att kunna filtrera verifikationer och rapporter per period.
+        </p>
+
+        {/* Create Fiscal Year Form */}
+        {showCreateFiscalYear && (
+          <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h3 className="font-medium mb-3">Skapa nytt räkenskapsår</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">År</label>
+                <input
+                  type="number"
+                  value={newFiscalYear.year}
+                  onChange={(e) => setNewFiscalYear({ ...newFiscalYear, year: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Benämning</label>
+                <input
+                  type="text"
+                  placeholder="t.ex. 2024"
+                  value={newFiscalYear.label}
+                  onChange={(e) => setNewFiscalYear({ ...newFiscalYear, label: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Startdatum</label>
+                <input
+                  type="date"
+                  value={newFiscalYear.start_date}
+                  onChange={(e) => setNewFiscalYear({ ...newFiscalYear, start_date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Slutdatum</label>
+                <input
+                  type="date"
+                  value={newFiscalYear.end_date}
+                  onChange={(e) => setNewFiscalYear({ ...newFiscalYear, end_date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleCreateFiscalYear}
+                disabled={loading}
+                className="btn btn-primary"
+              >
+                Skapa
+              </button>
+              <button
+                onClick={() => setShowCreateFiscalYear(false)}
+                disabled={loading}
+                className="btn btn-secondary"
+              >
+                Avbryt
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Fiscal Years List */}
+        {fiscalYears.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+            <p className="mb-4">Inga räkenskapsår konfigurerade.</p>
+            <p className="text-sm">
+              Skapa ett räkenskapsår för att kunna se verifikationer och rapporter per period.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {fiscalYears.map((fy) => (
+              <div
+                key={fy.id}
+                className={`flex items-center justify-between p-3 border rounded-lg ${
+                  fy.is_current ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                }`}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{fy.label}</span>
+                    {fy.is_current && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                        Aktuellt
+                      </span>
+                    )}
+                    {fy.is_closed && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                        Stängt
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    {fy.start_date} till {fy.end_date}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleAssignVerifications(fy.id, fy.label)}
+                    disabled={loading}
+                    className="btn btn-secondary text-sm"
+                  >
+                    Tilldela verifikationer
+                  </button>
+                  <button
+                    onClick={() => handleDeleteFiscalYear(fy.id, fy.label)}
+                    disabled={loading}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-md"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-blue-800">
+            <strong>Tips:</strong> Skapa räkenskapsår för varje år du har bokfört. Använd "Tilldela verifikationer" för att
+            automatiskt koppla verifikationer till rätt år baserat på transaktionsdatum.
+          </p>
+        </div>
       </div>
     </div>
   )

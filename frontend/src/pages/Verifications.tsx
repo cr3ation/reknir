@@ -2,18 +2,25 @@ import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
 import { verificationApi, accountApi, companyApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification } from '@/types'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function Verifications() {
+  const [allVerifications, setAllVerifications] = useState<VerificationListItem[]>([])
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [companyId, setCompanyId] = useState<number | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
+  const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    filterVerificationsByFiscalYear()
+  }, [selectedFiscalYear, allVerifications])
 
   const loadData = async () => {
     try {
@@ -26,17 +33,37 @@ export default function Verifications() {
       const company = companiesRes.data[0]
       setCompanyId(company.id)
 
+      // Load fiscal years for this company
+      await loadFiscalYears(company.id)
+
       const [verificationsRes, accountsRes] = await Promise.all([
         verificationApi.list(company.id),
         accountApi.list(company.id),
       ])
-      setVerifications(verificationsRes.data)
+      setAllVerifications(verificationsRes.data)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load verifications:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const filterVerificationsByFiscalYear = () => {
+    if (!selectedFiscalYear) {
+      setVerifications(allVerifications)
+      return
+    }
+
+    // Filter verifications by fiscal year date range
+    const filtered = allVerifications.filter((v) => {
+      const transactionDate = new Date(v.transaction_date)
+      const startDate = new Date(selectedFiscalYear.start_date)
+      const endDate = new Date(selectedFiscalYear.end_date)
+      return transactionDate >= startDate && transactionDate <= endDate
+    })
+
+    setVerifications(filtered)
   }
 
   const handleDelete = async (id: number) => {
