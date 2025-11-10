@@ -766,21 +766,43 @@ def export_vat_report_xml(
     net_vat_amount = to_int(skv["net_vat"]["amount"])
     moms_betala.text = str(net_vat_amount)
 
-    # Add a note field with period info
-    text_upplysning = ET.SubElement(moms, "TextUpplysningMoms")
-    text_upplysning.text = f"Momsdeklaration för period {start_date.strftime('%Y-%m-%d')} till {end_date.strftime('%Y-%m-%d')}"
+    # Pretty print the XML with indentation
+    def indent(elem, level=0):
+        i = "\n" + level * "  "
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + "  "
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+            for child in elem:
+                indent(child, level + 1)
+            if not child.tail or not child.tail.strip():
+                child.tail = i
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = i
 
-    # Convert to XML string with proper encoding
-    xml_declaration = '<?xml version="1.0" encoding="ISO-8859-1"?>\n'
-    xml_string = ET.tostring(root, encoding="ISO-8859-1", method="xml").decode("ISO-8859-1")
+    indent(root)
 
-    full_xml = xml_declaration + xml_string
+    # Convert to XML string with utf-8 encoding
+    xml_bytes = ET.tostring(root, encoding="utf-8", method="xml")
+    xml_string = xml_bytes.decode("utf-8")
+
+    # Add DOCTYPE declaration after XML declaration
+    doctype = '<!DOCTYPE eSKDUpload PUBLIC "-//Skatteverket, Sweden//DTD Skatteverket eSKDUpload-DTD Version 6.0//SV" "https://www.skatteverket.se/download/18.3f4496fd14864cc5ac99cb1/1415022101213/eSKDUpload_6p0.dtd">\n'
+
+    # Split to insert DOCTYPE after XML declaration
+    xml_lines = xml_string.split('\n', 1)
+    if len(xml_lines) == 2:
+        full_xml = xml_lines[0] + '\n' + doctype + xml_lines[1]
+    else:
+        full_xml = xml_string
 
     # Return as downloadable file
     filename = f"momsdeklaration_{company.org_number}_{period}.xml"
 
     return Response(
-        content=full_xml.encode("ISO-8859-1"),
+        content=full_xml.encode("utf-8"),
         media_type="application/xml",
         headers={
             "Content-Disposition": f"attachment; filename={filename}"
