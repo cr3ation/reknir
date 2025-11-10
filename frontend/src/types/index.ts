@@ -325,6 +325,19 @@ export interface VATReport {
       debit: number
       credit: number
     }>
+    verifications: Array<{
+      id: number
+      verification_number: number
+      series: string
+      transaction_date: string
+      description: string
+      vat_lines: Array<{
+        account_number: number
+        account_name: string
+        debit: number
+        credit: number
+      }>
+    }>
   }
 }
 

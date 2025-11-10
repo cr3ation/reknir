@@ -338,6 +338,75 @@ def get_vat_report(
     # Negative = Refund from Skatteverket
     net_vat = total_outgoing - total_incoming
 
+    # Fetch detailed verifications for debug purposes
+    verification_details = []
+    if transactions:
+        # Get all unique verification IDs from our filtered transactions
+        verification_ids = db.query(TransactionLine.verification_id).join(
+            Verification, TransactionLine.verification_id == Verification.id
+        ).filter(
+            Verification.company_id == company_id,
+            TransactionLine.account_id.in_([acc.id for acc in vat_accounts])
+        )
+
+        # Apply same filters as main query
+        if start_date:
+            verification_ids = verification_ids.filter(Verification.transaction_date >= start_date)
+        if end_date:
+            verification_ids = verification_ids.filter(Verification.transaction_date <= end_date)
+
+        # Apply settlement exclusion
+        if exclude_vat_settlements:
+            settlement_accounts = db.query(Account.id).filter(
+                Account.company_id == company_id,
+                Account.account_number.in_([2650, 2660])
+            ).all()
+
+            if settlement_accounts:
+                settlement_account_ids = [acc.id for acc in settlement_accounts]
+                settlement_verification_ids = db.query(TransactionLine.verification_id).filter(
+                    TransactionLine.account_id.in_(settlement_account_ids)
+                ).distinct().all()
+                settlement_ver_ids = [v.verification_id for v in settlement_verification_ids]
+
+                if settlement_ver_ids:
+                    verification_ids = verification_ids.filter(~Verification.id.in_(settlement_ver_ids))
+
+        verification_ids = verification_ids.distinct().all()
+        ver_ids = [v.verification_id for v in verification_ids]
+
+        # Fetch full verification details
+        verifications = db.query(Verification).filter(Verification.id.in_(ver_ids)).order_by(
+            Verification.transaction_date.desc()
+        ).all()
+
+        for ver in verifications:
+            # Get VAT transaction lines for this verification
+            vat_trans = db.query(TransactionLine).filter(
+                TransactionLine.verification_id == ver.id,
+                TransactionLine.account_id.in_([acc.id for acc in vat_accounts])
+            ).all()
+
+            vat_lines = []
+            for tl in vat_trans:
+                acc = next((a for a in vat_accounts if a.id == tl.account_id), None)
+                if acc:
+                    vat_lines.append({
+                        "account_number": acc.account_number,
+                        "account_name": acc.name,
+                        "debit": float(tl.debit),
+                        "credit": float(tl.credit)
+                    })
+
+            verification_details.append({
+                "id": ver.id,
+                "verification_number": ver.verification_number,
+                "series": ver.series,
+                "transaction_date": ver.transaction_date.isoformat(),
+                "description": ver.description or "",
+                "vat_lines": vat_lines
+            })
+
     return {
         "company_id": company_id,
         "report_type": "vat_report",
@@ -366,7 +435,8 @@ def get_vat_report(
                     "credit": float(t.total_credit or 0)
                 }
                 for t in transactions if t.account_id in trans_accounts_by_id
-            ]
+            ],
+            "verifications": verification_details
         }
     }
 

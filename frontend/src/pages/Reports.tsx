@@ -15,6 +15,7 @@ export default function Reports() {
   const [selectedPeriod, setSelectedPeriod] = useState<VATPeriod | null>(null)
   const [vatYear, setVatYear] = useState(new Date().getFullYear())
   const [excludeVatSettlements, setExcludeVatSettlements] = useState(true)
+  const [showVerificationsModal, setShowVerificationsModal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -458,6 +459,17 @@ export default function Reports() {
                     </ul>
                   </div>
                 )}
+
+                {vatReport.debug_info.verifications && vatReport.debug_info.verifications.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-yellow-300">
+                    <button
+                      onClick={() => setShowVerificationsModal(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    >
+                      Visa alla {vatReport.debug_info.verifications.length} verifikationer med moms
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -556,6 +568,97 @@ export default function Reports() {
           </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Verifications Modal */}
+      {showVerificationsModal && vatReport?.debug_info?.verifications && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-xl font-bold">
+                Verifikationer i momsrapporten ({vatReport.debug_info.verifications.length} st)
+              </h3>
+              <button
+                onClick={() => setShowVerificationsModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-4">
+                {vatReport.debug_info.verifications.map((ver) => (
+                  <div key={ver.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="font-semibold text-lg">
+                          {ver.series}-{ver.verification_number}
+                        </span>
+                        <span className="ml-3 text-sm text-gray-600">
+                          {new Date(ver.transaction_date).toLocaleDateString('sv-SE')}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowVerificationsModal(false)
+                          // Navigate to verification if needed
+                          window.location.href = `/verifications#${ver.id}`
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Visa verifikation →
+                      </button>
+                    </div>
+
+                    <p className="text-sm text-gray-700 mb-3">{ver.description}</p>
+
+                    {/* VAT Lines */}
+                    <div className="bg-gray-50 rounded p-3">
+                      <p className="text-xs font-semibold text-gray-600 mb-2">Momsrader:</p>
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="text-xs text-gray-500">
+                            <th className="text-left">Konto</th>
+                            <th className="text-left">Namn</th>
+                            <th className="text-right">Debet</th>
+                            <th className="text-right">Kredit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ver.vat_lines.map((line, idx) => (
+                            <tr key={idx} className="border-t border-gray-200">
+                              <td className="py-1 font-mono">{line.account_number}</td>
+                              <td className="py-1">{line.account_name}</td>
+                              <td className="py-1 text-right font-mono">
+                                {line.debit > 0 ? formatCurrency(line.debit) : '-'}
+                              </td>
+                              <td className="py-1 text-right font-mono">
+                                {line.credit > 0 ? formatCurrency(line.credit) : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setShowVerificationsModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+              >
+                Stäng
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
