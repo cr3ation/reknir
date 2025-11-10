@@ -7,8 +7,9 @@ This guide explains how to deploy Reknir to a server and make it accessible via 
 2. [Production Setup](#production-setup)
 3. [Option 1: Cloudflare Tunnel (Recommended)](#option-1-cloudflare-tunnel-recommended)
 4. [Option 2: Traditional Port Forwarding](#option-2-traditional-port-forwarding)
-5. [Security Considerations](#security-considerations)
-6. [Troubleshooting](#troubleshooting)
+5. [SSH Access and Port Forwarding](#ssh-access-and-port-forwarding)
+6. [Security Considerations](#security-considerations)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -579,6 +580,181 @@ Visit `https://your-domain.com`
 
 ---
 
+## SSH Access and Port Forwarding
+
+### SSH for Server Administration
+
+**SSH (Port 22) must remain open** for server administration, regardless of which deployment option you choose.
+
+**Configure SSH firewall rule:**
+```bash
+# UFW
+sudo ufw allow 22/tcp
+
+# Or limit to specific IP for extra security
+sudo ufw allow from YOUR_IP_ADDRESS to any port 22 proto tcp
+```
+
+**Best practices:**
+- Use SSH keys instead of passwords
+- Disable root login
+- Change default SSH port (optional but recommended)
+- Use fail2ban to prevent brute force attacks
+
+### SSH Port Forwarding for Development/Testing
+
+When developing or testing on a remote server, you can use SSH tunneling to access services locally:
+
+**Forward all Reknir ports to your local machine:**
+```bash
+ssh -L 5173:localhost:5173 \
+    -L 8000:localhost:8000 \
+    -L 5432:localhost:5432 \
+    user@your-server.com
+```
+
+This creates tunnels:
+- `localhost:5173` → Remote frontend (Vite dev server)
+- `localhost:8000` → Remote backend (FastAPI)
+- `localhost:5432` → Remote PostgreSQL (for database tools)
+
+**Access services:**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- Backend docs: http://localhost:8000/docs
+- PostgreSQL: localhost:5432
+
+**Keep tunnel alive:**
+```bash
+# Add to ~/.ssh/config
+Host reknir-server
+    HostName your-server.com
+    User your-username
+    LocalForward 5173 localhost:5173
+    LocalForward 8000 localhost:8000
+    LocalForward 5432 localhost:5432
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+```
+
+Then simply:
+```bash
+ssh reknir-server
+```
+
+### SSH Port Forwarding vs Cloudflare Tunnel
+
+**Important distinction:**
+
+| Purpose | Solution | Ports Needed |
+|---------|----------|--------------|
+| **Server administration** | SSH (port 22) | Port 22 open |
+| **Development/testing access** | SSH port forwarding | Port 22 open |
+| **Production public access** | Cloudflare Tunnel | No ports open! |
+| **Production public access** | Traditional setup | Ports 80, 443 open |
+
+**For production:**
+- **With Cloudflare Tunnel:** Only port 22 (SSH) needs to be open. Public access goes through Cloudflare Tunnel (no inbound ports for web traffic).
+- **With traditional setup:** Ports 22 (SSH), 80 (HTTP), and 443 (HTTPS) need to be open.
+
+**For development on remote server:**
+- Port 22 (SSH) open
+- Use SSH port forwarding to access services locally
+- No need to expose ports 5173, 8000, or 5432 to the internet
+
+### Security Note: Never Expose These Ports Publicly
+
+**Never open these ports on your firewall for public access:**
+- **Port 5432 (PostgreSQL):** Database should NEVER be exposed to the internet
+- **Port 5173 (Vite dev server):** Development server, not production-ready
+- **Port 8000 (FastAPI without reverse proxy):** Should be behind nginx in production
+
+**These ports are for:**
+- Internal Docker network communication (default)
+- SSH port forwarding for development/testing (via localhost only)
+- Local development on your own machine
+
+### Securing SSH
+
+**Generate SSH key (if you don't have one):**
+```bash
+# On your local machine
+ssh-keygen -t ed25519 -C "your_email@example.com"
+```
+
+**Copy key to server:**
+```bash
+ssh-copy-id user@your-server.com
+```
+
+**Disable password authentication:**
+```bash
+# On server
+sudo nano /etc/ssh/sshd_config
+
+# Set these values:
+PasswordAuthentication no
+PermitRootLogin no
+PubkeyAuthentication yes
+
+# Restart SSH
+sudo systemctl restart sshd
+```
+
+**Install fail2ban for brute force protection:**
+```bash
+sudo apt-get install fail2ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+```
+
+### Example: Development Workflow with SSH Tunneling
+
+```bash
+# 1. SSH into server with port forwarding
+ssh -L 5173:localhost:5173 -L 8000:localhost:8000 user@your-server.com
+
+# 2. On server, start development environment
+cd /opt/reknir
+docker compose up -d
+
+# 3. On your local machine (in a new terminal), access:
+# - Frontend: http://localhost:5173
+# - Backend API: http://localhost:8000/docs
+# - Test the app just like it was running locally!
+
+# 4. Make changes, test, commit, and push
+git add .
+git commit -m "Your changes"
+git push
+```
+
+### Example: Production Access
+
+**With Cloudflare Tunnel (recommended):**
+```bash
+# SSH for administration only
+ssh user@your-server.com
+
+# Public access the app:
+# → Users visit: https://your-domain.com
+# → Traffic goes through Cloudflare Tunnel
+# → No ports open except SSH (22)
+```
+
+**With traditional setup:**
+```bash
+# SSH for administration
+ssh user@your-server.com
+
+# Public access the app:
+# → Users visit: https://your-domain.com
+# → Traffic goes directly to your server via ports 80/443
+# → Ports 22, 80, 443 open
+```
+
+---
+
 ## Security Considerations
 
 ### 1. Strong Passwords
@@ -592,14 +768,37 @@ Update `.env.prod` with strong passwords.
 
 ### 2. Firewall Rules
 
+**For Cloudflare Tunnel (recommended):**
+```bash
+# Deny all except SSH
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp  # SSH for administration
+sudo ufw allow 80/tcp  # HTTP for Cloudflare Tunnel health checks
+sudo ufw enable
+```
+
+**For Traditional Setup:**
 ```bash
 # Deny all except necessary ports
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow 22/tcp  # SSH
-sudo ufw allow 80/tcp  # HTTP (Cloudflare Tunnel or traditional)
-sudo ufw allow 443/tcp # HTTPS (if using traditional)
+sudo ufw allow 22/tcp  # SSH for administration
+sudo ufw allow 80/tcp  # HTTP
+sudo ufw allow 443/tcp # HTTPS
 sudo ufw enable
+```
+
+**Development/Testing on Remote Server:**
+```bash
+# Only need SSH - use SSH port forwarding for everything else
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp  # SSH (includes port forwarding)
+sudo ufw enable
+
+# Then use SSH tunneling to access services:
+# ssh -L 5173:localhost:5173 -L 8000:localhost:8000 user@server
 ```
 
 ### 3. Database Security
@@ -860,6 +1059,8 @@ docker network prune
 ### For Cloudflare Tunnel:
 
 - [ ] Server with Docker installed
+- [ ] Configure SSH access (key-based auth, disable password login)
+- [ ] Configure firewall: `sudo ufw allow 22/tcp && sudo ufw allow 80/tcp`
 - [ ] Clone repository to `/opt/reknir`
 - [ ] Create production Dockerfiles and configs
 - [ ] Create `.env.prod` with strong passwords
@@ -871,19 +1072,22 @@ docker network prune
 - [ ] Start Reknir: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
 - [ ] Start tunnel: `cloudflared service install && sudo systemctl start cloudflared`
 - [ ] Configure Cloudflare dashboard (SSL: Full, Always HTTPS: On)
+- [ ] Install fail2ban for SSH protection
 - [ ] Test: Visit `https://your-domain.com`
 
 ### For Traditional Setup:
 
 - [ ] Server with Docker and static IP
-- [ ] Open ports 80, 443 on firewall
-- [ ] Configure port forwarding on router
+- [ ] Configure SSH access (key-based auth, disable password login)
+- [ ] Configure firewall: `sudo ufw allow 22/tcp && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`
+- [ ] Configure port forwarding on router (ports 22, 80, 443)
 - [ ] Clone repository to `/opt/reknir`
 - [ ] Create production Dockerfiles and configs
 - [ ] Create `.env.prod` with strong passwords
 - [ ] Add A record in Cloudflare DNS (proxied)
 - [ ] Start services: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`
 - [ ] Configure Cloudflare dashboard (SSL: Full, Always HTTPS: On)
+- [ ] Install fail2ban for SSH protection
 - [ ] Test: Visit `https://your-domain.com`
 
 ---
