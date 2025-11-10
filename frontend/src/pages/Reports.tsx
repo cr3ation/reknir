@@ -558,7 +558,7 @@ export default function Reports() {
           {vatReport.skv_3800 && (
             <div className="mt-8 p-6 bg-green-50 border-2 border-green-300 rounded-lg">
               <h3 className="text-xl font-bold text-green-900 mb-4">
-                📋 Momsdeklaration SKV 3800 - Rutter att fylla i
+                📋 Momsdeklaration SKV 3800 - Rutor att fylla i
               </h3>
               <p className="text-sm text-green-800 mb-4">
                 Använd dessa siffror när du fyller i din momsdeklaration på Skatteverket.se
