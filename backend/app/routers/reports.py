@@ -199,9 +199,10 @@ def get_vat_report(
     # Get all VAT accounts according to Swedish BAS account plan:
     # - Outgoing VAT (from sales): 2610-2619
     # - Incoming VAT (from purchases): 2640-2649
+    # Note: We don't filter on active=True because we want to include inactive accounts
+    # that still have transactions (e.g., from imported historical data)
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
-        Account.active == True,
         (
             # Outgoing VAT accounts
             ((Account.account_number >= 2610) & (Account.account_number <= 2619)) |
@@ -424,10 +425,9 @@ def get_vat_debug(
     """
     Debug endpoint to see what VAT accounts and transactions exist
     """
-    # Get all VAT accounts
+    # Get all VAT accounts (including inactive ones)
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
-        Account.active == True,
         (
             ((Account.account_number >= 2610) & (Account.account_number <= 2619)) |
             ((Account.account_number >= 2640) & (Account.account_number <= 2649))
