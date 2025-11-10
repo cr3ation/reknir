@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import date
 from typing import Optional
-from app.models.company import AccountingBasis
+from app.models.company import AccountingBasis, VATReportingPeriod
 
 
 class CompanyBase(BaseModel):
@@ -11,6 +11,7 @@ class CompanyBase(BaseModel):
     fiscal_year_start: date
     fiscal_year_end: date
     accounting_basis: AccountingBasis = AccountingBasis.ACCRUAL
+    vat_reporting_period: VATReportingPeriod = VATReportingPeriod.QUARTERLY
 
 
 class CompanyCreate(CompanyBase):
@@ -24,6 +25,7 @@ class CompanyUpdate(BaseModel):
     fiscal_year_start: Optional[date] = None
     fiscal_year_end: Optional[date] = None
     accounting_basis: Optional[AccountingBasis] = None
+    vat_reporting_period: Optional[VATReportingPeriod] = None
 
 
 class CompanyResponse(CompanyBase):

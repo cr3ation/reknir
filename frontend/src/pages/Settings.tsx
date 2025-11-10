@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi } from '@/services/api'
-import type { Account, DefaultAccount, Company } from '@/types'
+import type { Account, DefaultAccount, Company, VATReportingPeriod } from '@/types'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -135,6 +135,22 @@ export default function SettingsPage() {
     }
   }
 
+  const handleVATReportingPeriodChange = async (newPeriod: VATReportingPeriod) => {
+    if (!company) return
+
+    try {
+      setLoading(true)
+      await companyApi.update(company.id, { vat_reporting_period: newPeriod })
+      setCompany({ ...company, vat_reporting_period: newPeriod })
+      showMessage('Momsredovisningsperiod uppdaterad!', 'success')
+    } catch (error: any) {
+      console.error('Failed to update VAT reporting period:', error)
+      showMessage('Kunde inte uppdatera momsredovisningsperiod', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getAccountForType = (accountType: string): DefaultAccount | undefined => {
     return defaultAccounts.find((da) => da.account_type === accountType)
   }
@@ -170,6 +186,94 @@ export default function SettingsPage() {
           {message}
         </div>
       )}
+
+      {/* VAT Reporting Period Section */}
+      <div className="card mb-6">
+        <h2 className="text-xl font-semibold mb-4">Momsredovisningsperiod</h2>
+        <p className="text-gray-600 mb-4">
+          Välj hur ofta ditt företag ska redovisa moms till Skatteverket.
+        </p>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3">
+            {/* Monthly Option */}
+            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+              company?.vat_reporting_period === 'monthly'
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="radio"
+                name="vat_period"
+                value="monthly"
+                checked={company?.vat_reporting_period === 'monthly'}
+                onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
+                disabled={loading}
+                className="mt-1 mr-3"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">Månadsvis</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  För företag med omsättning över 40 miljoner SEK/år. Deklarera varje månad.
+                </div>
+              </div>
+            </label>
+
+            {/* Quarterly Option */}
+            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+              company?.vat_reporting_period === 'quarterly'
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="radio"
+                name="vat_period"
+                value="quarterly"
+                checked={company?.vat_reporting_period === 'quarterly'}
+                onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
+                disabled={loading}
+                className="mt-1 mr-3"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">Kvartalsvis (Rekommenderat)</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  Vanligast för små och medelstora företag. Deklarera varje kvartal.
+                </div>
+              </div>
+            </label>
+
+            {/* Yearly Option */}
+            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+              company?.vat_reporting_period === 'yearly'
+                ? 'border-blue-500 bg-blue-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}>
+              <input
+                type="radio"
+                name="vat_period"
+                value="yearly"
+                checked={company?.vat_reporting_period === 'yearly'}
+                onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
+                disabled={loading}
+                className="mt-1 mr-3"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">Årlig</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  För företag med omsättning under 1 miljon SEK/år. Deklarera en gång per år.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded p-3">
+            <p className="text-sm text-blue-800">
+              <strong>OBS:</strong> Kontakta Skatteverket om du är osäker på vilken redovisningsperiod
+              som gäller för ditt företag. Detta påverkar hur ofta du måste lämna momsdeklaration.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* SIE4 Import/Export Section */}
       <div className="card mb-6">
