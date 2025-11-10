@@ -18,6 +18,8 @@ class SIE4ImportResponse(BaseModel):
     accounts_updated: int
     verifications_created: int
     default_accounts_configured: int
+    errors: list[str] = []
+    warnings: list[str] = []
 
 
 class SIE4ExportRequest(BaseModel):

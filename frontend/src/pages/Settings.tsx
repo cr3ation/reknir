@@ -34,6 +34,8 @@ export default function SettingsPage() {
     accounts_updated: number
     verifications_created: number
     default_accounts_configured: number
+    errors?: string[]
+    warnings?: string[]
   } | null>(null)
 
   const getNextFiscalYearDefaults = () => {
@@ -129,6 +131,8 @@ export default function SettingsPage() {
         accounts_updated: response.data.accounts_updated,
         verifications_created: response.data.verifications_created,
         default_accounts_configured: response.data.default_accounts_configured,
+        errors: response.data.errors || [],
+        warnings: response.data.warnings || [],
       })
       setShowImportSummary(true)
 
@@ -728,6 +732,30 @@ export default function SettingsPage() {
                     <span className="text-sm font-semibold text-gray-900">{importSummary.default_accounts_configured}</span>
                   </div>
                 </div>
+
+                {/* Errors */}
+                {importSummary.errors && importSummary.errors.length > 0 && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                    <h5 className="text-sm font-medium text-red-900 mb-2">Fel:</h5>
+                    <ul className="list-disc list-inside space-y-1">
+                      {importSummary.errors.map((error, idx) => (
+                        <li key={idx} className="text-sm text-red-800">{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Warnings */}
+                {importSummary.warnings && importSummary.warnings.length > 0 && (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <h5 className="text-sm font-medium text-yellow-900 mb-2">Varningar:</h5>
+                    <ul className="list-disc list-inside space-y-1">
+                      {importSummary.warnings.map((warning, idx) => (
+                        <li key={idx} className="text-sm text-yellow-800">{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {importSummary.verifications_created > 0 && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">

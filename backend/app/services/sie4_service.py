@@ -99,6 +99,8 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
     - accounts_updated: number of accounts updated
     - verifications_created: number of verifications created
     - default_accounts_configured: number of default accounts configured
+    - errors: list of error messages encountered
+    - warnings: list of warning messages
     """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -109,12 +111,15 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
         'accounts_updated': 0,
         'verifications_created': 0,
         'default_accounts_configured': 0,
+        'errors': [],
+        'warnings': [],
     }
 
-    lines = file_content.split('\n')
+    lines = file_content.splitlines()  # Handle all line ending types
     accounts_cache = {}  # Cache account number -> Account object
     current_verification = None
     verifications_to_create = []  # Store verifications to create after parsing
+    commands_parsed = 0  # Track how many commands we successfully parsed
 
     for line in lines:
         command, args = _parse_sie_line(line)
@@ -122,38 +127,43 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
         if not command:
             continue
 
+        commands_parsed += 1
+
         if command == 'KONTO':
             # #KONTO account_number "name"
             if len(args) >= 2:
-                account_number = int(args[0])
-                account_name = args[1]
+                try:
+                    account_number = int(args[0])
+                    account_name = args[1]
 
-                # Check if account exists
-                existing = db.query(Account).filter(
-                    Account.company_id == company_id,
-                    Account.account_number == account_number
-                ).first()
+                    # Check if account exists
+                    existing = db.query(Account).filter(
+                        Account.company_id == company_id,
+                        Account.account_number == account_number
+                    ).first()
 
-                if existing:
-                    # Update name if different
-                    if existing.name != account_name:
-                        existing.name = account_name
-                        stats['accounts_updated'] += 1
-                    accounts_cache[account_number] = existing
-                else:
-                    # Create new account
-                    account_type = _determine_account_type(account_number)
-                    new_account = Account(
-                        company_id=company_id,
-                        account_number=account_number,
-                        name=account_name,
-                        account_type=account_type,
-                        is_bas_account=False  # Imported accounts are not necessarily BAS
-                    )
-                    db.add(new_account)
-                    db.flush()  # Get the ID
-                    accounts_cache[account_number] = new_account
-                    stats['accounts_created'] += 1
+                    if existing:
+                        # Update name if different
+                        if existing.name != account_name:
+                            existing.name = account_name
+                            stats['accounts_updated'] += 1
+                        accounts_cache[account_number] = existing
+                    else:
+                        # Create new account
+                        account_type = _determine_account_type(account_number)
+                        new_account = Account(
+                            company_id=company_id,
+                            account_number=account_number,
+                            name=account_name,
+                            account_type=account_type,
+                            is_bas_account=False  # Imported accounts are not necessarily BAS
+                        )
+                        db.add(new_account)
+                        db.flush()  # Get the ID
+                        accounts_cache[account_number] = new_account
+                        stats['accounts_created'] += 1
+                except (ValueError, IndexError) as e:
+                    stats['errors'].append(f"Failed to parse KONTO line: {e}")
 
         elif command == 'IB':
             # #IB year account_number opening_balance
@@ -174,41 +184,61 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
             # #VER series verification_number transaction_date "description"
             # Transactions follow in subsequent #TRANS lines until closing }
             if len(args) >= 3:
-                current_verification = {
-                    'series': args[0],
-                    'number': int(args[1]),
-                    'date': args[2],
-                    'description': args[3] if len(args) > 3 else '',
-                    'lines': []
-                }
+                try:
+                    # Handle verification number - might be string or int
+                    ver_number = args[1]
+                    if isinstance(ver_number, str) and not ver_number.isdigit():
+                        # If it contains non-digits, try to extract digits
+                        import re
+                        digit_match = re.search(r'\d+', ver_number)
+                        if digit_match:
+                            ver_number = digit_match.group()
+
+                    current_verification = {
+                        'series': args[0],
+                        'number': int(ver_number),
+                        'date': args[2],
+                        'description': args[3] if len(args) > 3 else '',
+                        'lines': []
+                    }
+                except (ValueError, IndexError) as e:
+                    stats['errors'].append(f"Failed to parse VER line: {e}")
+                    current_verification = None
 
         elif command == 'TRANS':
             # #TRANS account_number {object_list} amount [transaction_date] ["description"]
             if current_verification and len(args) >= 2:
-                account_number = int(args[0])
+                try:
+                    account_number = int(args[0])
 
-                # Parse amount - can be with or without object list {}
-                amount_str = args[1]
-                if amount_str == '{}' and len(args) >= 3:
-                    amount_str = args[2]
+                    # Parse amount - can be with or without object list {}
+                    amount_str = args[1]
+                    if amount_str == '{}' and len(args) >= 3:
+                        amount_str = args[2]
 
-                amount = Decimal(amount_str)
-                description = ''
-                if len(args) > 2:
-                    # Last argument might be description
-                    last_arg = args[-1]
-                    if not last_arg.replace('.', '').replace('-', '').isdigit():
-                        description = last_arg
+                    amount = Decimal(amount_str)
+                    description = ''
+                    if len(args) > 2:
+                        # Last argument might be description
+                        last_arg = args[-1]
+                        if not last_arg.replace('.', '').replace('-', '').isdigit():
+                            description = last_arg
 
-                current_verification['lines'].append({
-                    'account_number': account_number,
-                    'amount': amount,
-                    'description': description
-                })
+                    current_verification['lines'].append({
+                        'account_number': account_number,
+                        'amount': amount,
+                        'description': description
+                    })
+                except (ValueError, IndexError, KeyError) as e:
+                    stats['errors'].append(f"Failed to parse TRANS line: {e}")
 
     # Don't forget the last verification
     if current_verification and current_verification['lines']:
         verifications_to_create.append(current_verification)
+
+    # Check if any commands were parsed
+    if commands_parsed == 0:
+        stats['errors'].append(f"No SIE4 commands found in file. File may be empty or have incorrect format. Total lines: {len(lines)}")
 
     # Commit account changes
     db.commit()
@@ -218,6 +248,9 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
     accounts_by_number = {acc.account_number: acc for acc in all_accounts}
 
     # Create verifications
+    skipped_duplicates = 0
+    skipped_missing_accounts = []
+
     for ver_data in verifications_to_create:
         try:
             # Parse date
@@ -226,6 +259,7 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
                 transaction_date = datetime.strptime(date_str, '%Y%m%d').date()
             else:
                 # Skip if date format is invalid
+                stats['warnings'].append(f"Invalid date format for verification {ver_data.get('series', '?')}-{ver_data.get('number', '?')}: {date_str}")
                 continue
 
             # Check if verification already exists (same series, number, and date)
@@ -238,6 +272,7 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
 
             if existing_ver:
                 # Skip duplicate verifications
+                skipped_duplicates += 1
                 continue
 
             # Create verification
@@ -252,10 +287,13 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
             db.flush()  # Get the ID
 
             # Create transaction lines
+            lines_created = 0
             for line_data in ver_data['lines']:
                 account_number = line_data['account_number']
                 if account_number not in accounts_by_number:
-                    # Skip if account doesn't exist
+                    # Track missing account
+                    if account_number not in skipped_missing_accounts:
+                        skipped_missing_accounts.append(account_number)
                     continue
 
                 account = accounts_by_number[account_number]
@@ -273,13 +311,25 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
                     description=line_data['description']
                 )
                 db.add(trans_line)
+                lines_created += 1
 
-            stats['verifications_created'] += 1
+            if lines_created > 0:
+                stats['verifications_created'] += 1
+            else:
+                # Verification has no lines, remove it
+                db.rollback()
+                stats['warnings'].append(f"Verification {ver_data['series']}-{ver_data['number']} has no transaction lines (all accounts missing)")
 
         except Exception as e:
             # Log error but continue with other verifications
-            print(f"Error creating verification: {e}")
+            stats['errors'].append(f"Error creating verification {ver_data.get('series', '?')}-{ver_data.get('number', '?')}: {str(e)}")
             continue
+
+    # Add summary warnings
+    if skipped_duplicates > 0:
+        stats['warnings'].append(f"Skipped {skipped_duplicates} duplicate verifications")
+    if skipped_missing_accounts:
+        stats['warnings'].append(f"Missing accounts prevented some transactions: {', '.join(map(str, sorted(skipped_missing_accounts)))}")
 
     # Commit verifications
     db.commit()
