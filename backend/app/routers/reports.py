@@ -227,9 +227,9 @@ def get_vat_report(
 
     # Apply date filters if provided
     if start_date:
-        query = query.filter(Verification.date >= start_date)
+        query = query.filter(Verification.transaction_date >= start_date)
     if end_date:
-        query = query.filter(Verification.date <= end_date)
+        query = query.filter(Verification.transaction_date <= end_date)
 
     query = query.group_by(TransactionLine.account_id)
 

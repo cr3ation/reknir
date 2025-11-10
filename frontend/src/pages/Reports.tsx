@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { companyApi, reportApi } from '@/services/api'
-import type { Company, BalanceSheet, IncomeStatement, VATReport } from '@/types'
+import type { Company, BalanceSheet, IncomeStatement, VATReport, VATPeriod } from '@/types'
 
 type ReportTab = 'balance' | 'income' | 'vat'
 
@@ -11,10 +11,25 @@ export default function Reports() {
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
   const [vatReport, setVATReport] = useState<VATReport | null>(null)
   const [loading, setLoading] = useState(false)
+  const [vatPeriods, setVatPeriods] = useState<VATPeriod[]>([])
+  const [selectedPeriod, setSelectedPeriod] = useState<VATPeriod | null>(null)
+  const [vatYear, setVatYear] = useState(new Date().getFullYear())
 
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    if (company) {
+      loadVatPeriods()
+    }
+  }, [company, vatYear])
+
+  useEffect(() => {
+    if (company && selectedPeriod) {
+      loadVatReport()
+    }
+  }, [selectedPeriod])
 
   const loadData = async () => {
     try {
@@ -30,17 +45,49 @@ export default function Reports() {
       setCompany(comp)
 
       // Load reports
-      const [balanceRes, incomeRes, vatRes] = await Promise.all([
+      const [balanceRes, incomeRes] = await Promise.all([
         reportApi.balanceSheet(comp.id),
         reportApi.incomeStatement(comp.id),
-        reportApi.vatReport(comp.id),
       ])
 
       setBalanceSheet(balanceRes.data)
       setIncomeStatement(incomeRes.data)
-      setVATReport(vatRes.data)
     } catch (error) {
       console.error('Failed to load reports:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadVatPeriods = async () => {
+    if (!company) return
+
+    try {
+      const periodsRes = await reportApi.vatPeriods(company.id, vatYear)
+      setVatPeriods(periodsRes.data.periods)
+
+      // Auto-select the most recent period
+      if (periodsRes.data.periods.length > 0) {
+        setSelectedPeriod(periodsRes.data.periods[periodsRes.data.periods.length - 1])
+      }
+    } catch (error) {
+      console.error('Failed to load VAT periods:', error)
+    }
+  }
+
+  const loadVatReport = async () => {
+    if (!company || !selectedPeriod) return
+
+    try {
+      setLoading(true)
+      const vatRes = await reportApi.vatReport(
+        company.id,
+        selectedPeriod.start_date,
+        selectedPeriod.end_date
+      )
+      setVATReport(vatRes.data)
+    } catch (error) {
+      console.error('Failed to load VAT report:', error)
     } finally {
       setLoading(false)
     }
@@ -304,12 +351,62 @@ export default function Reports() {
       )}
 
       {/* VAT Report */}
-      {activeTab === 'vat' && vatReport && (
+      {activeTab === 'vat' && (
         <div className="card">
           <h2 className="text-2xl font-bold mb-6">Momsrapport</h2>
           <p className="text-gray-600 mb-4">
             Sammanställning av utgående moms (försäljning) och ingående moms (inköp).
           </p>
+
+          {/* Period Selection */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">År</label>
+                <select
+                  value={vatYear}
+                  onChange={(e) => setVatYear(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {[0, 1, 2, 3, 4].map((offset) => {
+                    const year = new Date().getFullYear() - offset
+                    return (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
+                <select
+                  value={selectedPeriod ? vatPeriods.indexOf(selectedPeriod) : -1}
+                  onChange={(e) => {
+                    const index = Number(e.target.value)
+                    if (index >= 0 && index < vatPeriods.length) {
+                      setSelectedPeriod(vatPeriods[index])
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {vatPeriods.map((period, index) => (
+                    <option key={index} value={index}>
+                      {period.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {selectedPeriod && (
+              <div className="mt-2 text-sm text-gray-600">
+                Visar period: {selectedPeriod.start_date} till {selectedPeriod.end_date}
+              </div>
+            )}
+          </div>
+
+          {vatReport && (
+            <>
 
           <div className="grid grid-cols-2 gap-8 mb-6">
             {/* Outgoing VAT */}
@@ -403,6 +500,8 @@ export default function Reports() {
               <li>• Använd denna rapport som underlag för din momsdeklaration</li>
             </ul>
           </div>
+            </>
+          )}
         </div>
       )}
     </div>
