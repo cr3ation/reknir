@@ -114,7 +114,7 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
     lines = file_content.split('\n')
     accounts_cache = {}  # Cache account number -> Account object
     current_verification = None
-    current_ver_lines = []
+    verifications_to_create = []  # Store verifications to create after parsing
 
     for line in lines:
         command, args = _parse_sie_line(line)
@@ -167,6 +167,10 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
                     account.current_balance = balance
 
         elif command == 'VER':
+            # Save previous verification if exists
+            if current_verification and current_verification['lines']:
+                verifications_to_create.append(current_verification)
+
             # #VER series verification_number transaction_date "description"
             # Transactions follow in subsequent #TRANS lines until closing }
             if len(args) >= 3:
@@ -202,7 +206,82 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> Dict[str, an
                     'description': description
                 })
 
+    # Don't forget the last verification
+    if current_verification and current_verification['lines']:
+        verifications_to_create.append(current_verification)
+
     # Commit account changes
+    db.commit()
+
+    # Reload accounts cache from database to get IDs
+    all_accounts = db.query(Account).filter(Account.company_id == company_id).all()
+    accounts_by_number = {acc.account_number: acc for acc in all_accounts}
+
+    # Create verifications
+    for ver_data in verifications_to_create:
+        try:
+            # Parse date
+            date_str = ver_data['date']
+            if len(date_str) == 8:  # YYYYMMDD format
+                transaction_date = datetime.strptime(date_str, '%Y%m%d').date()
+            else:
+                # Skip if date format is invalid
+                continue
+
+            # Check if verification already exists (same series, number, and date)
+            existing_ver = db.query(Verification).filter(
+                Verification.company_id == company_id,
+                Verification.series == ver_data['series'],
+                Verification.verification_number == ver_data['number'],
+                Verification.transaction_date == transaction_date
+            ).first()
+
+            if existing_ver:
+                # Skip duplicate verifications
+                continue
+
+            # Create verification
+            verification = Verification(
+                company_id=company_id,
+                series=ver_data['series'],
+                verification_number=ver_data['number'],
+                transaction_date=transaction_date,
+                description=ver_data['description']
+            )
+            db.add(verification)
+            db.flush()  # Get the ID
+
+            # Create transaction lines
+            for line_data in ver_data['lines']:
+                account_number = line_data['account_number']
+                if account_number not in accounts_by_number:
+                    # Skip if account doesn't exist
+                    continue
+
+                account = accounts_by_number[account_number]
+                amount = line_data['amount']
+
+                # In SIE4: positive amount = debit, negative amount = credit
+                debit = amount if amount > 0 else Decimal(0)
+                credit = -amount if amount < 0 else Decimal(0)
+
+                trans_line = TransactionLine(
+                    verification_id=verification.id,
+                    account_id=account.id,
+                    debit=debit,
+                    credit=credit,
+                    description=line_data['description']
+                )
+                db.add(trans_line)
+
+            stats['verifications_created'] += 1
+
+        except Exception as e:
+            # Log error but continue with other verifications
+            print(f"Error creating verification: {e}")
+            continue
+
+    # Commit verifications
     db.commit()
 
     # Initialize default account mappings based on imported accounts
