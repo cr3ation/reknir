@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { accountApi } from '@/services/api'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 interface LedgerEntry {
   verification_id: number
@@ -25,10 +26,19 @@ interface AccountLedger {
 export default function AccountLedger() {
   const { accountId } = useParams<{ accountId: string }>()
   const navigate = useNavigate()
+  const { selectedFiscalYear } = useFiscalYear()
   const [ledger, setLedger] = useState<AccountLedger | null>(null)
   const [loading, setLoading] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+
+  // Set default date range to selected fiscal year
+  useEffect(() => {
+    if (selectedFiscalYear) {
+      setStartDate(selectedFiscalYear.start_date)
+      setEndDate(selectedFiscalYear.end_date)
+    }
+  }, [selectedFiscalYear])
 
   useEffect(() => {
     if (accountId) {
@@ -94,6 +104,12 @@ export default function AccountLedger() {
         <p className="text-gray-600 mt-2">
           Ingående balans: {formatCurrency(ledger.opening_balance)} | Utgående balans:{' '}
           {formatCurrency(ledger.closing_balance)}
+          {selectedFiscalYear && (
+            <span className="ml-4 text-sm">
+              (Räkenskapsår: {formatDate(selectedFiscalYear.start_date)} -{' '}
+              {formatDate(selectedFiscalYear.end_date)})
+            </span>
+          )}
         </p>
       </div>
 
@@ -120,17 +136,30 @@ export default function AccountLedger() {
             />
           </div>
         </div>
-        {(startDate || endDate) && (
-          <button
-            onClick={() => {
-              setStartDate('')
-              setEndDate('')
-            }}
-            className="mt-3 text-sm text-blue-600 hover:text-blue-800"
-          >
-            Rensa filter
-          </button>
-        )}
+        <div className="flex gap-3 mt-3">
+          {selectedFiscalYear && (
+            <button
+              onClick={() => {
+                setStartDate(selectedFiscalYear.start_date)
+                setEndDate(selectedFiscalYear.end_date)
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Återställ till räkenskapsår
+            </button>
+          )}
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate('')
+                setEndDate('')
+              }}
+              className="text-sm text-gray-600 hover:text-gray-800"
+            >
+              Visa allt (ingen filtrering)
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Ledger table */}
