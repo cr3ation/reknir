@@ -28,6 +28,13 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
+  const [showImportSummary, setShowImportSummary] = useState(false)
+  const [importSummary, setImportSummary] = useState<{
+    accounts_created: number
+    accounts_updated: number
+    verifications_created: number
+    default_accounts_configured: number
+  } | null>(null)
 
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
@@ -116,23 +123,14 @@ export default function SettingsPage() {
       setLoading(true)
       const response = await sie4Api.import(company.id, file)
 
-      // Build detailed summary message
-      const parts = []
-      if (response.data.accounts_created > 0) {
-        parts.push(`${response.data.accounts_created} konton skapade`)
-      }
-      if (response.data.accounts_updated > 0) {
-        parts.push(`${response.data.accounts_updated} konton uppdaterade`)
-      }
-      if (response.data.verifications_created > 0) {
-        parts.push(`${response.data.verifications_created} verifikationer importerade`)
-      }
-      if (response.data.default_accounts_configured > 0) {
-        parts.push(`${response.data.default_accounts_configured} standardkonton konfigurerade`)
-      }
-
-      const summary = parts.length > 0 ? parts.join(', ') : 'Inga ändringar'
-      showMessage(`Import lyckades! ${summary}`, 'success')
+      // Show modal with import summary
+      setImportSummary({
+        accounts_created: response.data.accounts_created,
+        accounts_updated: response.data.accounts_updated,
+        verifications_created: response.data.verifications_created,
+        default_accounts_configured: response.data.default_accounts_configured,
+      })
+      setShowImportSummary(true)
 
       await loadData()
     } catch (error: any) {
@@ -695,6 +693,62 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+
+      {/* Import Summary Modal */}
+      {showImportSummary && importSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="ml-4 text-lg font-semibold text-gray-900">Import Lyckades!</h3>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Importsammanfattning:</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="text-sm text-gray-700">Konton skapade:</span>
+                    <span className="text-sm font-semibold text-gray-900">{importSummary.accounts_created}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="text-sm text-gray-700">Konton uppdaterade:</span>
+                    <span className="text-sm font-semibold text-gray-900">{importSummary.accounts_updated}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+                    <span className="text-sm text-gray-700">Verifikationer importerade:</span>
+                    <span className="text-sm font-semibold text-blue-900">{importSummary.verifications_created}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <span className="text-sm text-gray-700">Standardkonton konfigurerade:</span>
+                    <span className="text-sm font-semibold text-gray-900">{importSummary.default_accounts_configured}</span>
+                  </div>
+                </div>
+
+                {importSummary.verifications_created > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <p className="text-sm text-blue-800">
+                      <strong>Tips:</strong> Glöm inte att tilldela verifikationerna till räkenskapsår!
+                      Scrolla ner till "Räkenskapsår" och klicka "Tilldela verifikationer".
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowImportSummary(false)}
+                className="w-full btn btn-primary"
+              >
+                Stäng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
