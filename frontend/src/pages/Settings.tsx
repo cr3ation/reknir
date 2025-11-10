@@ -28,12 +28,23 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
-  const [newFiscalYear, setNewFiscalYear] = useState({
-    year: new Date().getFullYear(),
-    label: '',
-    start_date: '',
-    end_date: '',
-  })
+
+  const getNextFiscalYearDefaults = () => {
+    const currentYear = new Date().getFullYear()
+    // Find the highest year in existing fiscal years, or use current year
+    const nextYear = fiscalYears.length > 0
+      ? Math.max(...fiscalYears.map(fy => fy.year)) + 1
+      : currentYear
+
+    return {
+      year: nextYear,
+      label: `${nextYear}`,
+      start_date: `${nextYear}-01-01`,
+      end_date: `${nextYear}-12-31`,
+    }
+  }
+
+  const [newFiscalYear, setNewFiscalYear] = useState(getNextFiscalYearDefaults())
 
   useEffect(() => {
     loadData()
@@ -183,12 +194,10 @@ export default function SettingsPage() {
       showMessage('Räkenskapsår skapat!', 'success')
       await loadData()
       setShowCreateFiscalYear(false)
-      setNewFiscalYear({
-        year: new Date().getFullYear(),
-        label: '',
-        start_date: '',
-        end_date: '',
-      })
+      // Reset to next year defaults after creating
+      setTimeout(() => {
+        setNewFiscalYear(getNextFiscalYearDefaults())
+      }, 100)
     } catch (error: any) {
       console.error('Failed to create fiscal year:', error)
       showMessage(error.response?.data?.detail || 'Kunde inte skapa räkenskapsår', 'error')
@@ -231,6 +240,23 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleYearChange = (year: number) => {
+    setNewFiscalYear({
+      year,
+      label: `${year}`,
+      start_date: `${year}-01-01`,
+      end_date: `${year}-12-31`,
+    })
+  }
+
+  const handleToggleCreateForm = () => {
+    if (!showCreateFiscalYear) {
+      // Opening form - reset to defaults
+      setNewFiscalYear(getNextFiscalYearDefaults())
+    }
+    setShowCreateFiscalYear(!showCreateFiscalYear)
   }
 
   const getAccountForType = (accountType: string): DefaultAccount | undefined => {
@@ -512,7 +538,7 @@ export default function SettingsPage() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Räkenskapsår</h2>
           <button
-            onClick={() => setShowCreateFiscalYear(!showCreateFiscalYear)}
+            onClick={handleToggleCreateForm}
             disabled={loading}
             className="btn btn-primary inline-flex items-center"
           >
@@ -535,7 +561,7 @@ export default function SettingsPage() {
                 <input
                   type="number"
                   value={newFiscalYear.year}
-                  onChange={(e) => setNewFiscalYear({ ...newFiscalYear, year: parseInt(e.target.value) })}
+                  onChange={(e) => handleYearChange(parseInt(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
@@ -548,6 +574,7 @@ export default function SettingsPage() {
                   onChange={(e) => setNewFiscalYear({ ...newFiscalYear, label: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
+                <p className="text-xs text-gray-500 mt-1">Automatiskt ifylld med året</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Startdatum</label>
@@ -557,6 +584,7 @@ export default function SettingsPage() {
                   onChange={(e) => setNewFiscalYear({ ...newFiscalYear, start_date: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
+                <p className="text-xs text-gray-500 mt-1">Standard: 1 januari</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Slutdatum</label>
@@ -566,6 +594,7 @@ export default function SettingsPage() {
                   onChange={(e) => setNewFiscalYear({ ...newFiscalYear, end_date: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
+                <p className="text-xs text-gray-500 mt-1">Standard: 31 december</p>
               </div>
             </div>
             <div className="flex gap-2 mt-4">
