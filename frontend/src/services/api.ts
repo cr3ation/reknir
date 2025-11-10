@@ -60,6 +60,8 @@ export const accountApi = {
   create: (data: Omit<Account, 'id' | 'current_balance'>) =>
     api.post<Account>('/api/accounts/', data),
   update: (id: number, data: Partial<Account>) => api.patch<Account>(`/api/accounts/${id}`, data),
+  getLedger: (accountId: number, params?: { start_date?: string; end_date?: string }) =>
+    api.get(`/api/accounts/${accountId}/ledger`, { params }),
 }
 
 // Verifications

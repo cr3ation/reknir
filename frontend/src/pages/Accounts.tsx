@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Edit2, Save, X } from 'lucide-react'
+import { Edit2, Save, X, FileText } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { companyApi, accountApi } from '@/services/api'
 import type { Account } from '@/types'
 import api from '@/services/api'
@@ -246,13 +247,22 @@ export default function Accounts() {
                               </button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => startEdit(account)}
-                              className="p-1 text-indigo-600 hover:text-indigo-800"
-                              title="Sätt ingående balans"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <Link
+                                to={`/accounts/${account.id}/ledger`}
+                                className="p-1 text-blue-600 hover:text-blue-800"
+                                title="Visa kontohistorik"
+                              >
+                                <FileText className="w-4 h-4" />
+                              </Link>
+                              <button
+                                onClick={() => startEdit(account)}
+                                className="p-1 text-indigo-600 hover:text-indigo-800"
+                                title="Sätt ingående balans"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -349,13 +359,22 @@ export default function Accounts() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startEdit(account)}
-                          className="p-1 text-indigo-600 hover:text-indigo-800"
-                          title="Sätt ingående balans"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <Link
+                            to={`/accounts/${account.id}/ledger`}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                            title="Visa kontohistorik"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Link>
+                          <button
+                            onClick={() => startEdit(account)}
+                            className="p-1 text-indigo-600 hover:text-indigo-800"
+                            title="Sätt ingående balans"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

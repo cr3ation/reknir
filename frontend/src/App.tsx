@@ -6,6 +6,7 @@ import Verifications from './pages/Verifications'
 import Invoices from './pages/Invoices'
 import Customers from './pages/Customers'
 import Accounts from './pages/Accounts'
+import AccountLedger from './pages/AccountLedger'
 import Reports from './pages/Reports'
 import SettingsPage from './pages/Settings'
 import Setup from './pages/Setup'
@@ -165,6 +166,7 @@ function App() {
             <Route path="/verifications" element={<Verifications />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/accounts" element={<Accounts />} />
+            <Route path="/accounts/:accountId/ledger" element={<AccountLedger />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
