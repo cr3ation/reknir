@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye } from 'lucide-react'
+import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye, BookOpen } from 'lucide-react'
 import { companyApi, expenseApi, accountApi } from '@/services/api'
 import type { Expense, ExpenseStatus, Account } from '@/types'
 
@@ -189,6 +189,45 @@ export default function Expenses() {
     } catch (error) {
       console.error('Failed to mark expense as paid:', error)
       alert('Kunde inte markera utlägget som utbetalat')
+    }
+  }
+
+  const handleBook = async (id: number) => {
+    // Find liability accounts (e.g., 2890 Upplupna kostnader)
+    const liabilityAccounts = accounts.filter(a =>
+      a.account_number >= 2890 && a.account_number < 2900
+    )
+
+    if (liabilityAccounts.length === 0) {
+      alert('Inget skuldkonto hittades (t.ex. 2890). Lägg till ett konto för anställdas utlägg först.')
+      return
+    }
+
+    // Use first liability account or prompt if multiple
+    let employeePayableAccountId = liabilityAccounts[0].id
+    if (liabilityAccounts.length > 1) {
+      const accountOptions = liabilityAccounts.map(a => `${a.account_number} ${a.name}`).join('\n')
+      const accountNumber = prompt(
+        `Välj skuldkonto för utlägget:\n${accountOptions}\n\nAnge kontonummer:`,
+        liabilityAccounts[0].account_number.toString()
+      )
+      if (!accountNumber) return
+
+      const selectedAccount = liabilityAccounts.find(a => a.account_number.toString() === accountNumber)
+      if (!selectedAccount) {
+        alert('Ogiltigt kontonummer')
+        return
+      }
+      employeePayableAccountId = selectedAccount.id
+    }
+
+    try {
+      await expenseApi.book(id, employeePayableAccountId)
+      await loadExpenses()
+      alert('Utlägget har bokförts och en verifikation har skapats')
+    } catch (error: any) {
+      console.error('Failed to book expense:', error)
+      alert(`Kunde inte bokföra utlägget: ${error.response?.data?.detail || error.message}`)
     }
   }
 
@@ -459,6 +498,13 @@ export default function Expenses() {
                         {expense.status === 'submitted' && (
                           <>
                             <button
+                              onClick={() => handleEdit(expense)}
+                              className="p-1 text-indigo-600 hover:text-indigo-800"
+                              title="Redigera"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => handleApprove(expense.id)}
                               className="p-1 text-green-600 hover:text-green-800"
                               title="Godkänn"
@@ -475,13 +521,24 @@ export default function Expenses() {
                           </>
                         )}
                         {expense.status === 'approved' && (
-                          <button
-                            onClick={() => handleMarkPaid(expense.id)}
-                            className="p-1 text-purple-600 hover:text-purple-800"
-                            title="Markera som utbetald"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
+                          <>
+                            {!expense.verification_id && (
+                              <button
+                                onClick={() => handleBook(expense.id)}
+                                className="p-1 text-indigo-600 hover:text-indigo-800"
+                                title="Bokför (skapa verifikation)"
+                              >
+                                <BookOpen className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleMarkPaid(expense.id)}
+                              className="p-1 text-purple-600 hover:text-purple-800"
+                              title="Markera som utbetald"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
                         {(expense.status === 'paid' || expense.status === 'rejected') && (
                           <span className="text-xs text-gray-400">-</span>

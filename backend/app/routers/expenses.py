@@ -9,6 +9,7 @@ import uuid
 from app.database import get_db
 from app.models.expense import Expense, ExpenseStatus
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
+from app.services.expense_service import create_expense_verification
 
 router = APIRouter()
 
@@ -193,6 +194,67 @@ def submit_expense(expense_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(expense)
     return expense
+
+
+@router.post("/{expense_id}/book", response_model=ExpenseResponse)
+def book_expense(
+    expense_id: int,
+    employee_payable_account_id: int = Query(..., description="Account ID for employee payable (e.g., 2890)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Book an approved expense and create verification
+
+    Swedish: Bokför utlägg
+
+    Creates accounting entry:
+    Debit:  Expense account (e.g., 6540)
+    Debit:  VAT incoming account (e.g., 2641)
+    Credit: Employee payable account (e.g., 2890)
+    """
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Expense {expense_id} not found"
+        )
+
+    if expense.status != ExpenseStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Can only book approved expenses (current status: {expense.status})"
+        )
+
+    if expense.verification_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expense is already booked"
+        )
+
+    if not expense.expense_account_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expense account must be set before booking"
+        )
+
+    if expense.vat_amount > 0 and not expense.vat_account_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="VAT account must be set when expense has VAT"
+        )
+
+    # Create verification
+    try:
+        verification = create_expense_verification(db, expense, employee_payable_account_id)
+        expense.verification_id = verification.id
+        db.commit()
+        db.refresh(expense)
+        return expense
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.post("/{expense_id}/upload-receipt", response_model=ExpenseResponse)
