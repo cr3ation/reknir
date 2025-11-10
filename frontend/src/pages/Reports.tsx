@@ -683,6 +683,30 @@ export default function Reports() {
                   → Mina sidor → Momsdeklaration och fyll i rutorna ovan.
                 </p>
               </div>
+
+              {/* Download XML button */}
+              <div className="mt-4">
+                <button
+                  onClick={() => {
+                    if (!company || !selectedPeriod) return
+                    const url = new URL('/api/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000')
+                    url.searchParams.append('company_id', company.id.toString())
+                    url.searchParams.append('start_date', selectedPeriod.start_date)
+                    url.searchParams.append('end_date', selectedPeriod.end_date)
+                    url.searchParams.append('exclude_vat_settlements', excludeVatSettlements.toString())
+                    window.open(url.toString(), '_blank')
+                  }}
+                  className="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Ladda ner XML-fil för uppladdning till Skatteverket
+                </button>
+                <p className="mt-2 text-xs text-center text-gray-600">
+                  Filen är klar att laddas upp under "Lämna momsdeklaration" på Skatteverket.se
+                </p>
+              </div>
             </div>
           )}
 

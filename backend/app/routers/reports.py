@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Dict, List, Optional
 from decimal import Decimal
 from datetime import date, datetime, timedelta
+import xml.etree.ElementTree as ET
 from app.database import get_db
 from app.models.account import Account, AccountType
 from app.models.verification import Verification, TransactionLine
@@ -672,3 +673,116 @@ def get_vat_debug(
             "end_date": end_date.isoformat() if end_date else None,
         }
     }
+
+
+@router.get("/vat-report-xml")
+def export_vat_report_xml(
+    company_id: int = Query(..., description="Company ID"),
+    start_date: date = Query(..., description="Start date for VAT period (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="End date for VAT period (YYYY-MM-DD)"),
+    exclude_vat_settlements: bool = Query(True, description="Exclude VAT settlement/declaration entries"),
+    db: Session = Depends(get_db)
+):
+    """
+    Export VAT report as XML file for upload to Skatteverket (eSKDUpload format version 6.0)
+    Returns an XML file that can be uploaded directly to Swedish Tax Agency.
+    """
+
+    # Get company info for org number
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Get the VAT report data (reuse existing logic)
+    vat_report_response = get_vat_report(
+        company_id=company_id,
+        start_date=start_date,
+        end_date=end_date,
+        exclude_vat_settlements=exclude_vat_settlements,
+        db=db
+    )
+
+    skv = vat_report_response["skv_3800"]
+
+    # Format period as YYYYMM (use end date)
+    period = end_date.strftime("%Y%m")
+
+    # Convert amounts to integers (öre to whole kronor, rounded)
+    def to_int(amount: float) -> int:
+        return int(round(amount))
+
+    # Create XML structure
+    root = ET.Element("eSKDUpload", Version="6.0")
+
+    # Organization number (format: xxxxxx-xxxx)
+    org_nr = ET.SubElement(root, "OrgNr")
+    org_nr.text = company.org_number if company.org_number else ""
+
+    # Moms section
+    moms = ET.SubElement(root, "Moms")
+
+    # Period
+    period_elem = ET.SubElement(moms, "Period")
+    period_elem.text = period
+
+    # Sales and output VAT by rate
+    # 25% VAT
+    if skv["outgoing_25"]["vat"] > 0:
+        # Försäljning 25% (Box 05)
+        fors_25 = ET.SubElement(moms, "ForsMomsEjAnnan")
+        fors_25.text = str(to_int(skv["outgoing_25"]["sales"]))
+
+        # Utgående moms 25% (Box 10 in SKV naming)
+        moms_utg_hog = ET.SubElement(moms, "MomsUtgHog")
+        moms_utg_hog.text = str(to_int(skv["outgoing_25"]["vat"]))
+
+    # 12% VAT
+    if skv["outgoing_12"]["vat"] > 0:
+        # Försäljning 12%
+        fors_12_elem = ET.SubElement(moms, "ForsMoms12")
+        fors_12_elem.text = str(to_int(skv["outgoing_12"]["sales"]))
+
+        # Utgående moms 12%
+        moms_utg_medel = ET.SubElement(moms, "MomsUtgMedel")
+        moms_utg_medel.text = str(to_int(skv["outgoing_12"]["vat"]))
+
+    # 6% VAT
+    if skv["outgoing_6"]["vat"] > 0:
+        # Försäljning 6%
+        fors_6_elem = ET.SubElement(moms, "ForsMoms6")
+        fors_6_elem.text = str(to_int(skv["outgoing_6"]["sales"]))
+
+        # Utgående moms 6%
+        moms_utg_lag = ET.SubElement(moms, "MomsUtgLag")
+        moms_utg_lag.text = str(to_int(skv["outgoing_6"]["vat"]))
+
+    # Ingående moms (deductible input VAT)
+    if skv["incoming_total"]["vat"] > 0:
+        moms_ing_avdr = ET.SubElement(moms, "MomsIngAvdr")
+        moms_ing_avdr.text = str(to_int(skv["incoming_total"]["vat"]))
+
+    # Net VAT to pay or refund
+    moms_betala = ET.SubElement(moms, "MomsBetala")
+    net_vat_amount = to_int(skv["net_vat"]["amount"])
+    moms_betala.text = str(net_vat_amount)
+
+    # Add a note field with period info
+    text_upplysning = ET.SubElement(moms, "TextUpplysningMoms")
+    text_upplysning.text = f"Momsdeklaration för period {start_date.strftime('%Y-%m-%d')} till {end_date.strftime('%Y-%m-%d')}"
+
+    # Convert to XML string with proper encoding
+    xml_declaration = '<?xml version="1.0" encoding="ISO-8859-1"?>\n'
+    xml_string = ET.tostring(root, encoding="ISO-8859-1", method="xml").decode("ISO-8859-1")
+
+    full_xml = xml_declaration + xml_string
+
+    # Return as downloadable file
+    filename = f"momsdeklaration_{company.org_number}_{period}.xml"
+
+    return Response(
+        content=full_xml.encode("ISO-8859-1"),
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
