@@ -11,6 +11,7 @@ export default function Expenses() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [employeeFilter, setEmployeeFilter] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -68,6 +69,7 @@ export default function Expenses() {
 
   const handleCreate = () => {
     setEditingExpense(null)
+    setSelectedFile(null)
     setFormData({
       employee_name: '',
       expense_date: new Date().toISOString().split('T')[0],
@@ -82,6 +84,7 @@ export default function Expenses() {
 
   const handleEdit = (expense: Expense) => {
     setEditingExpense(expense)
+    setSelectedFile(null)
     setFormData({
       employee_name: expense.employee_name,
       expense_date: expense.expense_date,
@@ -111,13 +114,22 @@ export default function Expenses() {
         vat_account_id: formData.vat_account_id ? parseInt(formData.vat_account_id) : null,
       }
 
+      let expenseId: number
       if (editingExpense) {
-        await expenseApi.update(editingExpense.id, payload)
+        const response = await expenseApi.update(editingExpense.id, payload)
+        expenseId = response.data.id
       } else {
-        await expenseApi.create(payload)
+        const response = await expenseApi.create(payload)
+        expenseId = response.data.id
+      }
+
+      // Upload file if selected
+      if (selectedFile) {
+        await expenseApi.uploadReceipt(expenseId, selectedFile)
       }
 
       setShowModal(false)
+      setSelectedFile(null)
       await loadExpenses()
     } catch (error) {
       console.error('Failed to save expense:', error)
@@ -596,6 +608,48 @@ export default function Expenses() {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Kvitto (bilaga)
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex-1 cursor-pointer">
+                        <div className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-md hover:border-primary-500 transition-colors">
+                          <Upload className="w-5 h-5 text-gray-400" />
+                          <span className="text-sm text-gray-600">
+                            {selectedFile ? selectedFile.name : 'Välj fil (JPG, PNG, PDF)'}
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".jpg,.jpeg,.png,.pdf,.gif"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) setSelectedFile(file)
+                          }}
+                        />
+                      </label>
+                      {selectedFile && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFile(null)}
+                          className="px-3 py-2 text-sm text-red-600 hover:text-red-800"
+                        >
+                          Ta bort
+                        </button>
+                      )}
+                      {editingExpense?.receipt_filename && !selectedFile && (
+                        <span className="text-sm text-green-600">
+                          ✓ Kvitto uppladdat
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Godkända format: JPG, JPEG, PNG, GIF, PDF (max 10MB)
+                    </p>
                   </div>
                 </div>
 

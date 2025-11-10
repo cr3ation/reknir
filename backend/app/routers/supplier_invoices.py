@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+import shutil
+import uuid
 from app.database import get_db
 from app.models.invoice import SupplierInvoice, SupplierInvoiceLine, InvoiceStatus
 from app.models.customer import Supplier
@@ -17,6 +21,10 @@ from app.schemas.invoice import (
 from app.services.invoice_service import create_supplier_invoice_verification, create_supplier_invoice_payment_verification
 
 router = APIRouter()
+
+# Create invoices directory if it doesn't exist
+INVOICES_DIR = Path("/app/invoices")
+INVOICES_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/", response_model=SupplierInvoiceResponse, status_code=status.HTTP_201_CREATED)
@@ -273,3 +281,107 @@ def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
     db.delete(invoice)
     db.commit()
     return None
+
+
+@router.post("/{invoice_id}/upload-attachment", response_model=SupplierInvoiceResponse)
+async def upload_attachment(
+    invoice_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload an attachment file for a supplier invoice"""
+    invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier invoice {invoice_id} not found"
+        )
+
+    # Validate file type (images and PDFs)
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.gif'}
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type {file_ext} not allowed. Allowed types: {', '.join(allowed_extensions)}"
+        )
+
+    # Delete old attachment if exists
+    if invoice.attachment_path:
+        old_path = INVOICES_DIR / invoice.attachment_path
+        if old_path.exists():
+            old_path.unlink()
+
+    # Generate unique filename
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = INVOICES_DIR / unique_filename
+
+    # Save file
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Update invoice record
+    invoice.attachment_path = unique_filename
+    db.commit()
+    db.refresh(invoice)
+
+    return invoice
+
+
+@router.get("/{invoice_id}/attachment")
+async def download_attachment(invoice_id: int, db: Session = Depends(get_db)):
+    """Download the attachment file for a supplier invoice"""
+    invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier invoice {invoice_id} not found"
+        )
+
+    if not invoice.attachment_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attachment file found for this invoice"
+        )
+
+    file_path = INVOICES_DIR / invoice.attachment_path
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment file not found on disk"
+        )
+
+    return FileResponse(
+        path=str(file_path),
+        filename=invoice.attachment_path,
+        media_type="application/octet-stream"
+    )
+
+
+@router.delete("/{invoice_id}/attachment", response_model=SupplierInvoiceResponse)
+async def delete_attachment(invoice_id: int, db: Session = Depends(get_db)):
+    """Delete the attachment file for a supplier invoice"""
+    invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier invoice {invoice_id} not found"
+        )
+
+    if not invoice.attachment_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No attachment file found for this invoice"
+        )
+
+    # Delete file from disk
+    file_path = INVOICES_DIR / invoice.attachment_path
+    if file_path.exists():
+        file_path.unlink()
+
+    # Clear filename from database
+    invoice.attachment_path = None
+    db.commit()
+    db.refresh(invoice)
+
+    return invoice
