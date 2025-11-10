@@ -314,6 +314,34 @@ export interface VATReport {
   }
   net_vat: number
   pay_or_refund: 'pay' | 'refund' | 'zero'
+  skv_3800?: {
+    outgoing_25: {
+      vat: number
+      sales: number
+      box_sales: string
+      box_vat: string
+    }
+    outgoing_12: {
+      vat: number
+      sales: number
+      box_sales: string
+      box_vat: string
+    }
+    outgoing_6: {
+      vat: number
+      sales: number
+      box_sales: string
+      box_vat: string
+    }
+    incoming_total: {
+      vat: number
+      box: string
+    }
+    net_vat: {
+      amount: number
+      box: string
+    }
+  }
   debug_info?: {
     total_vat_accounts_found: number
     outgoing_vat_accounts: Array<{ number: number; name: string }>

@@ -297,6 +297,13 @@ def get_vat_report(
     outgoing_vat = []
     total_outgoing = Decimal("0")
 
+    # Track by VAT rate for SKV 3800 form
+    outgoing_by_rate = {
+        "25": {"vat": Decimal("0"), "accounts": []},
+        "12": {"vat": Decimal("0"), "accounts": []},
+        "6": {"vat": Decimal("0"), "accounts": []}
+    }
+
     for account in outgoing_vat_accounts:
         # Find transactions for this account
         trans = next((t for t in transactions if t.account_id == account.id), None)
@@ -313,9 +320,28 @@ def get_vat_report(
                 })
                 total_outgoing += vat_amount
 
+                # Categorize by VAT rate based on account number
+                # 2611: 25%, 2621: 12%, 2631/2615: 6%
+                if account.account_number == 2611:
+                    outgoing_by_rate["25"]["vat"] += vat_amount
+                    outgoing_by_rate["25"]["accounts"].append(account.account_number)
+                elif account.account_number == 2621:
+                    outgoing_by_rate["12"]["vat"] += vat_amount
+                    outgoing_by_rate["12"]["accounts"].append(account.account_number)
+                elif account.account_number in [2631, 2615]:
+                    outgoing_by_rate["6"]["vat"] += vat_amount
+                    outgoing_by_rate["6"]["accounts"].append(account.account_number)
+
     # Process incoming VAT (debit balance = purchase tax paid)
     incoming_vat = []
     total_incoming = Decimal("0")
+
+    # Track by VAT rate
+    incoming_by_rate = {
+        "25": {"vat": Decimal("0"), "accounts": []},
+        "12": {"vat": Decimal("0"), "accounts": []},
+        "6": {"vat": Decimal("0"), "accounts": []}
+    }
 
     for account in incoming_vat_accounts:
         # Find transactions for this account
@@ -333,10 +359,52 @@ def get_vat_report(
                 })
                 total_incoming += vat_amount
 
+                # Categorize by VAT rate based on account number
+                # 2641: 25%, 2645: 12%, 2647: 6%
+                if account.account_number == 2641:
+                    incoming_by_rate["25"]["vat"] += vat_amount
+                    incoming_by_rate["25"]["accounts"].append(account.account_number)
+                elif account.account_number == 2645:
+                    incoming_by_rate["12"]["vat"] += vat_amount
+                    incoming_by_rate["12"]["accounts"].append(account.account_number)
+                elif account.account_number == 2647:
+                    incoming_by_rate["6"]["vat"] += vat_amount
+                    incoming_by_rate["6"]["accounts"].append(account.account_number)
+
     # Net VAT = Outgoing - Incoming
     # Positive = Pay to Skatteverket
     # Negative = Refund from Skatteverket
     net_vat = total_outgoing - total_incoming
+
+    # Prepare SKV 3800 form data (Swedish VAT declaration form)
+    skv_3800 = {
+        "outgoing_25": {
+            "vat": float(outgoing_by_rate["25"]["vat"]),
+            "sales": float(outgoing_by_rate["25"]["vat"] / Decimal("0.25")) if outgoing_by_rate["25"]["vat"] != 0 else 0.0,
+            "box_sales": "05",  # Ruta för försäljning
+            "box_vat": "06"     # Ruta för moms
+        },
+        "outgoing_12": {
+            "vat": float(outgoing_by_rate["12"]["vat"]),
+            "sales": float(outgoing_by_rate["12"]["vat"] / Decimal("0.12")) if outgoing_by_rate["12"]["vat"] != 0 else 0.0,
+            "box_sales": "07",
+            "box_vat": "08"
+        },
+        "outgoing_6": {
+            "vat": float(outgoing_by_rate["6"]["vat"]),
+            "sales": float(outgoing_by_rate["6"]["vat"] / Decimal("0.06")) if outgoing_by_rate["6"]["vat"] != 0 else 0.0,
+            "box_sales": "09",
+            "box_vat": "10"
+        },
+        "incoming_total": {
+            "vat": float(total_incoming),
+            "box": "30"  # Ruta för ingående moms
+        },
+        "net_vat": {
+            "amount": float(net_vat),
+            "box": "48"  # Ruta för moms att betala/få tillbaka
+        }
+    }
 
     # Fetch detailed verifications for debug purposes
     verification_details = []
@@ -430,6 +498,7 @@ def get_vat_report(
         },
         "net_vat": float(net_vat),
         "pay_or_refund": "pay" if net_vat > 0 else "refund" if net_vat < 0 else "zero",
+        "skv_3800": skv_3800,
         "debug_info": {
             "total_vat_accounts_found": len(vat_accounts),
             "outgoing_vat_accounts": [{"number": acc.account_number, "name": acc.name} for acc in outgoing_vat_accounts],

@@ -554,6 +554,138 @@ export default function Reports() {
             </div>
           </div>
 
+          {/* SKV 3800 Declaration Form */}
+          {vatReport.skv_3800 && (
+            <div className="mt-8 p-6 bg-green-50 border-2 border-green-300 rounded-lg">
+              <h3 className="text-xl font-bold text-green-900 mb-4">
+                📋 Momsdeklaration SKV 3800 - Rutter att fylla i
+              </h3>
+              <p className="text-sm text-green-800 mb-4">
+                Använd dessa siffror när du fyller i din momsdeklaration på Skatteverket.se
+              </p>
+
+              <div className="space-y-4">
+                {/* 25% VAT */}
+                {vatReport.skv_3800.outgoing_25.vat > 0 && (
+                  <div className="bg-white p-4 rounded border border-green-200">
+                    <h4 className="font-semibold text-gray-900 mb-2">Moms 25%</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          Ruta {vatReport.skv_3800.outgoing_25.box_sales}: Försäljning 25%
+                        </span>
+                        <p className="text-lg font-mono font-bold">
+                          {formatCurrency(vatReport.skv_3800.outgoing_25.sales)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          Ruta {vatReport.skv_3800.outgoing_25.box_vat}: Utgående moms 25%
+                        </span>
+                        <p className="text-lg font-mono font-bold text-green-700">
+                          {formatCurrency(vatReport.skv_3800.outgoing_25.vat)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 12% VAT */}
+                {vatReport.skv_3800.outgoing_12.vat > 0 && (
+                  <div className="bg-white p-4 rounded border border-green-200">
+                    <h4 className="font-semibold text-gray-900 mb-2">Moms 12%</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          Ruta {vatReport.skv_3800.outgoing_12.box_sales}: Försäljning 12%
+                        </span>
+                        <p className="text-lg font-mono font-bold">
+                          {formatCurrency(vatReport.skv_3800.outgoing_12.sales)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          Ruta {vatReport.skv_3800.outgoing_12.box_vat}: Utgående moms 12%
+                        </span>
+                        <p className="text-lg font-mono font-bold text-green-700">
+                          {formatCurrency(vatReport.skv_3800.outgoing_12.vat)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 6% VAT */}
+                {vatReport.skv_3800.outgoing_6.vat > 0 && (
+                  <div className="bg-white p-4 rounded border border-green-200">
+                    <h4 className="font-semibold text-gray-900 mb-2">Moms 6%</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          Ruta {vatReport.skv_3800.outgoing_6.box_sales}: Försäljning 6%
+                        </span>
+                        <p className="text-lg font-mono font-bold">
+                          {formatCurrency(vatReport.skv_3800.outgoing_6.sales)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          Ruta {vatReport.skv_3800.outgoing_6.box_vat}: Utgående moms 6%
+                        </span>
+                        <p className="text-lg font-mono font-bold text-green-700">
+                          {formatCurrency(vatReport.skv_3800.outgoing_6.vat)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Incoming VAT */}
+                <div className="bg-white p-4 rounded border border-green-200">
+                  <h4 className="font-semibold text-gray-900 mb-2">Ingående moms</h4>
+                  <div>
+                    <span className="text-sm text-gray-600">
+                      Ruta {vatReport.skv_3800.incoming_total.box}: Ingående moms
+                    </span>
+                    <p className="text-lg font-mono font-bold text-blue-700">
+                      {formatCurrency(vatReport.skv_3800.incoming_total.vat)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Net VAT */}
+                <div className="bg-white p-4 rounded border-2 border-gray-900">
+                  <h4 className="font-semibold text-gray-900 mb-2">Att betala/få tillbaka</h4>
+                  <div>
+                    <span className="text-sm text-gray-600">
+                      Ruta {vatReport.skv_3800.net_vat.box}: Moms att betala (eller återfå med minus)
+                    </span>
+                    <p className={`text-xl font-mono font-bold ${
+                      vatReport.skv_3800.net_vat.amount > 0 ? 'text-red-700' : 'text-green-700'
+                    }`}>
+                      {formatCurrency(vatReport.skv_3800.net_vat.amount)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-300 rounded">
+                <p className="text-sm text-yellow-900">
+                  <strong>💡 Tips:</strong> Gå till{' '}
+                  <a
+                    href="https://www.skatteverket.se"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-semibold"
+                  >
+                    Skatteverket.se
+                  </a>{' '}
+                  → Mina sidor → Momsdeklaration och fyll i rutorna ovan.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
             <h4 className="text-sm font-semibold text-blue-900 mb-2">Om momsrapporten</h4>
             <ul className="text-sm text-blue-800 space-y-1">
