@@ -1,12 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, date
+from pathlib import Path
+import shutil
+import uuid
 from app.database import get_db
 from app.models.expense import Expense, ExpenseStatus
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
 
 router = APIRouter()
+
+# Create receipts directory if it doesn't exist
+RECEIPTS_DIR = Path("/app/receipts")
+RECEIPTS_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
@@ -184,4 +192,108 @@ def submit_expense(expense_id: int, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(expense)
+    return expense
+
+
+@router.post("/{expense_id}/upload-receipt", response_model=ExpenseResponse)
+async def upload_receipt(
+    expense_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload a receipt file for an expense"""
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Expense {expense_id} not found"
+        )
+
+    # Validate file type (images and PDFs)
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.gif'}
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type {file_ext} not allowed. Allowed types: {', '.join(allowed_extensions)}"
+        )
+
+    # Delete old receipt if exists
+    if expense.receipt_filename:
+        old_path = RECEIPTS_DIR / expense.receipt_filename
+        if old_path.exists():
+            old_path.unlink()
+
+    # Generate unique filename
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = RECEIPTS_DIR / unique_filename
+
+    # Save file
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Update expense record
+    expense.receipt_filename = unique_filename
+    db.commit()
+    db.refresh(expense)
+
+    return expense
+
+
+@router.get("/{expense_id}/receipt")
+async def download_receipt(expense_id: int, db: Session = Depends(get_db)):
+    """Download the receipt file for an expense"""
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Expense {expense_id} not found"
+        )
+
+    if not expense.receipt_filename:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No receipt file found for this expense"
+        )
+
+    file_path = RECEIPTS_DIR / expense.receipt_filename
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt file not found on disk"
+        )
+
+    return FileResponse(
+        path=str(file_path),
+        filename=expense.receipt_filename,
+        media_type="application/octet-stream"
+    )
+
+
+@router.delete("/{expense_id}/receipt", response_model=ExpenseResponse)
+async def delete_receipt(expense_id: int, db: Session = Depends(get_db)):
+    """Delete the receipt file for an expense"""
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Expense {expense_id} not found"
+        )
+
+    if not expense.receipt_filename:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No receipt file found for this expense"
+        )
+
+    # Delete file from disk
+    file_path = RECEIPTS_DIR / expense.receipt_filename
+    if file_path.exists():
+        file_path.unlink()
+
+    # Clear filename from database
+    expense.receipt_filename = None
+    db.commit()
+    db.refresh(expense)
+
     return expense

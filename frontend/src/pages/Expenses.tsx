@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye } from 'lucide-react'
 import { companyApi, expenseApi, accountApi } from '@/services/api'
 import type { Expense, ExpenseStatus, Account } from '@/types'
 
@@ -180,6 +180,45 @@ export default function Expenses() {
     }
   }
 
+  const handleFileUpload = async (expenseId: number, file: File) => {
+    try {
+      await expenseApi.uploadReceipt(expenseId, file)
+      await loadExpenses()
+    } catch (error) {
+      console.error('Failed to upload receipt:', error)
+      alert('Kunde inte ladda upp kvittot')
+    }
+  }
+
+  const handleDownloadReceipt = async (expenseId: number, filename: string) => {
+    try {
+      const response = await expenseApi.downloadReceipt(expenseId)
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', filename)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download receipt:', error)
+      alert('Kunde inte ladda ner kvittot')
+    }
+  }
+
+  const handleDeleteReceipt = async (expenseId: number) => {
+    if (!confirm('Är du säker på att du vill ta bort kvittot?')) return
+
+    try {
+      await expenseApi.deleteReceipt(expenseId)
+      await loadExpenses()
+    } catch (error) {
+      console.error('Failed to delete receipt:', error)
+      alert('Kunde inte ta bort kvittot')
+    }
+  }
+
   const getStatusBadge = (status: ExpenseStatus) => {
     const badges = {
       draft: 'bg-gray-100 text-gray-800',
@@ -318,6 +357,7 @@ export default function Expenses() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beskrivning</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Belopp</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Moms</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Kvitto</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Åtgärder</th>
               </tr>
@@ -325,7 +365,7 @@ export default function Expenses() {
             <tbody className="divide-y divide-gray-200 bg-white">
               {filteredExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     Inga utlägg hittades
                   </td>
                 </tr>
@@ -340,6 +380,41 @@ export default function Expenses() {
                     </td>
                     <td className="px-4 py-3 text-sm text-right font-mono">
                       {formatCurrency(expense.vat_amount)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {expense.receipt_filename ? (
+                          <>
+                            <button
+                              onClick={() => handleDownloadReceipt(expense.id, expense.receipt_filename!)}
+                              className="p-1 text-blue-600 hover:text-blue-800"
+                              title="Ladda ner kvitto"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReceipt(expense.id)}
+                              className="p-1 text-red-600 hover:text-red-800"
+                              title="Ta bort kvitto"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".jpg,.jpeg,.png,.pdf,.gif"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) handleFileUpload(expense.id, file)
+                              }}
+                            />
+                            <Upload className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+                          </label>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">{getStatusBadge(expense.status)}</td>
                     <td className="px-4 py-3">

@@ -201,6 +201,15 @@ export const expenseApi = {
   reject: (id: number) => api.post<Expense>(`/api/expenses/${id}/reject`),
   markPaid: (id: number, paidDate: string) =>
     api.post<Expense>(`/api/expenses/${id}/mark-paid`, null, { params: { paid_date: paidDate } }),
+  uploadReceipt: (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<Expense>(`/api/expenses/${id}/upload-receipt`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  downloadReceipt: (id: number) => api.get(`/api/expenses/${id}/receipt`, { responseType: 'blob' }),
+  deleteReceipt: (id: number) => api.delete<Expense>(`/api/expenses/${id}/receipt`),
 }
 
 export default api
