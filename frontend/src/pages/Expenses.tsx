@@ -331,8 +331,8 @@ export default function Expenses() {
     return true
   })
 
-  const totalAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
-  const totalVat = filteredExpenses.reduce((sum, e) => sum + e.vat_amount, 0)
+  const totalAmount = filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0)
+  const totalVat = filteredExpenses.reduce((sum, e) => sum + Number(e.vat_amount), 0)
 
   if (loading) {
     return (
