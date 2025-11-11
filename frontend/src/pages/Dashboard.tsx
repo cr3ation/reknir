@@ -1,28 +1,28 @@
 import { useEffect, useState } from 'react'
-import { companyApi, accountApi } from '@/services/api'
-import type { Company, Account } from '@/types'
+import { accountApi } from '@/services/api'
+import type { Account } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function Dashboard() {
-  const [company, setCompany] = useState<Company | null>(null)
+  const { selectedCompany } = useCompany()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedCompany])
 
   const loadData = async () => {
-    try {
-      // Get first company (single-company mode for MVP)
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length > 0) {
-        const comp = companiesRes.data[0]
-        setCompany(comp)
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
 
-        // Load accounts
-        const accountsRes = await accountApi.list(comp.id)
-        setAccounts(accountsRes.data)
-      }
+    try {
+      setLoading(true)
+      // Load accounts
+      const accountsRes = await accountApi.list(selectedCompany.id)
+      setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
@@ -38,7 +38,7 @@ export default function Dashboard() {
     )
   }
 
-  if (!company) {
+  if (!selectedCompany) {
     return (
       <div className="card">
         <h2 className="text-2xl font-bold mb-4">Välkommen till Reknir</h2>
@@ -65,8 +65,8 @@ export default function Dashboard() {
         {/* Company Info */}
         <div className="card">
           <h3 className="text-sm font-medium text-gray-500 mb-1">Företag</h3>
-          <p className="text-2xl font-bold">{company.name}</p>
-          <p className="text-sm text-gray-600">Org.nr: {company.org_number}</p>
+          <p className="text-2xl font-bold">{selectedCompany.name}</p>
+          <p className="text-sm text-gray-600">Org.nr: {selectedCompany.org_number}</p>
         </div>
 
         {/* Assets */}

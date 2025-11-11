@@ -1,43 +1,41 @@
 import { useEffect, useState } from 'react'
 import { Download, Plus, X, Eye, DollarSign } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { invoiceApi, companyApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
+import { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function Invoices() {
   const navigate = useNavigate()
+  const { selectedCompany } = useCompany()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoiceListItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
-  const [companyId, setCompanyId] = useState<number | null>(null)
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false)
   const [showCreateSupplierInvoiceModal, setShowCreateSupplierInvoiceModal] = useState(false)
 
   useEffect(() => {
     loadInvoices()
-  }, [])
+  }, [selectedCompany])
 
   const loadInvoices = async () => {
-    try {
-      // Get the first company (single-company mode)
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        setLoading(false)
-        return
-      }
-      const company = companiesRes.data[0]
-      setCompanyId(company.id)
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
 
+    try {
+      setLoading(true)
       const [outgoingRes, incomingRes, customersRes, suppliersRes, accountsRes] = await Promise.all([
-        invoiceApi.list(company.id),
-        supplierInvoiceApi.list(company.id),
-        customerApi.list(company.id),
-        supplierApi.list(company.id),
-        accountApi.list(company.id),
+        invoiceApi.list(selectedCompany.id),
+        supplierInvoiceApi.list(selectedCompany.id),
+        customerApi.list(selectedCompany.id),
+        supplierApi.list(selectedCompany.id),
+        accountApi.list(selectedCompany.id),
       ])
       setInvoices(outgoingRes.data)
       setSupplierInvoices(incomingRes.data)
@@ -382,9 +380,9 @@ export default function Invoices() {
       </div>
 
       {/* Create Invoice Modal */}
-      {showCreateInvoiceModal && companyId && (
+      {showCreateInvoiceModal && selectedCompany && (
         <CreateInvoiceModal
-          companyId={companyId}
+          companyId={selectedCompany.id}
           customers={customers}
           accounts={accounts}
           onClose={() => setShowCreateInvoiceModal(false)}
@@ -396,9 +394,9 @@ export default function Invoices() {
       )}
 
       {/* Create Supplier Invoice Modal */}
-      {showCreateSupplierInvoiceModal && companyId && (
+      {showCreateSupplierInvoiceModal && selectedCompany && (
         <CreateSupplierInvoiceModal
-          companyId={companyId}
+          companyId={selectedCompany.id}
           suppliers={suppliers}
           accounts={accounts}
           onClose={() => setShowCreateSupplierInvoiceModal(false)}

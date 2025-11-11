@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye, BookOpen } from 'lucide-react'
-import { companyApi, expenseApi, accountApi } from '@/services/api'
+import { expenseApi, accountApi } from '@/services/api'
 import type { Expense, ExpenseStatus, Account } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function Expenses() {
   const navigate = useNavigate()
+  const { selectedCompany } = useCompany()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,17 +31,16 @@ export default function Expenses() {
   useEffect(() => {
     loadExpenses()
     loadAccounts()
-  }, [statusFilter, employeeFilter])
+  }, [selectedCompany, statusFilter, employeeFilter])
 
   const loadExpenses = async () => {
-    try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        setLoading(false)
-        return
-      }
-      const company = companiesRes.data[0]
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
 
+    try {
+      setLoading(true)
       const params: any = {}
       if (statusFilter !== 'all') {
         params.status_filter = statusFilter
@@ -48,7 +49,7 @@ export default function Expenses() {
         params.employee_name = employeeFilter
       }
 
-      const expensesRes = await expenseApi.list(company.id, params)
+      const expensesRes = await expenseApi.list(selectedCompany.id, params)
       setExpenses(expensesRes.data)
     } catch (error) {
       console.error('Failed to load expenses:', error)
@@ -58,11 +59,10 @@ export default function Expenses() {
   }
 
   const loadAccounts = async () => {
+    if (!selectedCompany) return
+
     try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) return
-      const company = companiesRes.data[0]
-      const accountsRes = await accountApi.list(company.id)
+      const accountsRes = await accountApi.list(selectedCompany.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
@@ -101,12 +101,11 @@ export default function Expenses() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    try {
-      const companiesRes = await companyApi.list()
-      const company = companiesRes.data[0]
+    if (!selectedCompany) return
 
+    try {
       const payload = {
-        company_id: company.id,
+        company_id: selectedCompany.id,
         employee_name: formData.employee_name,
         expense_date: formData.expense_date,
         description: formData.description,

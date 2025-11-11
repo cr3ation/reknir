@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { companyApi, reportApi } from '@/services/api'
-import type { Company, BalanceSheet, IncomeStatement, VATReport, VATPeriod } from '@/types'
+import { reportApi } from '@/services/api'
+import type { BalanceSheet, IncomeStatement, VATReport, VATPeriod } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
 
 type ReportTab = 'balance' | 'income' | 'vat'
 
 export default function Reports() {
-  const [company, setCompany] = useState<Company | null>(null)
+  const { selectedCompany } = useCompany()
   const [activeTab, setActiveTab] = useState<ReportTab>('income')
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
@@ -19,37 +20,32 @@ export default function Reports() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedCompany])
 
   useEffect(() => {
-    if (company) {
+    if (selectedCompany) {
       loadVatPeriods()
     }
-  }, [company, vatYear])
+  }, [selectedCompany, vatYear])
 
   useEffect(() => {
-    if (company && selectedPeriod) {
+    if (selectedCompany && selectedPeriod) {
       loadVatReport()
     }
-  }, [selectedPeriod, excludeVatSettlements])
+  }, [selectedCompany, selectedPeriod, excludeVatSettlements])
 
   const loadData = async () => {
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
-
-      // Get first company
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        return
-      }
-
-      const comp = companiesRes.data[0]
-      setCompany(comp)
-
       // Load reports
       const [balanceRes, incomeRes] = await Promise.all([
-        reportApi.balanceSheet(comp.id),
-        reportApi.incomeStatement(comp.id),
+        reportApi.balanceSheet(selectedCompany.id),
+        reportApi.incomeStatement(selectedCompany.id),
       ])
 
       setBalanceSheet(balanceRes.data)
@@ -62,10 +58,10 @@ export default function Reports() {
   }
 
   const loadVatPeriods = async () => {
-    if (!company) return
+    if (!selectedCompany) return
 
     try {
-      const periodsRes = await reportApi.vatPeriods(company.id, vatYear)
+      const periodsRes = await reportApi.vatPeriods(selectedCompany.id, vatYear)
       setVatPeriods(periodsRes.data.periods)
 
       // Auto-select the most recent period
@@ -78,12 +74,12 @@ export default function Reports() {
   }
 
   const loadVatReport = async () => {
-    if (!company || !selectedPeriod) return
+    if (!selectedCompany || !selectedPeriod) return
 
     try {
       setLoading(true)
       const vatRes = await reportApi.vatReport(
-        company.id,
+        selectedCompany.id,
         selectedPeriod.start_date,
         selectedPeriod.end_date,
         excludeVatSettlements
@@ -96,7 +92,7 @@ export default function Reports() {
     }
   }
 
-  if (!company) {
+  if (!selectedCompany) {
     return (
       <div className="card">
         <p className="text-gray-600">Inget företag hittat.</p>
@@ -688,9 +684,9 @@ export default function Reports() {
               <div className="mt-4">
                 <button
                   onClick={() => {
-                    if (!company || !selectedPeriod) return
+                    if (!selectedCompany || !selectedPeriod) return
                     const url = new URL('/api/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000')
-                    url.searchParams.append('company_id', company.id.toString())
+                    url.searchParams.append('company_id', selectedCompany.id.toString())
                     url.searchParams.append('start_date', selectedPeriod.start_date)
                     url.searchParams.append('end_date', selectedPeriod.end_date)
                     url.searchParams.append('exclude_vat_settlements', excludeVatSettlements.toString())

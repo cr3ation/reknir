@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Edit2, Save, X, FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { companyApi, accountApi } from '@/services/api'
+import { accountApi } from '@/services/api'
 import type { Account } from '@/types'
 import api from '@/services/api'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function Accounts() {
+  const { selectedCompany } = useCompany()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<string>('all')
@@ -15,17 +17,17 @@ export default function Accounts() {
 
   useEffect(() => {
     loadAccounts()
-  }, [])
+  }, [selectedCompany])
 
   const loadAccounts = async () => {
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        setLoading(false)
-        return
-      }
-      const company = companiesRes.data[0]
-      const accountsRes = await accountApi.list(company.id)
+      setLoading(true)
+      const accountsRes = await accountApi.list(selectedCompany.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
