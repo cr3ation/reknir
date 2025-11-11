@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Download, Plus, X } from 'lucide-react'
+import { Download, Plus, X, Eye, DollarSign } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { invoiceApi, companyApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 
 export default function Invoices() {
+  const navigate = useNavigate()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoiceListItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -78,6 +80,34 @@ export default function Invoices() {
     } catch (error) {
       console.error('Failed to register supplier invoice:', error)
       alert('Kunde inte bokföra leverantörsfakturan')
+    }
+  }
+
+  const markSupplierInvoicePaid = async (invoiceId: number, totalAmount: number, paidAmount: number) => {
+    const paidDate = prompt('Ange betalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
+    if (!paidDate) return
+
+    // Find bank account 1930 (default bank account)
+    const bankAccount = accounts.find(a => a.account_number === 1930)
+
+    if (!bankAccount) {
+      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      return
+    }
+
+    const remainingAmount = totalAmount - paidAmount
+
+    try {
+      await supplierInvoiceApi.markPaid(invoiceId, {
+        paid_date: paidDate,
+        paid_amount: remainingAmount,
+        bank_account_id: bankAccount.id
+      })
+      await loadInvoices()
+      alert('Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
+    } catch (error: any) {
+      console.error('Failed to mark supplier invoice as paid:', error)
+      alert(`Kunde inte markera som betald: ${error.response?.data?.detail || error.message}`)
     }
   }
 
@@ -271,15 +301,33 @@ export default function Invoices() {
                       })}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {invoice.status === 'draft' && (
+                      <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => registerSupplierInvoice(invoice.id)}
-                          className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                          title="Bokför faktura"
+                          onClick={() => navigate(`/supplier-invoices/${invoice.id}`)}
+                          className="p-1 text-gray-600 hover:text-gray-800"
+                          title="Visa detaljer"
                         >
-                          Bokför
+                          <Eye className="w-4 h-4" />
                         </button>
-                      )}
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => registerSupplierInvoice(invoice.id)}
+                            className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            title="Bokför faktura"
+                          >
+                            Bokför
+                          </button>
+                        )}
+                        {invoice.status !== 'draft' && invoice.status !== 'paid' && (
+                          <button
+                            onClick={() => markSupplierInvoicePaid(invoice.id, invoice.total_amount, invoice.paid_amount)}
+                            className="p-1 text-purple-600 hover:text-purple-800"
+                            title="Markera som betald"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -152,9 +152,11 @@ export const supplierInvoiceApi = {
   update: (id: number, data: Partial<SupplierInvoice>) =>
     api.patch<SupplierInvoice>(`/api/supplier-invoices/${id}`, data),
   register: (id: number) => api.post<SupplierInvoice>(`/api/supplier-invoices/${id}/register`),
-  markPaid: (id: number, data: { paid_date: string; paid_amount?: number }) =>
+  markPaid: (id: number, data: { paid_date: string; paid_amount?: number; bank_account_id?: number }) =>
     api.post<SupplierInvoice>(`/api/supplier-invoices/${id}/mark-paid`, data),
   delete: (id: number) => api.delete(`/api/supplier-invoices/${id}`),
+  downloadAttachment: (id: number) => api.get(`/api/supplier-invoices/${id}/attachment`, { responseType: 'blob' }),
+  deleteAttachment: (id: number) => api.delete<SupplierInvoice>(`/api/supplier-invoices/${id}/attachment`),
 }
 
 // SIE4 Import/Export
