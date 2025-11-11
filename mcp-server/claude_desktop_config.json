@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "reknir": {
+      "command": "python",
+      "args": ["-m", "src.server"],
+      "cwd": "/absolute/path/to/reknir/mcp-server",
+      "env": {
+        "REKNIR_API_URL": "http://localhost:8000",
+        "REKNIR_COMPANY_ID": "1"
+      }
+    }
+  }
+}
