@@ -9,6 +9,7 @@ import Accounts from './pages/Accounts'
 import AccountLedger from './pages/AccountLedger'
 import Reports from './pages/Reports'
 import Expenses from './pages/Expenses'
+import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
 import Setup from './pages/Setup'
 import api from './services/api'
@@ -160,6 +161,7 @@ function AppContent() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/expenses" element={<Expenses />} />
+              <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
               <Route path="/verifications" element={<Verifications />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/accounts" element={<Accounts />} />

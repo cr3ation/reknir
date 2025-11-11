@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye, BookOpen } from 'lucide-react'
 import { companyApi, expenseApi, accountApi } from '@/services/api'
 import type { Expense, ExpenseStatus, Account } from '@/types'
 
 export default function Expenses() {
+  const navigate = useNavigate()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -470,6 +472,13 @@ export default function Expenses() {
                     <td className="px-4 py-3 text-center">{getStatusBadge(expense.status)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => navigate(`/expenses/${expense.id}`)}
+                          className="p-1 text-gray-600 hover:text-gray-800"
+                          title="Visa detaljer"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         {expense.status === 'draft' && (
                           <>
                             <button
