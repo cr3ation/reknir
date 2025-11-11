@@ -3,6 +3,7 @@ import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet } 
 import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
+import VerificationDetail from './pages/VerificationDetail'
 import Invoices from './pages/Invoices'
 import Customers from './pages/Customers'
 import Accounts from './pages/Accounts'
@@ -163,6 +164,7 @@ function AppContent() {
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
               <Route path="/verifications" element={<Verifications />} />
+              <Route path="/verifications/:verificationId" element={<VerificationDetail />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/accounts/:accountId/ledger" element={<AccountLedger />} />
