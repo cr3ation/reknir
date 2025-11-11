@@ -141,21 +141,28 @@ export default function SettingsPage() {
   }
 
   const formatErrorMessage = (error: any): string => {
+    console.log('Full error:', error)
+    console.log('Error response data:', error.response?.data)
+
     // Handle FastAPI validation errors (422)
     if (error.response?.data?.detail) {
       const detail = error.response.data.detail
       // If detail is an array of validation errors
       if (Array.isArray(detail)) {
-        return detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ')
+        return detail.map((err: any) => {
+          const field = err.loc?.slice(-1)[0] || 'okänt fält'
+          const message = err.msg || err.type || 'valideringsfel'
+          return `• ${field}: ${message}`
+        }).join('\n')
       }
       // If detail is a string
       if (typeof detail === 'string') {
         return detail
       }
       // If detail is an object, try to stringify it
-      return JSON.stringify(detail)
+      return JSON.stringify(detail, null, 2)
     }
-    return 'Ett fel uppstod'
+    return `Ett fel uppstod: ${error.message || 'Okänt fel'}`
   }
 
   const handleUpdateCompany = async () => {
@@ -417,7 +424,7 @@ export default function SettingsPage() {
               : 'bg-red-100 text-red-800'
           }`}
         >
-          {message}
+          <pre className="whitespace-pre-wrap font-sans text-sm">{message}</pre>
         </div>
       )}
 
@@ -552,9 +559,13 @@ export default function SettingsPage() {
                     value={companyForm.org_number}
                     onChange={(e) => setCompanyForm({ ...companyForm, org_number: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="XXXXXX-XXXX"
+                    placeholder="123456-7890 eller 1234567890"
+                    pattern="^\d{6}-?\d{4}$"
                     required
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    10 siffror, med eller utan bindestreck (t.ex. 123456-7890)
+                  </p>
                 </div>
               </div>
             </div>
