@@ -148,12 +148,41 @@ export default function ExpenseDetail() {
     const paidDate = prompt('Ange utbetalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
     if (!paidDate) return
 
+    // Find bank accounts (e.g., 1930 Företagskonto)
+    const bankAccounts = accounts.filter(a =>
+      a.account_number >= 1900 && a.account_number < 2000
+    )
+
+    if (bankAccounts.length === 0) {
+      alert('Inget bankkonto hittades (t.ex. 1930). Lägg till ett bankkonto först.')
+      return
+    }
+
+    // Use first bank account or prompt if multiple
+    let bankAccountId = bankAccounts[0].id
+    if (bankAccounts.length > 1) {
+      const accountOptions = bankAccounts.map(a => `${a.account_number} ${a.name}`).join('\n')
+      const accountNumber = prompt(
+        `Välj bankkonto för betalning:\n${accountOptions}\n\nAnge kontonummer:`,
+        bankAccounts[0].account_number.toString()
+      )
+      if (!accountNumber) return
+
+      const selectedAccount = bankAccounts.find(a => a.account_number.toString() === accountNumber)
+      if (!selectedAccount) {
+        alert('Ogiltigt kontonummer')
+        return
+      }
+      bankAccountId = selectedAccount.id
+    }
+
     try {
-      await expenseApi.markPaid(parseInt(expenseId!), paidDate)
+      await expenseApi.markPaid(parseInt(expenseId!), paidDate, bankAccountId)
       await loadExpense()
-    } catch (error) {
+      alert('Utlägget har markerats som utbetalt och en verifikation har skapats')
+    } catch (error: any) {
       console.error('Failed to mark paid:', error)
-      alert('Kunde inte markera som utbetald')
+      alert(`Kunde inte markera som utbetald: ${error.response?.data?.detail || error.message}`)
     }
   }
 

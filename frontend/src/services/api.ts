@@ -201,8 +201,8 @@ export const expenseApi = {
   reject: (id: number) => api.post<Expense>(`/api/expenses/${id}/reject`),
   book: (id: number, employeePayableAccountId: number) =>
     api.post<Expense>(`/api/expenses/${id}/book`, null, { params: { employee_payable_account_id: employeePayableAccountId } }),
-  markPaid: (id: number, paidDate: string) =>
-    api.post<Expense>(`/api/expenses/${id}/mark-paid`, null, { params: { paid_date: paidDate } }),
+  markPaid: (id: number, paidDate: string, bankAccountId: number) =>
+    api.post<Expense>(`/api/expenses/${id}/mark-paid`, null, { params: { paid_date: paidDate, bank_account_id: bankAccountId } }),
   uploadReceipt: (id: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)

@@ -9,7 +9,7 @@ import uuid
 from app.database import get_db
 from app.models.expense import Expense, ExpenseStatus
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
-from app.services.expense_service import create_expense_verification
+from app.services.expense_service import create_expense_verification, create_expense_payment_verification
 
 router = APIRouter()
 
@@ -150,8 +150,21 @@ def reject_expense(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{expense_id}/mark-paid", response_model=ExpenseResponse)
-def mark_expense_paid(expense_id: int, paid_date: date = Query(...), db: Session = Depends(get_db)):
-    """Mark an expense as paid"""
+def mark_expense_paid(
+    expense_id: int,
+    paid_date: date = Query(...),
+    bank_account_id: int = Query(..., description="Account ID for bank account (e.g., 1930)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark an expense as paid and create payment verification
+
+    Swedish: Registrera utlägg som betalt
+
+    Creates accounting entry:
+    Debit:  Employee payable account (e.g., 2890)
+    Credit: Bank account (e.g., 1930)
+    """
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(
@@ -165,12 +178,30 @@ def mark_expense_paid(expense_id: int, paid_date: date = Query(...), db: Session
             detail=f"Can only mark approved expenses as paid (current status: {expense.status})"
         )
 
-    expense.status = ExpenseStatus.PAID
-    expense.paid_date = datetime.combine(paid_date, datetime.min.time())
+    if not expense.verification_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expense must be booked before marking as paid"
+        )
 
-    db.commit()
-    db.refresh(expense)
-    return expense
+    # Create payment verification
+    try:
+        payment_verification = create_expense_payment_verification(
+            db, expense, paid_date, bank_account_id
+        )
+
+        # Update expense status
+        expense.status = ExpenseStatus.PAID
+        expense.paid_date = datetime.combine(paid_date, datetime.min.time())
+
+        db.commit()
+        db.refresh(expense)
+        return expense
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.post("/{expense_id}/submit", response_model=ExpenseResponse)

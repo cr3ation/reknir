@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime
 from app.models.expense import Expense
 from app.models.verification import Verification, TransactionLine
 from app.models.account import Account
@@ -92,6 +92,95 @@ def create_expense_verification(
     )
     db.add(credit_line)
     payable_account.current_balance -= expense.amount
+
+    db.commit()
+    db.refresh(verification)
+
+    return verification
+
+
+def create_expense_payment_verification(
+    db: Session,
+    expense: Expense,
+    paid_date: date,
+    bank_account_id: int,
+    description: Optional[str] = None
+) -> Verification:
+    """
+    Create payment verification when expense is paid
+
+    Swedish: Bokför betalning av utlägg
+
+    Debit:  Employee payable account (e.g., 2890 Upplupna kostnader)
+    Credit: Bank account (e.g., 1930 Företagskonto)
+    """
+
+    # Get next verification number
+    from app.routers.verifications import get_next_verification_number
+    ver_number = get_next_verification_number(db, expense.company_id, "A")
+
+    # Create verification
+    verification = Verification(
+        company_id=expense.company_id,
+        verification_number=ver_number,
+        series="A",
+        transaction_date=paid_date,
+        description=description or f"Betalning utlägg - {expense.employee_name}: {expense.description}",
+        registration_date=date.today()
+    )
+    db.add(verification)
+    db.flush()
+
+    # Get the employee payable account from the original expense verification
+    if not expense.verification_id:
+        raise ValueError("Expense must be booked before marking as paid")
+
+    # Find the employee payable account from the original verification
+    original_verification = db.query(Verification).filter(Verification.id == expense.verification_id).first()
+    if not original_verification:
+        raise ValueError(f"Original verification {expense.verification_id} not found")
+
+    # Find the credit line in the original verification (employee payable account)
+    employee_payable_line = None
+    for line in original_verification.transaction_lines:
+        if line.credit > 0:  # This should be the employee payable account
+            employee_payable_line = line
+            break
+
+    if not employee_payable_line:
+        raise ValueError("Could not find employee payable account in original verification")
+
+    employee_payable_account_id = employee_payable_line.account_id
+
+    # Debit: Employee payable account (reduces liability)
+    payable_account = db.query(Account).filter(Account.id == employee_payable_account_id).first()
+    if not payable_account:
+        raise ValueError(f"Employee payable account {employee_payable_account_id} not found")
+
+    debit_line = TransactionLine(
+        verification_id=verification.id,
+        account_id=payable_account.id,
+        debit=expense.amount,
+        credit=Decimal("0"),
+        description=f"Betald till {expense.employee_name}"
+    )
+    db.add(debit_line)
+    payable_account.current_balance += expense.amount  # Reduce liability
+
+    # Credit: Bank account (reduces asset)
+    bank_account = db.query(Account).filter(Account.id == bank_account_id).first()
+    if not bank_account:
+        raise ValueError(f"Bank account {bank_account_id} not found")
+
+    credit_line = TransactionLine(
+        verification_id=verification.id,
+        account_id=bank_account.id,
+        debit=Decimal("0"),
+        credit=expense.amount,
+        description=f"Betalning till {expense.employee_name}"
+    )
+    db.add(credit_line)
+    bank_account.current_balance -= expense.amount
 
     db.commit()
     db.refresh(verification)
