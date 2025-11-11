@@ -26,6 +26,11 @@ export interface Company {
   id: number
   name: string
   org_number: string
+  address?: string
+  postal_code?: string
+  city?: string
+  phone?: string
+  email?: string
   fiscal_year_start: string
   fiscal_year_end: string
   accounting_basis: AccountingBasis
