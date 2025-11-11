@@ -43,11 +43,9 @@ export default function SettingsPage() {
   const [companyForm, setCompanyForm] = useState({
     name: '',
     org_number: '',
-    address: '',
-    postal_code: '',
-    city: '',
-    phone: '',
-    email: '',
+    fiscal_year_start: new Date().getFullYear() + '-01-01',
+    fiscal_year_end: new Date().getFullYear() + '-12-31',
+    accounting_basis: 'accrual' as 'accrual' | 'cash',
     vat_reporting_period: 'quarterly' as VATReportingPeriod,
   })
 
@@ -107,11 +105,9 @@ export default function SettingsPage() {
     setCompanyForm({
       name: selectedCompany.name,
       org_number: selectedCompany.org_number,
-      address: selectedCompany.address || '',
-      postal_code: selectedCompany.postal_code || '',
-      city: selectedCompany.city || '',
-      phone: selectedCompany.phone || '',
-      email: selectedCompany.email || '',
+      fiscal_year_start: selectedCompany.fiscal_year_start,
+      fiscal_year_end: selectedCompany.fiscal_year_end,
+      accounting_basis: selectedCompany.accounting_basis,
       vat_reporting_period: selectedCompany.vat_reporting_period,
     })
     setEditingCompany(true)
@@ -122,13 +118,29 @@ export default function SettingsPage() {
     setCompanyForm({
       name: '',
       org_number: '',
-      address: '',
-      postal_code: '',
-      city: '',
-      phone: '',
-      email: '',
+      fiscal_year_start: new Date().getFullYear() + '-01-01',
+      fiscal_year_end: new Date().getFullYear() + '-12-31',
+      accounting_basis: 'accrual',
       vat_reporting_period: 'quarterly',
     })
+  }
+
+  const formatErrorMessage = (error: any): string => {
+    // Handle FastAPI validation errors (422)
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail
+      // If detail is an array of validation errors
+      if (Array.isArray(detail)) {
+        return detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ')
+      }
+      // If detail is a string
+      if (typeof detail === 'string') {
+        return detail
+      }
+      // If detail is an object, try to stringify it
+      return JSON.stringify(detail)
+    }
+    return 'Ett fel uppstod'
   }
 
   const handleUpdateCompany = async () => {
@@ -143,7 +155,7 @@ export default function SettingsPage() {
       await loadCompanies()
     } catch (error: any) {
       console.error('Failed to update company:', error)
-      showMessage(error.response?.data?.detail || 'Kunde inte uppdatera företag', 'error')
+      showMessage(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
     }
@@ -158,18 +170,16 @@ export default function SettingsPage() {
       setCompanyForm({
         name: '',
         org_number: '',
-        address: '',
-        postal_code: '',
-        city: '',
-        phone: '',
-        email: '',
+        fiscal_year_start: new Date().getFullYear() + '-01-01',
+        fiscal_year_end: new Date().getFullYear() + '-12-31',
+        accounting_basis: 'accrual',
         vat_reporting_period: 'quarterly',
       })
       await loadCompanies()
       setSelectedCompany(response.data)
     } catch (error: any) {
       console.error('Failed to create company:', error)
-      showMessage(error.response?.data?.detail || 'Kunde inte skapa företag', 'error')
+      showMessage(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
     }
@@ -434,24 +444,25 @@ export default function SettingsPage() {
               <p className="text-gray-900">{selectedCompany.org_number}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
-              <p className="text-gray-900">{selectedCompany.address || '-'}</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Räkenskapsår start</label>
+              <p className="text-gray-900">{selectedCompany.fiscal_year_start}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Postnummer</label>
-              <p className="text-gray-900">{selectedCompany.postal_code || '-'}</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Räkenskapsår slut</label>
+              <p className="text-gray-900">{selectedCompany.fiscal_year_end}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Stad</label>
-              <p className="text-gray-900">{selectedCompany.city || '-'}</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bokföringsmetod</label>
+              <p className="text-gray-900">
+                {selectedCompany.accounting_basis === 'accrual' ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
+              </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-              <p className="text-gray-900">{selectedCompany.phone || '-'}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
-              <p className="text-gray-900">{selectedCompany.email || '-'}</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Momsredovisning</label>
+              <p className="text-gray-900">
+                {selectedCompany.vat_reporting_period === 'monthly' ? 'Månadsvis' :
+                 selectedCompany.vat_reporting_period === 'quarterly' ? 'Kvartalsvis' : 'Årlig'}
+              </p>
             </div>
           </div>
         )}
@@ -486,50 +497,55 @@ export default function SettingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Räkenskapsår start *
+                </label>
                 <input
-                  type="text"
-                  value={companyForm.address}
-                  onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
+                  type="date"
+                  value={companyForm.fiscal_year_start}
+                  onChange={(e) => setCompanyForm({ ...companyForm, fiscal_year_start: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Postnummer</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Räkenskapsår slut *
+                </label>
                 <input
-                  type="text"
-                  value={companyForm.postal_code}
-                  onChange={(e) => setCompanyForm({ ...companyForm, postal_code: e.target.value })}
+                  type="date"
+                  value={companyForm.fiscal_year_end}
+                  onChange={(e) => setCompanyForm({ ...companyForm, fiscal_year_end: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="123 45"
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stad</label>
-                <input
-                  type="text"
-                  value={companyForm.city}
-                  onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bokföringsmetod
+                </label>
+                <select
+                  value={companyForm.accounting_basis}
+                  onChange={(e) => setCompanyForm({ ...companyForm, accounting_basis: e.target.value as 'accrual' | 'cash' })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
+                >
+                  <option value="accrual">Bokföringsmässiga grunder</option>
+                  <option value="cash">Kontantmetoden</option>
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-                <input
-                  type="tel"
-                  value={companyForm.phone}
-                  onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Momsredovisningsperiod
+                </label>
+                <select
+                  value={companyForm.vat_reporting_period}
+                  onChange={(e) => setCompanyForm({ ...companyForm, vat_reporting_period: e.target.value as VATReportingPeriod })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
-                <input
-                  type="email"
-                  value={companyForm.email}
-                  onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
+                >
+                  <option value="monthly">Månadsvis</option>
+                  <option value="quarterly">Kvartalsvis</option>
+                  <option value="yearly">Årlig</option>
+                </select>
               </div>
             </div>
 
