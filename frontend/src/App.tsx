@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
 import VerificationDetail from './pages/VerificationDetail'
 import Invoices from './pages/Invoices'
+import InvoiceDetail from './pages/InvoiceDetail'
 import SupplierInvoiceDetail from './pages/SupplierInvoiceDetail'
 import Customers from './pages/Customers'
 import Accounts from './pages/Accounts'
@@ -162,6 +163,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/invoices" element={<Invoices />} />
+              <Route path="/invoices/:invoiceId" element={<InvoiceDetail />} />
               <Route path="/supplier-invoices/:invoiceId" element={<SupplierInvoiceDetail />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />

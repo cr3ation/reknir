@@ -138,7 +138,7 @@ export const invoiceApi = {
   create: (data: any) => api.post<Invoice>('/api/invoices/', data),
   update: (id: number, data: Partial<Invoice>) => api.patch<Invoice>(`/api/invoices/${id}`, data),
   send: (id: number) => api.post<Invoice>(`/api/invoices/${id}/send`),
-  markPaid: (id: number, data: { paid_date: string; paid_amount?: number }) =>
+  markPaid: (id: number, data: { paid_date: string; paid_amount?: number; bank_account_id?: number }) =>
     api.post<Invoice>(`/api/invoices/${id}/mark-paid`, data),
   delete: (id: number) => api.delete(`/api/invoices/${id}`),
 }

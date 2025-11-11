@@ -83,6 +83,34 @@ export default function Invoices() {
     }
   }
 
+  const markInvoicePaid = async (invoiceId: number, totalAmount: number, paidAmount: number) => {
+    const paidDate = prompt('Ange betalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
+    if (!paidDate) return
+
+    // Find bank account 1930 (default bank account)
+    const bankAccount = accounts.find(a => a.account_number === 1930)
+
+    if (!bankAccount) {
+      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      return
+    }
+
+    const remainingAmount = totalAmount - paidAmount
+
+    try {
+      await invoiceApi.markPaid(invoiceId, {
+        paid_date: paidDate,
+        paid_amount: remainingAmount,
+        bank_account_id: bankAccount.id
+      })
+      await loadInvoices()
+      alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
+    } catch (error: any) {
+      console.error('Failed to mark invoice as paid:', error)
+      alert(`Kunde inte markera som betald: ${error.response?.data?.detail || error.message}`)
+    }
+  }
+
   const markSupplierInvoicePaid = async (invoiceId: number, totalAmount: number, paidAmount: number) => {
     const paidDate = prompt('Ange betalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
     if (!paidDate) return
@@ -207,6 +235,13 @@ export default function Invoices() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => navigate(`/invoices/${invoice.id}`)}
+                          className="p-1 text-gray-600 hover:text-gray-800"
+                          title="Visa detaljer"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         {invoice.status === 'draft' && (
                           <button
                             onClick={() => sendInvoice(invoice.id)}
@@ -214,6 +249,15 @@ export default function Invoices() {
                             title="Skicka och bokför faktura"
                           >
                             Skicka
+                          </button>
+                        )}
+                        {invoice.status !== 'draft' && invoice.status !== 'paid' && (
+                          <button
+                            onClick={() => markInvoicePaid(invoice.id, invoice.total_amount, invoice.paid_amount)}
+                            className="p-1 text-purple-600 hover:text-purple-800"
+                            title="Markera som betald"
+                          >
+                            <DollarSign className="w-4 h-4" />
                           </button>
                         )}
                         <button
