@@ -30,8 +30,13 @@ export default function Dashboard() {
 
       // Load monthly statistics if fiscal year is selected
       if (selectedFiscalYear) {
+        console.log('Loading monthly statistics for year:', selectedFiscalYear.year)
         const statsRes = await reportApi.monthlyStatistics(selectedCompany.id, selectedFiscalYear.year)
+        console.log('Monthly statistics loaded:', statsRes.data)
         setMonthlyStats(statsRes.data)
+      } else {
+        console.log('No fiscal year selected, skipping monthly statistics')
+        setMonthlyStats(null)
       }
     } catch (error) {
       console.error('Failed to load data:', error)
@@ -73,6 +78,15 @@ export default function Dashboard() {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Översikt</h1>
+
+      {/* No fiscal year selected message */}
+      {!selectedFiscalYear && (
+        <div className="card mb-8 bg-blue-50 border-blue-200">
+          <p className="text-blue-800">
+            📅 Välj ett verksamhetsår i menyn ovan för att se ekonomiska grafer och statistik.
+          </p>
+        </div>
+      )}
 
       {/* Financial Overview Cards */}
       {monthlyStats && (
