@@ -820,8 +820,6 @@ def get_monthly_statistics(
     Get monthly revenue and expense statistics for a specific year.
     Used for dashboard charts to visualize financial performance over time.
     """
-    from dateutil.relativedelta import relativedelta
-
     # Get all revenue accounts (3000-3999)
     revenue_accounts = db.query(Account).filter(
         Account.company_id == company_id,
