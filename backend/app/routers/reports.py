@@ -851,28 +851,34 @@ def get_monthly_statistics(
             end_date = date(year, month + 1, 1) - timedelta(days=1)
 
         # Get all transactions for revenue accounts in this month
-        revenue_trans = db.query(
-            func.sum(TransactionLine.credit - TransactionLine.debit).label('total')
-        ).join(
-            Verification, TransactionLine.verification_id == Verification.id
-        ).filter(
-            Verification.company_id == company_id,
-            Verification.transaction_date >= start_date,
-            Verification.transaction_date <= end_date,
-            TransactionLine.account_id.in_(revenue_account_ids) if revenue_account_ids else False
-        ).scalar()
+        if revenue_account_ids:
+            revenue_trans = db.query(
+                func.sum(TransactionLine.credit - TransactionLine.debit).label('total')
+            ).join(
+                Verification, TransactionLine.verification_id == Verification.id
+            ).filter(
+                Verification.company_id == company_id,
+                Verification.transaction_date >= start_date,
+                Verification.transaction_date <= end_date,
+                TransactionLine.account_id.in_(revenue_account_ids)
+            ).scalar()
+        else:
+            revenue_trans = 0
 
         # Get all transactions for expense accounts in this month
-        expense_trans = db.query(
-            func.sum(TransactionLine.debit - TransactionLine.credit).label('total')
-        ).join(
-            Verification, TransactionLine.verification_id == Verification.id
-        ).filter(
-            Verification.company_id == company_id,
-            Verification.transaction_date >= start_date,
-            Verification.transaction_date <= end_date,
-            TransactionLine.account_id.in_(expense_account_ids) if expense_account_ids else False
-        ).scalar()
+        if expense_account_ids:
+            expense_trans = db.query(
+                func.sum(TransactionLine.debit - TransactionLine.credit).label('total')
+            ).join(
+                Verification, TransactionLine.verification_id == Verification.id
+            ).filter(
+                Verification.company_id == company_id,
+                Verification.transaction_date >= start_date,
+                Verification.transaction_date <= end_date,
+                TransactionLine.account_id.in_(expense_account_ids)
+            ).scalar()
+        else:
+            expense_trans = 0
 
         revenue = float(revenue_trans or 0)
         expenses = float(expense_trans or 0)
