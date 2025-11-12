@@ -417,3 +417,24 @@ export interface Expense {
   created_at: string
   updated_at: string
 }
+
+// Monthly Statistics
+
+export interface MonthlyData {
+  month: number
+  month_name: string
+  revenue: number
+  expenses: number
+  profit: number
+}
+
+export interface YTDTotals {
+  revenue: number
+  expenses: number
+  profit: number
+}
+
+export interface MonthlyStatistics {
+  monthly_data: MonthlyData[]
+  ytd_totals: YTDTotals
+}
