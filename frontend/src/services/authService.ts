@@ -5,12 +5,16 @@ const API_URL = 'http://localhost:8000/api/auth';
 
 export const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
-    const loginData: LoginRequest = {
-      username: email, // API expects 'username' field
-      password: password
-    };
+    // OAuth2PasswordRequestForm expects form-encoded data, not JSON
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
 
-    const response = await axios.post<LoginResponse>(`${API_URL}/login`, loginData);
+    const response = await axios.post<LoginResponse>(`${API_URL}/login`, formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
     return response.data;
   },
 
