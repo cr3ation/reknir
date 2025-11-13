@@ -4,6 +4,10 @@ from app.models.company import Company
 from app.models.customer import Customer, Supplier
 from app.models.invoice import Invoice, InvoiceLine, SupplierInvoice, SupplierInvoiceLine
 from app.models.default_account import DefaultAccount
+from app.models.fiscal_year import FiscalYear
+from app.models.expense import Expense
+from app.models.user import User, CompanyUser
+from app.models.invitation import Invitation
 
 __all__ = [
     "Account",
@@ -17,4 +21,9 @@ __all__ = [
     "SupplierInvoice",
     "SupplierInvoiceLine",
     "DefaultAccount",
+    "FiscalYear",
+    "Expense",
+    "User",
+    "CompanyUser",
+    "Invitation",
 ]
