@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User } from 'lucide-react'
+import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User, UserCog } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
 import VerificationDetail from './pages/VerificationDetail'
@@ -13,10 +13,13 @@ import Reports from './pages/Reports'
 import Expenses from './pages/Expenses'
 import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
+import UsersPage from './pages/Users'
 import Setup from './pages/Setup'
 import Login from './pages/Login'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
 import FiscalYearSelector from './components/FiscalYearSelector'
+import { CompanyProvider, useCompany } from './contexts/CompanyContext'
+import CompanySelector from './components/CompanySelector'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -24,13 +27,15 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <FiscalYearProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
-            <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
-          </Routes>
-        </FiscalYearProvider>
+        <CompanyProvider>
+          <FiscalYearProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
+              <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+            </Routes>
+          </FiscalYearProvider>
+        </CompanyProvider>
       </AuthProvider>
     </Router>
   )
@@ -39,6 +44,7 @@ function App() {
 function AppContent() {
   const location = useLocation()
   const { user, logout } = useAuth()
+  const { selectedCompany, setSelectedCompany } = useCompany()
 
   const menuItems = [
     { path: '/', icon: Home, label: 'Översikt' },
@@ -90,10 +96,41 @@ function AppContent() {
               </Link>
             )
           })}
+
+          {/* Admin-only menu items */}
+          {user?.is_admin && (
+            <>
+              <div className="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">
+                Administration
+              </div>
+              <Link
+                to="/users"
+                className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname.startsWith('/users')
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <UserCog className={`w-5 h-5 mr-3 ${location.pathname.startsWith('/users') ? 'text-primary-600' : 'text-gray-500'}`} />
+                Användare
+              </Link>
+            </>
+          )}
         </nav>
 
         {/* User info and logout at bottom */}
         <div className="border-t border-gray-200">
+          {/* Company Selector */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
+              Företag
+            </div>
+            <CompanySelector
+              selectedCompanyId={selectedCompany?.id || null}
+              onCompanyChange={setSelectedCompany}
+            />
+          </div>
+
           {/* Fiscal Year Selector */}
           <div className="p-4">
             <FiscalYearSelector />
@@ -141,6 +178,7 @@ function AppContent() {
               <Route path="/accounts/:accountId/ledger" element={<AccountLedger />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/users" element={<UsersPage />} />
             </Routes>
           </div>
         </main>
