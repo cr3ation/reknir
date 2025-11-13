@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, DollarSign, Download } from 'lucide-react'
-import { invoiceApi, accountApi, companyApi, customerApi } from '@/services/api'
+import api, { invoiceApi, accountApi, companyApi, customerApi } from '@/services/api'
 import type { Invoice, Account, Customer } from '@/types'
 
 export default function InvoiceDetail() {

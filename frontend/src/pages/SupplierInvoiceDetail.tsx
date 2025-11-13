@@ -12,6 +12,8 @@ export default function SupplierInvoiceDetail() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     loadInvoice()
@@ -103,6 +105,30 @@ export default function SupplierInvoiceDetail() {
     } catch (error) {
       console.error('Failed to download attachment:', error)
       alert('Kunde inte ladda ner bilagan')
+    }
+  }
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+    }
+  }
+
+  const handleUploadAttachment = async () => {
+    if (!selectedFile) return
+
+    try {
+      setUploading(true)
+      await supplierInvoiceApi.uploadAttachment(parseInt(invoiceId!), selectedFile)
+      setSelectedFile(null)
+      await loadInvoice()
+      alert('Bilagan har laddats upp')
+    } catch (error) {
+      console.error('Failed to upload attachment:', error)
+      alert('Kunde inte ladda upp bilagan')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -297,9 +323,9 @@ export default function SupplierInvoiceDetail() {
           </div>
 
           {/* Attachment */}
-          {invoice.attachment_path && (
-            <div className="card">
-              <h2 className="text-xl font-bold mb-4">Bilaga</h2>
+          <div className="card">
+            <h2 className="text-xl font-bold mb-4">Bilaga</h2>
+            {invoice.attachment_path ? (
               <div className="flex items-center gap-3">
                 <FileText className="w-8 h-8 text-gray-400" />
                 <div className="flex-1">
@@ -313,8 +339,54 @@ export default function SupplierInvoiceDetail() {
                   <Download className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-          )}
+            ) : (
+              <div>
+                {selectedFile ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                      <FileText className="w-6 h-6 text-blue-600" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-900">{selectedFile.name}</p>
+                        <p className="text-xs text-blue-700">
+                          {(selectedFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedFile(null)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleUploadAttachment}
+                      disabled={uploading}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+                    >
+                      {uploading ? 'Laddar upp...' : 'Ladda upp bilaga'}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-center py-8 text-gray-500">
+                      <Upload className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                      <p className="mb-4">Ingen bilaga uppladdad</p>
+                    </div>
+                    <label className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      Välj fil att ladda upp
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.gif"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}
