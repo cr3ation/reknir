@@ -91,11 +91,11 @@ async def get_dashboard_overview(
     ).all()
     revenue_account_ids = [acc[0] for acc in revenue_accounts]
 
-    # Get expense accounts (4xxx-8xxx)
+    # Get expense accounts (4xxx-7xxx - operating expenses only)
     expense_accounts = db.query(Account.id).filter(
         Account.company_id == company_id,
         Account.account_number >= 4000,
-        Account.account_number < 9000
+        Account.account_number < 8000
     ).all()
     expense_account_ids = [acc[0] for acc in expense_accounts]
 
