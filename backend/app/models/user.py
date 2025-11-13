@@ -25,7 +25,7 @@ class User(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    company_access = relationship("CompanyUser", back_populates="user", cascade="all, delete-orphan")
+    company_access = relationship("CompanyUser", back_populates="user", foreign_keys="CompanyUser.user_id", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email} (admin={self.is_admin})>"
