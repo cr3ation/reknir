@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet } from 'lucide-react'
+import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
@@ -15,9 +15,12 @@ import Expenses from './pages/Expenses'
 import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
 import Setup from './pages/Setup'
+import Login from './pages/Login'
 import api from './services/api'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
 import FiscalYearSelector from './components/FiscalYearSelector'
+import { AuthProvider } from './contexts/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   const [setupComplete, setSetupComplete] = useState<boolean | null>(null)
@@ -81,28 +84,31 @@ function App() {
     )
   }
 
-  if (!setupComplete) {
-    return (
-      <Router>
-        <Routes>
-          <Route path="/setup" element={<Setup />} />
-          <Route path="*" element={<Navigate to="/setup" replace />} />
-        </Routes>
-      </Router>
-    )
-  }
-
   return (
     <Router>
-      <FiscalYearProvider>
-        <AppContent />
-      </FiscalYearProvider>
+      <AuthProvider>
+        {!setupComplete ? (
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/setup" replace />} />
+          </Routes>
+        ) : (
+          <FiscalYearProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+            </Routes>
+          </FiscalYearProvider>
+        )}
+      </AuthProvider>
     </Router>
   )
 }
 
 function AppContent() {
   const location = useLocation()
+  const { user, logout } = require('./contexts/AuthContext').useAuth()
 
   const menuItems = [
     { path: '/', icon: Home, label: 'Översikt' },
@@ -114,6 +120,12 @@ function AppContent() {
     { path: '/reports', icon: PieChart, label: 'Rapporter' },
     { path: '/settings', icon: Settings, label: 'Inställningar' },
   ]
+
+  const handleLogout = () => {
+    if (window.confirm('Är du säker på att du vill logga ut?')) {
+      logout()
+    }
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -150,9 +162,34 @@ function AppContent() {
           })}
         </nav>
 
-        {/* Fiscal Year Selector at bottom */}
-        <div className="p-4 border-t border-gray-200">
-          <FiscalYearSelector />
+        {/* User info and logout at bottom */}
+        <div className="border-t border-gray-200">
+          {/* Fiscal Year Selector */}
+          <div className="p-4">
+            <FiscalYearSelector />
+          </div>
+
+          {/* User info and logout button */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex items-center mb-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <User className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+              <div className="ml-3 flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{user?.full_name}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logga ut
+            </button>
+          </div>
         </div>
       </div>
 
