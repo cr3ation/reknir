@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Users as UsersIcon, Plus, Building2, Trash2 } from 'lucide-react'
-import { authService } from '../services/authService'
 import api from '../services/api'
 
 interface User {
@@ -49,10 +48,7 @@ export default function Users() {
 
   const loadUsers = async () => {
     try {
-      const token = authService.getToken()
-      const response = await api.get('/api/auth/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await api.get('/api/auth/users')
       setUsers(response.data)
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -63,10 +59,7 @@ export default function Users() {
 
   const loadCompanies = async () => {
     try {
-      const token = authService.getToken()
-      const response = await api.get('/api/auth/me/companies', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await api.get('/api/auth/me/companies')
       setCompanies(response.data)
     } catch (error) {
       console.error('Failed to load companies:', error)
@@ -75,10 +68,7 @@ export default function Users() {
 
   const loadUserCompanies = async (userId: number) => {
     try {
-      const token = authService.getToken()
-      const response = await api.get(`/api/auth/users/${userId}/companies`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await api.get(`/api/auth/users/${userId}/companies`)
       setUserCompanies(response.data)
     } catch (error) {
       console.error('Failed to load user companies:', error)
@@ -88,10 +78,7 @@ export default function Users() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const token = authService.getToken()
-      await api.post('/api/auth/users', newUser, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      await api.post('/api/auth/users', newUser)
       setShowCreateModal(false)
       setNewUser({ email: '', full_name: '', password: '' })
       loadUsers()
@@ -104,11 +91,9 @@ export default function Users() {
     if (!selectedUser || !selectedCompanyId) return
 
     try {
-      const token = authService.getToken()
       await api.post(
         `/api/auth/users/${selectedUser.id}/companies/${selectedCompanyId}`,
-        { role: selectedRole },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { role: selectedRole }
       )
       loadUserCompanies(selectedUser.id)
       setSelectedCompanyId(null)
@@ -121,10 +106,7 @@ export default function Users() {
     if (!confirm('Är du säker på att du vill ta bort åtkomst till detta företag?')) return
 
     try {
-      const token = authService.getToken()
-      await api.delete(`/api/auth/users/${userId}/companies/${companyId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      await api.delete(`/api/auth/users/${userId}/companies/${companyId}`)
       if (selectedUser) {
         loadUserCompanies(selectedUser.id)
       }

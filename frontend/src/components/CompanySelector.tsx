@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Building2, ChevronDown } from 'lucide-react'
-import { authService } from '../services/authService'
 import api from '../services/api'
 
 interface Company {
@@ -25,10 +24,7 @@ export default function CompanySelector({ selectedCompanyId, onCompanyChange }: 
 
   const loadCompanies = async () => {
     try {
-      const token = authService.getToken()
-      const response = await api.get('/api/auth/me/companies', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await api.get('/api/auth/me/companies')
       setCompanies(response.data)
 
       // Auto-select first company if none selected
