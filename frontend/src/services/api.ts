@@ -125,6 +125,16 @@ export const reportApi = {
     api.get<IncomeStatement>('/api/reports/income-statement', {
       params: { company_id: companyId },
     }),
+  generalLedger: (companyId: number, fiscalYearId?: number, startDate?: string, endDate?: string, accountNumbers?: string) =>
+    api.get<GeneralLedger>('/api/reports/general-ledger', {
+      params: {
+        company_id: companyId,
+        fiscal_year_id: fiscalYearId,
+        start_date: startDate,
+        end_date: endDate,
+        account_numbers: accountNumbers,
+      },
+    }),
   vatReport: (companyId: number, startDate?: string, endDate?: string, excludeVatSettlements?: boolean) =>
     api.get<VATReport>('/api/reports/vat-report', {
       params: {

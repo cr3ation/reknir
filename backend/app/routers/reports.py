@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Response, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import Dict, List, Optional
 from decimal import Decimal
 from datetime import date, datetime, timedelta
@@ -9,10 +9,118 @@ from app.database import get_db
 from app.models.account import Account, AccountType
 from app.models.verification import Verification, TransactionLine
 from app.models.company import Company, VATReportingPeriod
+from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.dependencies import get_current_active_user, verify_company_access
 
 router = APIRouter()
+
+
+@router.get("/general-ledger")
+async def get_general_ledger(
+    company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: Optional[int] = Query(None, description="Fiscal Year ID"),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    account_numbers: Optional[str] = Query(None, description="Comma-separated account numbers to filter"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Generate General Ledger (Huvudbok) - all transactions across all accounts
+    Shows every transaction line with account info, verification info, amounts
+    """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
+    # Determine date range
+    if fiscal_year_id:
+        fiscal_year = db.query(FiscalYear).filter(
+            FiscalYear.id == fiscal_year_id,
+            FiscalYear.company_id == company_id
+        ).first()
+        if not fiscal_year:
+            raise HTTPException(status_code=404, detail="Fiscal year not found")
+        date_start = fiscal_year.start_date
+        date_end = fiscal_year.end_date
+    elif start_date and end_date:
+        date_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        date_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    else:
+        # Get current fiscal year
+        fiscal_year = db.query(FiscalYear).filter(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= date.today(),
+            FiscalYear.end_date >= date.today()
+        ).first()
+        if fiscal_year:
+            date_start = fiscal_year.start_date
+            date_end = fiscal_year.end_date
+        else:
+            # Default to current year
+            date_start = date(date.today().year, 1, 1)
+            date_end = date(date.today().year, 12, 31)
+
+    # Build query for transaction lines
+    query = db.query(
+        TransactionLine,
+        Verification,
+        Account
+    ).join(
+        Verification, TransactionLine.verification_id == Verification.id
+    ).join(
+        Account, TransactionLine.account_id == Account.id
+    ).filter(
+        Verification.company_id == company_id,
+        Verification.transaction_date >= date_start,
+        Verification.transaction_date <= date_end
+    )
+
+    # Filter by specific accounts if provided
+    if account_numbers:
+        account_nums = [int(num.strip()) for num in account_numbers.split(',')]
+        query = query.filter(Account.account_number.in_(account_nums))
+
+    # Order by date, verification, and account
+    query = query.order_by(
+        Verification.transaction_date,
+        Verification.series,
+        Verification.verification_number,
+        Account.account_number
+    )
+
+    results = query.all()
+
+    # Format results
+    entries = []
+    for transaction_line, verification, account in results:
+        entries.append({
+            "transaction_date": verification.transaction_date.isoformat(),
+            "verification_id": verification.id,
+            "verification_series": verification.series,
+            "verification_number": verification.verification_number,
+            "account_number": account.account_number,
+            "account_name": account.name,
+            "description": verification.description,
+            "debit": float(transaction_line.debit or Decimal(0)),
+            "credit": float(transaction_line.credit or Decimal(0))
+        })
+
+    # Calculate totals
+    total_debit = sum(e["debit"] for e in entries)
+    total_credit = sum(e["credit"] for e in entries)
+
+    return {
+        "company_id": company_id,
+        "report_type": "general_ledger",
+        "start_date": date_start.isoformat(),
+        "end_date": date_end.isoformat(),
+        "entries": entries,
+        "total_debit": total_debit,
+        "total_credit": total_credit,
+        "entry_count": len(entries),
+        "balanced": abs(total_debit - total_credit) < 0.01
+    }
 
 
 @router.get("/balance-sheet")
@@ -40,6 +148,10 @@ async def get_balance_sheet(
     equity = []
 
     for account in accounts:
+        # Skip accounts with zero balance
+        if account.current_balance == 0:
+            continue
+
         item = {
             "account_number": account.account_number,
             "name": account.name,
@@ -112,6 +224,10 @@ async def get_income_statement(
     expenses = []
 
     for account in accounts:
+        # Skip accounts with zero balance
+        if account.current_balance == 0:
+            continue
+
         item = {
             "account_number": account.account_number,
             "name": account.name,

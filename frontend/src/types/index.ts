@@ -126,6 +126,30 @@ export interface IncomeStatement {
   profit_loss: number
 }
 
+export interface GeneralLedgerEntry {
+  transaction_date: string
+  verification_id: number
+  verification_series: string
+  verification_number: number
+  account_number: number
+  account_name: string
+  description: string
+  debit: number
+  credit: number
+}
+
+export interface GeneralLedger {
+  company_id: number
+  report_type: string
+  start_date: string
+  end_date: string
+  entries: GeneralLedgerEntry[]
+  total_debit: number
+  total_credit: number
+  entry_count: number
+  balanced: boolean
+}
+
 // Invoice management types
 
 export enum InvoiceStatus {
