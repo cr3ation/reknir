@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, Wallet, AlertCircle, Clock, FileText } from 'lucide-react'
 import api from '../services/api'
 import { useCompany } from '../contexts/CompanyContext'
+import { useFiscalYear } from '../contexts/FiscalYearContext'
 import StatCard from '../components/StatCard'
 import RevenueExpenseChart from '../components/RevenueExpenseChart'
 
@@ -46,21 +47,34 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Load fiscal years when company changes
   useEffect(() => {
     if (selectedCompany) {
-      loadDashboardData()
+      loadFiscalYears(selectedCompany.id)
     }
   }, [selectedCompany])
 
+  // Load dashboard data when company or fiscal year changes
+  useEffect(() => {
+    if (selectedCompany && selectedFiscalYear) {
+      loadDashboardData()
+    }
+  }, [selectedCompany, selectedFiscalYear])
+
   const loadDashboardData = async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
       setLoading(true)
-      const response = await api.get(`/api/dashboard/overview?company_id=${selectedCompany.id}`)
+      const params = new URLSearchParams({
+        company_id: selectedCompany.id.toString(),
+        fiscal_year_id: selectedFiscalYear.id.toString()
+      })
+      const response = await api.get(`/api/dashboard/overview?${params}`)
       setData(response.data)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
@@ -84,6 +98,17 @@ export default function Dashboard() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-500">Välj ett företag för att se översikten</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!selectedFiscalYear) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-500">Välj ett räkenskapsår för att se översikten</p>
         </div>
       </div>
     )
