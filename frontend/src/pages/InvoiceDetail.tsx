@@ -87,10 +87,29 @@ export default function InvoiceDetail() {
     }
   }
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!invoice) return
-    const url = `http://localhost:8000/api/invoices/${invoice.id}/pdf`
-    window.open(url, '_blank')
+
+    try {
+      // Use axios to download with authentication
+      const response = await api.get(`/api/invoices/${invoice.id}/pdf`, {
+        responseType: 'blob' // Important for file downloads
+      })
+
+      // Create blob URL and download
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `faktura_${invoice.invoice_series}${invoice.invoice_number}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download PDF:', error)
+      alert('Kunde inte ladda ner PDF')
+    }
   }
 
   const formatCurrency = (amount: number) => {
