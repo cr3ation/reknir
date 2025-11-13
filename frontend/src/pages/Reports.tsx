@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { companyApi, reportApi } from '@/services/api'
-import type { Company, BalanceSheet, IncomeStatement, VATReport, VATPeriod } from '@/types'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import type { Company, BalanceSheet, IncomeStatement, GeneralLedger, VATReport, VATPeriod } from '@/types'
 
-type ReportTab = 'balance' | 'income' | 'vat'
+type ReportTab = 'balance' | 'income' | 'general-ledger' | 'vat'
 
 export default function Reports() {
   const [company, setCompany] = useState<Company | null>(null)
   const [activeTab, setActiveTab] = useState<ReportTab>('income')
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
+  const [generalLedger, setGeneralLedger] = useState<GeneralLedger | null>(null)
   const [vatReport, setVATReport] = useState<VATReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [vatPeriods, setVatPeriods] = useState<VATPeriod[]>([])
@@ -16,6 +19,7 @@ export default function Reports() {
   const [vatYear, setVatYear] = useState(new Date().getFullYear())
   const [excludeVatSettlements, setExcludeVatSettlements] = useState(true)
   const [showVerificationsModal, setShowVerificationsModal] = useState(false)
+  const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
   useEffect(() => {
     loadData()
@@ -23,6 +27,7 @@ export default function Reports() {
 
   useEffect(() => {
     if (company) {
+      loadFiscalYears(company.id)
       loadVatPeriods()
     }
   }, [company, vatYear])
@@ -32,6 +37,12 @@ export default function Reports() {
       loadVatReport()
     }
   }, [selectedPeriod, excludeVatSettlements])
+
+  useEffect(() => {
+    if (company && selectedFiscalYear && activeTab === 'general-ledger') {
+      loadGeneralLedger()
+    }
+  }, [company, selectedFiscalYear, activeTab])
 
   const loadData = async () => {
     try {
@@ -96,6 +107,20 @@ export default function Reports() {
     }
   }
 
+  const loadGeneralLedger = async () => {
+    if (!company || !selectedFiscalYear) return
+
+    try {
+      setLoading(true)
+      const ledgerRes = await reportApi.generalLedger(company.id, selectedFiscalYear.id)
+      setGeneralLedger(ledgerRes.data)
+    } catch (error) {
+      console.error('Failed to load general ledger:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (!company) {
     return (
       <div className="card">
@@ -147,6 +172,16 @@ export default function Reports() {
             }`}
           >
             Balansräkning
+          </button>
+          <button
+            onClick={() => setActiveTab('general-ledger')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'general-ledger'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Huvudbok
           </button>
           <button
             onClick={() => setActiveTab('vat')}
@@ -350,6 +385,95 @@ export default function Reports() {
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* General Ledger */}
+      {activeTab === 'general-ledger' && generalLedger && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Huvudbok</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Period: {new Date(generalLedger.start_date).toLocaleDateString('sv-SE')} - {new Date(generalLedger.end_date).toLocaleDateString('sv-SE')}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Antal poster: {generalLedger.entry_count}</p>
+              <p className="text-sm font-medium">
+                {generalLedger.balanced ? (
+                  <span className="text-green-600">✓ Balanserad</span>
+                ) : (
+                  <span className="text-red-600">⚠ Obalanserad</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {generalLedger.entries.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">Inga transaktioner för vald period</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ver</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Konto</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontonamn</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beskrivning</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debet</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Kredit</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {generalLedger.entries.map((entry, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {new Date(entry.transaction_date).toLocaleDateString('sv-SE')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        <Link
+                          to={`/verifications/${entry.verification_id}`}
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {entry.verification_series}{entry.verification_number}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-900 whitespace-nowrap">
+                        {entry.account_number}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {entry.account_name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-md truncate">
+                        {entry.description}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
+                        {entry.debit > 0 ? formatCurrency(entry.debit) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
+                        {entry.credit > 0 ? formatCurrency(entry.credit) : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t-2 border-gray-900">
+                  <tr>
+                    <td colSpan={5} className="px-4 py-3 text-sm font-semibold text-gray-900">
+                      TOTALT
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right font-mono font-semibold">
+                      {formatCurrency(generalLedger.total_debit)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right font-mono font-semibold">
+                      {formatCurrency(generalLedger.total_credit)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
