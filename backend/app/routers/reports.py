@@ -9,19 +9,24 @@ from app.database import get_db
 from app.models.account import Account, AccountType
 from app.models.verification import Verification, TransactionLine
 from app.models.company import Company, VATReportingPeriod
+from app.models.user import User
+from app.dependencies import get_current_active_user, verify_company_access
 
 router = APIRouter()
 
 
 @router.get("/balance-sheet")
-def get_balance_sheet(
+async def get_balance_sheet(
     company_id: int = Query(..., description="Company ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate Balance Sheet (Balansräkning)
     Assets = Liabilities + Equity
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get all accounts with balances
     accounts = db.query(Account).filter(
@@ -77,14 +82,17 @@ def get_balance_sheet(
 
 
 @router.get("/income-statement")
-def get_income_statement(
+async def get_income_statement(
     company_id: int = Query(..., description="Company ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate Income Statement (Resultaträkning)
     Revenue - Expenses = Profit/Loss
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get all revenue and expense accounts
     accounts = db.query(Account).filter(
@@ -135,10 +143,13 @@ def get_income_statement(
 
 
 @router.get("/trial-balance")
-def get_trial_balance(
+async def get_trial_balance(
     company_id: int = Query(..., description="Company ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
     """
     Generate Trial Balance (Råbalans/RAR)
     Shows all accounts with opening balance, changes, and closing balance
@@ -184,12 +195,13 @@ def get_trial_balance(
 
 
 @router.get("/vat-report")
-def get_vat_report(
+async def get_vat_report(
     company_id: int = Query(..., description="Company ID"),
     start_date: Optional[date] = Query(None, description="Start date for VAT period (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date for VAT period (YYYY-MM-DD)"),
     exclude_vat_settlements: bool = Query(False, description="Exclude VAT settlement/declaration entries"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate VAT Report (Momsrapport) for a specific period
@@ -199,6 +211,8 @@ def get_vat_report(
     If exclude_vat_settlements is True, filters out verifications that appear to be VAT settlements
     (e.g., entries that zero out VAT accounts when filing declarations).
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get all VAT accounts according to Swedish BAS account plan:
     # - Outgoing VAT (from sales): 2610-2619
@@ -520,15 +534,18 @@ def get_vat_report(
 
 
 @router.get("/vat-periods")
-def get_vat_periods(
+async def get_vat_periods(
     company_id: int = Query(..., description="Company ID"),
     year: int = Query(..., description="Year to generate periods for (e.g., 2024)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Get all VAT reporting periods for a company in a specific year.
     Returns periods based on company's vat_reporting_period setting (monthly/quarterly/yearly).
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         return {"error": "Company not found", "periods": []}
@@ -595,15 +612,19 @@ def get_vat_periods(
 
 
 @router.get("/vat-debug")
-def get_vat_debug(
+async def get_vat_debug(
     company_id: int = Query(..., description="Company ID"),
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Debug endpoint to see what VAT accounts and transactions exist
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
     # Get all VAT accounts (including inactive ones)
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
@@ -676,17 +697,20 @@ def get_vat_debug(
 
 
 @router.get("/vat-report-xml")
-def export_vat_report_xml(
+async def export_vat_report_xml(
     company_id: int = Query(..., description="Company ID"),
     start_date: date = Query(..., description="Start date for VAT period (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End date for VAT period (YYYY-MM-DD)"),
     exclude_vat_settlements: bool = Query(True, description="Exclude VAT settlement/declaration entries"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Export VAT report as XML file for upload to Skatteverket (eSKDUpload format version 6.0)
     Returns an XML file that can be uploaded directly to Swedish Tax Agency.
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get company info for org number
     company = db.query(Company).filter(Company.id == company_id).first()
