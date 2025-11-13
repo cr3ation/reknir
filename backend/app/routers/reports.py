@@ -27,8 +27,8 @@ async def get_general_ledger(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Generate General Ledger (Huvudbok) - all transactions across all accounts
-    Shows every transaction line with account info, verification info, amounts
+    Generate General Ledger (Huvudbok) - summary per account with opening/closing balances
+    Shows each account with IB (opening balance), transactions, and UB (closing balance)
     """
     # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
@@ -61,65 +61,71 @@ async def get_general_ledger(
             date_start = date(date.today().year, 1, 1)
             date_end = date(date.today().year, 12, 31)
 
-    # Build query for transaction lines
-    query = db.query(
-        TransactionLine,
-        Verification,
-        Account
-    ).join(
-        Verification, TransactionLine.verification_id == Verification.id
-    ).join(
-        Account, TransactionLine.account_id == Account.id
-    ).filter(
-        Verification.company_id == company_id,
-        Verification.transaction_date >= date_start,
-        Verification.transaction_date <= date_end
-    )
+    # Get all accounts or filtered accounts
+    account_query = db.query(Account).filter(Account.company_id == company_id)
 
-    # Filter by specific accounts if provided
     if account_numbers:
         account_nums = [int(num.strip()) for num in account_numbers.split(',')]
-        query = query.filter(Account.account_number.in_(account_nums))
+        account_query = account_query.filter(Account.account_number.in_(account_nums))
 
-    # Order by date, verification, and account
-    query = query.order_by(
-        Verification.transaction_date,
-        Verification.series,
-        Verification.verification_number,
-        Account.account_number
-    )
+    accounts = account_query.order_by(Account.account_number).all()
 
-    results = query.all()
+    # For each account, calculate opening balance, transactions, and closing balance
+    account_summaries = []
 
-    # Format results
-    entries = []
-    for transaction_line, verification, account in results:
-        entries.append({
-            "transaction_date": verification.transaction_date.isoformat(),
-            "verification_id": verification.id,
-            "verification_series": verification.series,
-            "verification_number": verification.verification_number,
+    for account in accounts:
+        # Get all transactions for this account in the period
+        transactions = db.query(
+            TransactionLine,
+            Verification
+        ).join(
+            Verification, TransactionLine.verification_id == Verification.id
+        ).filter(
+            TransactionLine.account_id == account.id,
+            Verification.company_id == company_id,
+            Verification.transaction_date >= date_start,
+            Verification.transaction_date <= date_end
+        ).order_by(Verification.transaction_date).all()
+
+        # Skip accounts with no transactions
+        if not transactions:
+            continue
+
+        # Calculate opening balance (transactions before start date)
+        opening_balance_query = db.query(
+            func.sum(TransactionLine.debit - TransactionLine.credit)
+        ).join(Verification).filter(
+            TransactionLine.account_id == account.id,
+            Verification.company_id == company_id,
+            Verification.transaction_date < date_start
+        ).scalar()
+
+        opening_balance = float(opening_balance_query or Decimal(0))
+
+        # Calculate period totals
+        period_debit = sum(float(t[0].debit or Decimal(0)) for t in transactions)
+        period_credit = sum(float(t[0].credit or Decimal(0)) for t in transactions)
+
+        # Closing balance = opening balance + period debit - period credit
+        closing_balance = opening_balance + period_debit - period_credit
+
+        account_summaries.append({
             "account_number": account.account_number,
             "account_name": account.name,
-            "description": verification.description,
-            "debit": float(transaction_line.debit or Decimal(0)),
-            "credit": float(transaction_line.credit or Decimal(0))
+            "opening_balance": opening_balance,
+            "period_debit": period_debit,
+            "period_credit": period_credit,
+            "closing_balance": closing_balance,
+            "transaction_count": len(transactions)
         })
-
-    # Calculate totals
-    total_debit = sum(e["debit"] for e in entries)
-    total_credit = sum(e["credit"] for e in entries)
 
     return {
         "company_id": company_id,
         "report_type": "general_ledger",
         "start_date": date_start.isoformat(),
         "end_date": date_end.isoformat(),
-        "entries": entries,
-        "total_debit": total_debit,
-        "total_credit": total_credit,
-        "entry_count": len(entries),
-        "balanced": abs(total_debit - total_credit) < 0.01
+        "accounts": account_summaries,
+        "account_count": len(account_summaries)
     }
 
 
@@ -239,7 +245,9 @@ async def get_income_statement(
         else:
             expenses.append(item)
 
-    total_revenue = sum(r["balance"] for r in revenue)
+    # Revenue accounts have negative balance (credits), so negate to get positive revenue
+    total_revenue = -sum(r["balance"] for r in revenue)
+    # Expense accounts have positive balance (debits)
     total_expenses = sum(e["balance"] for e in expenses)
     profit_loss = total_revenue - total_expenses
 

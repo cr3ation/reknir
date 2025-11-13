@@ -399,78 +399,58 @@ export default function Reports() {
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-600">Antal poster: {generalLedger.entry_count}</p>
-              <p className="text-sm font-medium">
-                {generalLedger.balanced ? (
-                  <span className="text-green-600">✓ Balanserad</span>
-                ) : (
-                  <span className="text-red-600">⚠ Obalanserad</span>
-                )}
-              </p>
+              <p className="text-sm text-gray-600">Antal konton: {generalLedger.account_count}</p>
             </div>
           </div>
 
-          {generalLedger.entries.length === 0 ? (
+          {generalLedger.accounts.length === 0 ? (
             <p className="text-gray-500 text-center py-8">Inga transaktioner för vald period</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ver</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Konto</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontonamn</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beskrivning</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">IB</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debet</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Kredit</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">UB</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Trans</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {generalLedger.entries.map((entry, index) => (
+                  {generalLedger.accounts.map((account, index) => (
                     <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {new Date(entry.transaction_date).toLocaleDateString('sv-SE')}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm font-mono text-gray-900 whitespace-nowrap">
                         <Link
-                          to={`/verifications/${entry.verification_id}`}
+                          to={`/accounts/${account.account_number}/ledger`}
                           className="text-blue-600 hover:text-blue-800 hover:underline"
                         >
-                          {entry.verification_series}{entry.verification_number}
+                          {account.account_number}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-900 whitespace-nowrap">
-                        {entry.account_number}
-                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        {entry.account_name}
+                        {account.account_name}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-md truncate">
-                        {entry.description}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
-                        {entry.debit > 0 ? formatCurrency(entry.debit) : '-'}
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap text-gray-600">
+                        {formatCurrency(account.opening_balance)}
                       </td>
                       <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
-                        {entry.credit > 0 ? formatCurrency(entry.credit) : '-'}
+                        {account.period_debit > 0 ? formatCurrency(account.period_debit) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
+                        {account.period_credit > 0 ? formatCurrency(account.period_credit) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap font-semibold">
+                        {formatCurrency(account.closing_balance)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-500">
+                        {account.transaction_count}
                       </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50 border-t-2 border-gray-900">
-                  <tr>
-                    <td colSpan={5} className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      TOTALT
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-mono font-semibold">
-                      {formatCurrency(generalLedger.total_debit)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-mono font-semibold">
-                      {formatCurrency(generalLedger.total_credit)}
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
           )}

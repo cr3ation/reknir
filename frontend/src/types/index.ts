@@ -126,16 +126,14 @@ export interface IncomeStatement {
   profit_loss: number
 }
 
-export interface GeneralLedgerEntry {
-  transaction_date: string
-  verification_id: number
-  verification_series: string
-  verification_number: number
+export interface GeneralLedgerAccountSummary {
   account_number: number
   account_name: string
-  description: string
-  debit: number
-  credit: number
+  opening_balance: number
+  period_debit: number
+  period_credit: number
+  closing_balance: number
+  transaction_count: number
 }
 
 export interface GeneralLedger {
@@ -143,11 +141,8 @@ export interface GeneralLedger {
   report_type: string
   start_date: string
   end_date: string
-  entries: GeneralLedgerEntry[]
-  total_debit: number
-  total_credit: number
-  entry_count: number
-  balanced: boolean
+  accounts: GeneralLedgerAccountSummary[]
+  account_count: number
 }
 
 // Invoice management types
