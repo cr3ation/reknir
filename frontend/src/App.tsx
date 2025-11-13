@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User, UserCog } from 'lucide-react'
+import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User, UserCog, Mail } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
 import VerificationDetail from './pages/VerificationDetail'
@@ -14,6 +14,8 @@ import Expenses from './pages/Expenses'
 import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
 import UsersPage from './pages/Users'
+import InvitationsPage from './pages/Invitations'
+import InviteAccept from './pages/InviteAccept'
 import Setup from './pages/Setup'
 import Login from './pages/Login'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
@@ -31,6 +33,7 @@ function App() {
           <FiscalYearProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/invite/:token" element={<InviteAccept />} />
               <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
               <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
             </Routes>
@@ -114,6 +117,17 @@ function AppContent() {
                 <UserCog className={`w-5 h-5 mr-3 ${location.pathname.startsWith('/users') ? 'text-primary-600' : 'text-gray-500'}`} />
                 Användare
               </Link>
+              <Link
+                to="/invitations"
+                className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname.startsWith('/invitations')
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Mail className={`w-5 h-5 mr-3 ${location.pathname.startsWith('/invitations') ? 'text-primary-600' : 'text-gray-500'}`} />
+                Inbjudningar
+              </Link>
             </>
           )}
         </nav>
@@ -179,6 +193,7 @@ function AppContent() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/users" element={<UsersPage />} />
+              <Route path="/invitations" element={<InvitationsPage />} />
             </Routes>
           </div>
         </main>
