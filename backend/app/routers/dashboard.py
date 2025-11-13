@@ -99,8 +99,8 @@ async def get_dashboard_overview(
     ).all()
     expense_account_ids = [acc[0] for acc in expense_accounts]
 
-    # Calculate revenue this month (credits on revenue accounts)
-    revenue_this_month = db.query(
+    # Calculate revenue this month (credit - debit on revenue accounts)
+    revenue_credits = db.query(
         func.sum(TransactionLine.credit)
     ).join(Verification).filter(
         Verification.company_id == company_id,
@@ -109,8 +109,19 @@ async def get_dashboard_overview(
         TransactionLine.account_id.in_(revenue_account_ids)
     ).scalar() or Decimal(0)
 
-    # Calculate expenses this month (debits on expense accounts)
-    expenses_this_month = db.query(
+    revenue_debits = db.query(
+        func.sum(TransactionLine.debit)
+    ).join(Verification).filter(
+        Verification.company_id == company_id,
+        Verification.transaction_date >= month_start,
+        Verification.transaction_date <= month_end,
+        TransactionLine.account_id.in_(revenue_account_ids)
+    ).scalar() or Decimal(0)
+
+    revenue_this_month = revenue_credits - revenue_debits
+
+    # Calculate expenses this month (debit - credit on expense accounts)
+    expenses_debits = db.query(
         func.sum(TransactionLine.debit)
     ).join(Verification).filter(
         Verification.company_id == company_id,
@@ -118,6 +129,17 @@ async def get_dashboard_overview(
         Verification.transaction_date <= month_end,
         TransactionLine.account_id.in_(expense_account_ids)
     ).scalar() or Decimal(0)
+
+    expenses_credits = db.query(
+        func.sum(TransactionLine.credit)
+    ).join(Verification).filter(
+        Verification.company_id == company_id,
+        Verification.transaction_date >= month_start,
+        Verification.transaction_date <= month_end,
+        TransactionLine.account_id.in_(expense_account_ids)
+    ).scalar() or Decimal(0)
+
+    expenses_this_month = expenses_debits - expenses_credits
 
     # Profit this month
     profit_this_month = revenue_this_month - expenses_this_month
@@ -187,8 +209,8 @@ async def get_dashboard_overview(
         if month_end_trend > fiscal_year_end:
             month_end_trend = fiscal_year_end
 
-        # Revenue for this month
-        revenue_month = db.query(
+        # Revenue for this month (credit - debit)
+        revenue_credits_month = db.query(
             func.sum(TransactionLine.credit)
         ).join(Verification).filter(
             Verification.company_id == company_id,
@@ -198,8 +220,20 @@ async def get_dashboard_overview(
             TransactionLine.account_id.in_(revenue_account_ids)
         ).scalar() or Decimal(0)
 
-        # Expenses for this month
-        expenses_month = db.query(
+        revenue_debits_month = db.query(
+            func.sum(TransactionLine.debit)
+        ).join(Verification).filter(
+            Verification.company_id == company_id,
+            Verification.fiscal_year_id == fiscal_year.id,
+            Verification.transaction_date >= current_month_start,
+            Verification.transaction_date <= month_end_trend,
+            TransactionLine.account_id.in_(revenue_account_ids)
+        ).scalar() or Decimal(0)
+
+        revenue_month = revenue_credits_month - revenue_debits_month
+
+        # Expenses for this month (debit - credit)
+        expenses_debits_month = db.query(
             func.sum(TransactionLine.debit)
         ).join(Verification).filter(
             Verification.company_id == company_id,
@@ -208,6 +242,18 @@ async def get_dashboard_overview(
             Verification.transaction_date <= month_end_trend,
             TransactionLine.account_id.in_(expense_account_ids)
         ).scalar() or Decimal(0)
+
+        expenses_credits_month = db.query(
+            func.sum(TransactionLine.credit)
+        ).join(Verification).filter(
+            Verification.company_id == company_id,
+            Verification.fiscal_year_id == fiscal_year.id,
+            Verification.transaction_date >= current_month_start,
+            Verification.transaction_date <= month_end_trend,
+            TransactionLine.account_id.in_(expense_account_ids)
+        ).scalar() or Decimal(0)
+
+        expenses_month = expenses_debits_month - expenses_credits_month
 
         trend_data.append({
             "month": current_month_start.strftime("%Y-%m"),
