@@ -16,7 +16,9 @@ import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
 import Setup from './pages/Setup'
 import api from './services/api'
+import { CompanyProvider } from './contexts/CompanyContext'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
+import CompanySelector from './components/CompanySelector'
 import FiscalYearSelector from './components/FiscalYearSelector'
 
 function App() {
@@ -94,9 +96,11 @@ function App() {
 
   return (
     <Router>
-      <FiscalYearProvider>
-        <AppContent />
-      </FiscalYearProvider>
+      <CompanyProvider>
+        <FiscalYearProvider>
+          <AppContent />
+        </FiscalYearProvider>
+      </CompanyProvider>
     </Router>
   )
 }
@@ -150,8 +154,9 @@ function AppContent() {
           })}
         </nav>
 
-        {/* Fiscal Year Selector at bottom */}
-        <div className="p-4 border-t border-gray-200">
+        {/* Company and Fiscal Year Selectors at bottom */}
+        <div className="p-4 border-t border-gray-200 space-y-3">
+          <CompanySelector />
           <FiscalYearSelector />
         </div>
       </div>

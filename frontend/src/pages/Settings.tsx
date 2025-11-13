@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
-import type { Account, DefaultAccount, Company, VATReportingPeriod, FiscalYear } from '@/types'
-import { Plus, Trash2, Calendar } from 'lucide-react'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company } from '@/types'
+import { Plus, Trash2, Calendar, Building2, Edit2, Save, X } from 'lucide-react'
+import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -20,7 +21,7 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
 }
 
 export default function SettingsPage() {
-  const [company, setCompany] = useState<Company | null>(null)
+  const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
@@ -37,6 +38,21 @@ export default function SettingsPage() {
     errors?: string[]
     warnings?: string[]
   } | null>(null)
+  const [editingCompany, setEditingCompany] = useState(false)
+  const [showCreateCompany, setShowCreateCompany] = useState(false)
+  const [companyForm, setCompanyForm] = useState({
+    name: '',
+    org_number: '',
+    address: '',
+    postal_code: '',
+    city: '',
+    phone: '',
+    email: '',
+    fiscal_year_start: new Date().getFullYear() + '-01-01',
+    fiscal_year_end: new Date().getFullYear() + '-12-31',
+    accounting_basis: 'accrual' as 'accrual' | 'cash',
+    vat_reporting_period: 'quarterly' as VATReportingPeriod,
+  })
 
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
@@ -57,27 +73,20 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedCompany])
 
   const loadData = async () => {
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
-
-      // Get first company (single-company mode for MVP)
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        showMessage('Inget företag hittat. Skapa ett företag först.', 'error')
-        setLoading(false)
-        return
-      }
-
-      const comp = companiesRes.data[0]
-      setCompany(comp)
-
       const [defaultsRes, accountsRes, fiscalYearsRes] = await Promise.all([
-        defaultAccountApi.list(comp.id).catch(() => ({ data: [] })),
-        accountApi.list(comp.id),
-        fiscalYearApi.list(comp.id).catch(() => ({ data: [] })),
+        defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        accountApi.list(selectedCompany.id),
+        fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
       ])
       setDefaultAccounts(defaultsRes.data)
       setAllAccounts(accountsRes.data)
@@ -96,12 +105,119 @@ export default function SettingsPage() {
     setTimeout(() => setMessage(''), 5000)
   }
 
-  const handleInitializeDefaults = async () => {
-    if (!company) return
+  const startEditCompany = () => {
+    if (!selectedCompany) return
+    setCompanyForm({
+      name: selectedCompany.name,
+      org_number: selectedCompany.org_number,
+      address: selectedCompany.address || '',
+      postal_code: selectedCompany.postal_code || '',
+      city: selectedCompany.city || '',
+      phone: selectedCompany.phone || '',
+      email: selectedCompany.email || '',
+      fiscal_year_start: selectedCompany.fiscal_year_start,
+      fiscal_year_end: selectedCompany.fiscal_year_end,
+      accounting_basis: selectedCompany.accounting_basis,
+      vat_reporting_period: selectedCompany.vat_reporting_period,
+    })
+    setEditingCompany(true)
+  }
+
+  const cancelEditCompany = () => {
+    setEditingCompany(false)
+    setCompanyForm({
+      name: '',
+      org_number: '',
+      address: '',
+      postal_code: '',
+      city: '',
+      phone: '',
+      email: '',
+      fiscal_year_start: new Date().getFullYear() + '-01-01',
+      fiscal_year_end: new Date().getFullYear() + '-12-31',
+      accounting_basis: 'accrual',
+      vat_reporting_period: 'quarterly',
+    })
+  }
+
+  const formatErrorMessage = (error: any): string => {
+    console.log('Full error:', error)
+    console.log('Error response data:', error.response?.data)
+
+    // Handle FastAPI validation errors (422)
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail
+      // If detail is an array of validation errors
+      if (Array.isArray(detail)) {
+        return detail.map((err: any) => {
+          const field = err.loc?.slice(-1)[0] || 'okänt fält'
+          const message = err.msg || err.type || 'valideringsfel'
+          return `• ${field}: ${message}`
+        }).join('\n')
+      }
+      // If detail is a string
+      if (typeof detail === 'string') {
+        return detail
+      }
+      // If detail is an object, try to stringify it
+      return JSON.stringify(detail, null, 2)
+    }
+    return `Ett fel uppstod: ${error.message || 'Okänt fel'}`
+  }
+
+  const handleUpdateCompany = async () => {
+    if (!selectedCompany) return
 
     try {
       setLoading(true)
-      const response = await companyApi.initializeDefaults(company.id)
+      const response = await companyApi.update(selectedCompany.id, companyForm)
+      setSelectedCompany(response.data)
+      showMessage('Företagsinformation uppdaterad!', 'success')
+      setEditingCompany(false)
+      await loadCompanies()
+    } catch (error: any) {
+      console.error('Failed to update company:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateCompany = async () => {
+    try {
+      setLoading(true)
+      const response = await companyApi.create(companyForm)
+      showMessage('Nytt företag skapat!', 'success')
+      setShowCreateCompany(false)
+      setCompanyForm({
+        name: '',
+        org_number: '',
+        address: '',
+        postal_code: '',
+        city: '',
+        phone: '',
+        email: '',
+        fiscal_year_start: new Date().getFullYear() + '-01-01',
+        fiscal_year_end: new Date().getFullYear() + '-12-31',
+        accounting_basis: 'accrual',
+        vat_reporting_period: 'quarterly',
+      })
+      await loadCompanies()
+      setSelectedCompany(response.data)
+    } catch (error: any) {
+      console.error('Failed to create company:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleInitializeDefaults = async () => {
+    if (!selectedCompany) return
+
+    try {
+      setLoading(true)
+      const response = await companyApi.initializeDefaults(selectedCompany.id)
       showMessage(response.data.message, 'success')
       await loadData()
     } catch (error: any) {
@@ -116,14 +232,14 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!company) return
+    if (!selectedCompany) return
 
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
       setLoading(true)
-      const response = await sie4Api.import(company.id, file)
+      const response = await sie4Api.import(selectedCompany.id, file)
 
       // Show modal with import summary
       setImportSummary({
@@ -148,11 +264,11 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Export = async (includeVerifications: boolean) => {
-    if (!company) return
+    if (!selectedCompany) return
 
     try {
       setLoading(true)
-      const response = await sie4Api.export(company.id, includeVerifications)
+      const response = await sie4Api.export(selectedCompany.id, includeVerifications)
 
       // Create download link
       const blob = new Blob([response.data], { type: 'text/plain' })
@@ -175,12 +291,12 @@ export default function SettingsPage() {
   }
 
   const handleVATReportingPeriodChange = async (newPeriod: VATReportingPeriod) => {
-    if (!company) return
+    if (!selectedCompany) return
 
     try {
       setLoading(true)
-      await companyApi.update(company.id, { vat_reporting_period: newPeriod })
-      setCompany({ ...company, vat_reporting_period: newPeriod })
+      await companyApi.update(selectedCompany.id, { vat_reporting_period: newPeriod })
+      setSelectedCompany({ ...selectedCompany, vat_reporting_period: newPeriod })
       showMessage('Momsredovisningsperiod uppdaterad!', 'success')
     } catch (error: any) {
       console.error('Failed to update VAT reporting period:', error)
@@ -191,7 +307,7 @@ export default function SettingsPage() {
   }
 
   const handleCreateFiscalYear = async () => {
-    if (!company) return
+    if (!selectedCompany) return
 
     if (!newFiscalYear.label || !newFiscalYear.start_date || !newFiscalYear.end_date) {
       showMessage('Fyll i alla fält', 'error')
@@ -201,7 +317,7 @@ export default function SettingsPage() {
     try {
       setLoading(true)
       await fiscalYearApi.create({
-        company_id: company.id,
+        company_id: selectedCompany.id,
         year: newFiscalYear.year,
         label: newFiscalYear.label,
         start_date: newFiscalYear.start_date,
@@ -285,7 +401,7 @@ export default function SettingsPage() {
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
   }
 
-  if (!company && !loading) {
+  if (!selectedCompany && !loading) {
     return (
       <div className="card">
         <h2 className="text-2xl font-bold mb-4">Företagsinställningar</h2>
@@ -308,9 +424,320 @@ export default function SettingsPage() {
               : 'bg-red-100 text-red-800'
           }`}
         >
-          {message}
+          <pre className="whitespace-pre-wrap font-sans text-sm">{message}</pre>
         </div>
       )}
+
+      {/* Company Management Section */}
+      <div className="card mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            Företagsinformation
+          </h2>
+          <div className="flex gap-2">
+            {!editingCompany && !showCreateCompany && (
+              <>
+                <button
+                  onClick={startEditCompany}
+                  disabled={loading}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Redigera
+                </button>
+                <button
+                  onClick={() => setShowCreateCompany(true)}
+                  disabled={loading}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nytt företag
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* View Mode */}
+        {!editingCompany && !showCreateCompany && selectedCompany && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Grunduppgifter</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Företagsnamn</label>
+                  <p className="text-gray-900">{selectedCompany.name}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
+                  <p className="text-gray-900">{selectedCompany.org_number}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Kontaktuppgifter</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
+                  <p className="text-gray-900">{selectedCompany.address || '-'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Postnummer</label>
+                  <p className="text-gray-900">{selectedCompany.postal_code || '-'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stad</label>
+                  <p className="text-gray-900">{selectedCompany.city || '-'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                  <p className="text-gray-900">{selectedCompany.phone || '-'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
+                  <p className="text-gray-900">{selectedCompany.email || '-'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Bokföringsinställningar</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Räkenskapsår start</label>
+                  <p className="text-gray-900">{selectedCompany.fiscal_year_start}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Räkenskapsår slut</label>
+                  <p className="text-gray-900">{selectedCompany.fiscal_year_end}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bokföringsmetod</label>
+                  <p className="text-gray-900">
+                    {selectedCompany.accounting_basis === 'accrual' ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Momsredovisning</label>
+                  <p className="text-gray-900">
+                    {selectedCompany.vat_reporting_period === 'monthly' ? 'Månadsvis' :
+                     selectedCompany.vat_reporting_period === 'quarterly' ? 'Kvartalsvis' : 'Årlig'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit/Create Mode */}
+        {(editingCompany || showCreateCompany) && (
+          <div className="space-y-6">
+            {/* Grunduppgifter */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Grunduppgifter</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Företagsnamn *
+                  </label>
+                  <input
+                    type="text"
+                    value={companyForm.name}
+                    onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Organisationsnummer *
+                  </label>
+                  <input
+                    type="text"
+                    value={companyForm.org_number}
+                    onChange={(e) => setCompanyForm({ ...companyForm, org_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="123456-7890 eller 1234567890"
+                    pattern="^\d{6}-?\d{4}$"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    10 siffror, med eller utan bindestreck (t.ex. 123456-7890)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Kontaktuppgifter */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Kontaktuppgifter</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
+                  <input
+                    type="text"
+                    value={companyForm.address}
+                    onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Gatunamn 123"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Postnummer</label>
+                  <input
+                    type="text"
+                    value={companyForm.postal_code}
+                    onChange={(e) => setCompanyForm({ ...companyForm, postal_code: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="123 45"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stad</label>
+                  <input
+                    type="text"
+                    value={companyForm.city}
+                    onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Stockholm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                  <input
+                    type="tel"
+                    value={companyForm.phone}
+                    onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="08-123 456 78"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
+                  <input
+                    type="email"
+                    value={companyForm.email}
+                    onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="info@företag.se"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bokföringsinställningar */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Bokföringsinställningar</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Räkenskapsår start *
+                  </label>
+                  <input
+                    type="date"
+                    value={companyForm.fiscal_year_start}
+                    onChange={(e) => setCompanyForm({ ...companyForm, fiscal_year_start: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Räkenskapsår slut *
+                  </label>
+                  <input
+                    type="date"
+                    value={companyForm.fiscal_year_end}
+                    onChange={(e) => setCompanyForm({ ...companyForm, fiscal_year_end: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bokföringsmetod
+                  </label>
+                  <select
+                    value={companyForm.accounting_basis}
+                    onChange={(e) => setCompanyForm({ ...companyForm, accounting_basis: e.target.value as 'accrual' | 'cash' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="accrual">Bokföringsmässiga grunder</option>
+                    <option value="cash">Kontantmetoden</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Momsredovisningsperiod
+                  </label>
+                  <select
+                    value={companyForm.vat_reporting_period}
+                    onChange={(e) => setCompanyForm({ ...companyForm, vat_reporting_period: e.target.value as VATReportingPeriod })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="monthly">Månadsvis</option>
+                    <option value="quarterly">Kvartalsvis</option>
+                    <option value="yearly">Årlig</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4 border-t">
+              <button
+                onClick={editingCompany ? handleUpdateCompany : handleCreateCompany}
+                disabled={loading || !companyForm.name || !companyForm.org_number}
+                className="btn btn-primary flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {editingCompany ? 'Spara ändringar' : 'Skapa företag'}
+              </button>
+              <button
+                onClick={editingCompany ? cancelEditCompany : () => setShowCreateCompany(false)}
+                disabled={loading}
+                className="btn btn-secondary flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Avbryt
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* List of all companies */}
+        {companies.length > 1 && !editingCompany && !showCreateCompany && (
+          <div className="mt-6 pt-6 border-t">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Alla företag ({companies.length})</h3>
+            <div className="space-y-2">
+              {companies.map((company) => (
+                <div
+                  key={company.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                    selectedCompany?.id === company.id
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{company.name}</p>
+                    <p className="text-sm text-gray-600">Org.nr: {company.org_number}</p>
+                  </div>
+                  {selectedCompany?.id !== company.id && (
+                    <button
+                      onClick={() => setSelectedCompany(company)}
+                      className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      Välj
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* VAT Reporting Period Section */}
       <div className="card mb-6">
@@ -323,7 +750,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 gap-3">
             {/* Monthly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              company?.vat_reporting_period === 'monthly'
+              selectedCompany?.vat_reporting_period === 'monthly'
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
@@ -331,7 +758,7 @@ export default function SettingsPage() {
                 type="radio"
                 name="vat_period"
                 value="monthly"
-                checked={company?.vat_reporting_period === 'monthly'}
+                checked={selectedCompany?.vat_reporting_period === 'monthly'}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -346,7 +773,7 @@ export default function SettingsPage() {
 
             {/* Quarterly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              company?.vat_reporting_period === 'quarterly'
+              selectedCompany?.vat_reporting_period === 'quarterly'
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
@@ -354,7 +781,7 @@ export default function SettingsPage() {
                 type="radio"
                 name="vat_period"
                 value="quarterly"
-                checked={company?.vat_reporting_period === 'quarterly'}
+                checked={selectedCompany?.vat_reporting_period === 'quarterly'}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -369,7 +796,7 @@ export default function SettingsPage() {
 
             {/* Yearly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              company?.vat_reporting_period === 'yearly'
+              selectedCompany?.vat_reporting_period === 'yearly'
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
@@ -377,7 +804,7 @@ export default function SettingsPage() {
                 type="radio"
                 name="vat_period"
                 value="yearly"
-                checked={company?.vat_reporting_period === 'yearly'}
+                checked={selectedCompany?.vat_reporting_period === 'yearly'}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"

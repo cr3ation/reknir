@@ -808,3 +808,100 @@ def export_vat_report_xml(
             "Content-Disposition": f"attachment; filename={filename}"
         }
     )
+
+
+@router.get("/monthly-statistics")
+def get_monthly_statistics(
+    company_id: int = Query(..., description="Company ID"),
+    year: int = Query(..., description="Year (e.g., 2024)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get monthly revenue and expense statistics for a specific year.
+    Used for dashboard charts to visualize financial performance over time.
+    """
+    # Get all revenue accounts (3000-3999)
+    revenue_accounts = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.account_number >= 3000,
+        Account.account_number < 4000
+    ).all()
+
+    # Get all expense accounts (4000-8999)
+    expense_accounts = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.account_number >= 4000,
+        Account.account_number < 9000
+    ).all()
+
+    revenue_account_ids = [acc.id for acc in revenue_accounts]
+    expense_account_ids = [acc.id for acc in expense_accounts]
+
+    monthly_data = []
+
+    # Calculate for each month
+    for month in range(1, 13):
+        # Start and end dates for the month
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year, 12, 31)
+        else:
+            end_date = date(year, month + 1, 1) - timedelta(days=1)
+
+        # Get all transactions for revenue accounts in this month
+        if revenue_account_ids:
+            revenue_trans = db.query(
+                func.sum(TransactionLine.credit - TransactionLine.debit).label('total')
+            ).join(
+                Verification, TransactionLine.verification_id == Verification.id
+            ).filter(
+                Verification.company_id == company_id,
+                Verification.transaction_date >= start_date,
+                Verification.transaction_date <= end_date,
+                TransactionLine.account_id.in_(revenue_account_ids)
+            ).scalar()
+        else:
+            revenue_trans = 0
+
+        # Get all transactions for expense accounts in this month
+        if expense_account_ids:
+            expense_trans = db.query(
+                func.sum(TransactionLine.debit - TransactionLine.credit).label('total')
+            ).join(
+                Verification, TransactionLine.verification_id == Verification.id
+            ).filter(
+                Verification.company_id == company_id,
+                Verification.transaction_date >= start_date,
+                Verification.transaction_date <= end_date,
+                TransactionLine.account_id.in_(expense_account_ids)
+            ).scalar()
+        else:
+            expense_trans = 0
+
+        revenue = float(revenue_trans or 0)
+        expenses = float(expense_trans or 0)
+        profit = revenue - expenses
+
+        monthly_data.append({
+            "month": month,
+            "month_name": start_date.strftime("%b"),  # Jan, Feb, etc.
+            "revenue": revenue,
+            "expenses": expenses,
+            "profit": profit
+        })
+
+    # Calculate year-to-date totals
+    ytd_revenue = sum(m["revenue"] for m in monthly_data)
+    ytd_expenses = sum(m["expenses"] for m in monthly_data)
+    ytd_profit = ytd_revenue - ytd_expenses
+
+    return {
+        "company_id": company_id,
+        "year": year,
+        "monthly_data": monthly_data,
+        "ytd_totals": {
+            "revenue": ytd_revenue,
+            "expenses": ytd_expenses,
+            "profit": ytd_profit
+        }
+    }

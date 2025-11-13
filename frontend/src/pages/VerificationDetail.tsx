@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-react'
-import { verificationApi, accountApi, companyApi } from '@/services/api'
+import { verificationApi, accountApi } from '@/services/api'
 import type { Verification, Account } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function VerificationDetail() {
   const { verificationId } = useParams<{ verificationId: string }>()
   const navigate = useNavigate()
+  const { selectedCompany } = useCompany()
   const [verification, setVerification] = useState<Verification | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -14,7 +16,7 @@ export default function VerificationDetail() {
   useEffect(() => {
     loadVerification()
     loadAccounts()
-  }, [verificationId])
+  }, [verificationId, selectedCompany])
 
   const loadVerification = async () => {
     try {
@@ -29,11 +31,10 @@ export default function VerificationDetail() {
   }
 
   const loadAccounts = async () => {
+    if (!selectedCompany) return
+
     try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) return
-      const company = companiesRes.data[0]
-      const accountsRes = await accountApi.list(company.id)
+      const accountsRes = await accountApi.list(selectedCompany.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)

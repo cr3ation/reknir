@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
-import { expenseApi, accountApi, companyApi } from '@/services/api'
+import { expenseApi, accountApi } from '@/services/api'
 import type { Expense, Account } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function ExpenseDetail() {
   const { expenseId } = useParams<{ expenseId: string }>()
   const navigate = useNavigate()
+  const { selectedCompany } = useCompany()
   const [expense, setExpense] = useState<Expense | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +28,7 @@ export default function ExpenseDetail() {
   useEffect(() => {
     loadExpense()
     loadAccounts()
-  }, [expenseId])
+  }, [expenseId, selectedCompany])
 
   const loadExpense = async () => {
     try {
@@ -50,11 +52,10 @@ export default function ExpenseDetail() {
   }
 
   const loadAccounts = async () => {
+    if (!selectedCompany) return
+
     try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) return
-      const company = companiesRes.data[0]
-      const accountsRes = await accountApi.list(company.id)
+      const accountsRes = await accountApi.list(selectedCompany.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)

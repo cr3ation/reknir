@@ -18,6 +18,7 @@ import type {
   VATReport,
   VATPeriodsResponse,
   Expense,
+  MonthlyStatistics,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -106,6 +107,10 @@ export const reportApi = {
     }),
   vatPeriods: (companyId: number, year: number) =>
     api.get<VATPeriodsResponse>('/api/reports/vat-periods', {
+      params: { company_id: companyId, year },
+    }),
+  monthlyStatistics: (companyId: number, year: number) =>
+    api.get<MonthlyStatistics>('/api/reports/monthly-statistics', {
       params: { company_id: companyId, year },
     }),
 }

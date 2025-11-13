@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit2, Trash2, X, Save } from 'lucide-react'
-import { customerApi, supplierApi, companyApi } from '@/services/api'
+import { customerApi, supplierApi } from '@/services/api'
 import type { Customer, Supplier } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function Customers() {
+  const { selectedCompany } = useCompany()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
-  const [companyId, setCompanyId] = useState<number | null>(null)
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false)
   const [showCreateSupplierModal, setShowCreateSupplierModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -17,21 +18,19 @@ export default function Customers() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedCompany])
 
   const loadData = async () => {
-    try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        setLoading(false)
-        return
-      }
-      const company = companiesRes.data[0]
-      setCompanyId(company.id)
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
 
+    try {
+      setLoading(true)
       const [customersRes, suppliersRes] = await Promise.all([
-        customerApi.list(company.id, false), // Load all customers (not just active)
-        supplierApi.list(company.id, false), // Load all suppliers
+        customerApi.list(selectedCompany.id, false), // Load all customers (not just active)
+        supplierApi.list(selectedCompany.id, false), // Load all suppliers
       ])
       setCustomers(customersRes.data)
       setSuppliers(suppliersRes.data)
@@ -285,9 +284,9 @@ export default function Customers() {
       )}
 
       {/* Create/Edit Customer Modal */}
-      {(showCreateCustomerModal || editingCustomer) && companyId && (
+      {(showCreateCustomerModal || editingCustomer) && selectedCompany && (
         <CreateCustomerModal
-          companyId={companyId}
+          companyId={selectedCompany.id}
           customer={editingCustomer}
           onClose={() => {
             setShowCreateCustomerModal(false)
@@ -302,9 +301,9 @@ export default function Customers() {
       )}
 
       {/* Create/Edit Supplier Modal */}
-      {(showCreateSupplierModal || editingSupplier) && companyId && (
+      {(showCreateSupplierModal || editingSupplier) && selectedCompany && (
         <CreateSupplierModal
-          companyId={companyId}
+          companyId={selectedCompany.id}
           supplier={editingSupplier}
           onClose={() => {
             setShowCreateSupplierModal(false)
