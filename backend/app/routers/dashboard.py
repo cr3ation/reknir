@@ -22,6 +22,89 @@ from app.dependencies import get_current_active_user, verify_company_access
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+@router.get("/month-verifications")
+async def get_month_verifications(
+    company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
+    month: str = Query(..., description="Month in format YYYY-MM"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get verifications for a specific month, categorized by revenue and expenses
+    """
+    # Verify access
+    await verify_company_access(company_id, current_user, db)
+
+    # Parse month
+    try:
+        year, month_num = month.split('-')
+        month_start = date(int(year), int(month_num), 1)
+        if int(month_num) == 12:
+            month_end = date(int(year) + 1, 1, 1) - timedelta(days=1)
+        else:
+            month_end = date(int(year), int(month_num) + 1, 1) - timedelta(days=1)
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+
+    # Get revenue accounts (3xxx)
+    revenue_account_ids = [acc[0] for acc in db.query(Account.id).filter(
+        Account.company_id == company_id,
+        Account.account_number >= 3000,
+        Account.account_number < 4000
+    ).all()]
+
+    # Get expense accounts (4xxx-7xxx)
+    expense_account_ids = [acc[0] for acc in db.query(Account.id).filter(
+        Account.company_id == company_id,
+        Account.account_number >= 4000,
+        Account.account_number < 8000
+    ).all()]
+
+    # Get all verifications for the month
+    verifications = db.query(Verification).filter(
+        Verification.company_id == company_id,
+        Verification.fiscal_year_id == fiscal_year_id,
+        Verification.transaction_date >= month_start,
+        Verification.transaction_date <= month_end
+    ).order_by(Verification.transaction_date.desc()).all()
+
+    # Process each verification
+    result = []
+    for verification in verifications:
+        # Calculate net revenue and expense for this verification
+        revenue_amount = Decimal(0)
+        expense_amount = Decimal(0)
+
+        for line in verification.transaction_lines:
+            if line.account_id in revenue_account_ids:
+                revenue_amount += (line.credit or Decimal(0)) - (line.debit or Decimal(0))
+            elif line.account_id in expense_account_ids:
+                expense_amount += (line.debit or Decimal(0)) - (line.credit or Decimal(0))
+
+        # Only include if it affects revenue or expenses
+        if revenue_amount != 0 or expense_amount != 0:
+            # Determine primary type based on which is larger
+            if abs(revenue_amount) > abs(expense_amount):
+                verification_type = "revenue"
+                amount = float(revenue_amount)
+            else:
+                verification_type = "expense"
+                amount = float(expense_amount)
+
+            result.append({
+                "id": verification.id,
+                "verification_number": verification.verification_number,
+                "series": verification.series,
+                "transaction_date": verification.transaction_date.isoformat(),
+                "description": verification.description,
+                "amount": amount,
+                "type": verification_type
+            })
+
+    return result
+
+
 @router.get("/overview")
 async def get_dashboard_overview(
     company_id: int = Query(..., description="Company ID"),

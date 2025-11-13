@@ -7,9 +7,10 @@ interface MonthlyData {
 
 interface RevenueExpenseChartProps {
   data: MonthlyData[]
+  onMonthClick?: (month: string) => void
 }
 
-export default function RevenueExpenseChart({ data }: RevenueExpenseChartProps) {
+export default function RevenueExpenseChart({ data, onMonthClick }: RevenueExpenseChartProps) {
   if (data.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
@@ -76,7 +77,11 @@ export default function RevenueExpenseChart({ data }: RevenueExpenseChartProps) 
               const expensesHeight = item.expenses * scale
 
               return (
-                <div key={index} className="flex-1 flex flex-col items-center gap-1 group">
+                <div
+                  key={index}
+                  className="flex-1 flex flex-col items-center gap-1 group cursor-pointer"
+                  onClick={() => onMonthClick?.(item.month)}
+                >
                   <div className="relative w-full flex items-end justify-center gap-1 h-full">
                     {/* Revenue bar */}
                     <div

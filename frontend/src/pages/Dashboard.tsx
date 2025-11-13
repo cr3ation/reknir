@@ -5,6 +5,17 @@ import { useCompany } from '../contexts/CompanyContext'
 import { useFiscalYear } from '../contexts/FiscalYearContext'
 import StatCard from '../components/StatCard'
 import RevenueExpenseChart from '../components/RevenueExpenseChart'
+import MonthVerificationsModal from '../components/MonthVerificationsModal'
+
+interface MonthVerification {
+  id: number
+  verification_number: number
+  series: string
+  transaction_date: string
+  description: string
+  amount: number
+  type: 'revenue' | 'expense'
+}
 
 interface DashboardData {
   fiscal_year: {
@@ -50,6 +61,9 @@ export default function Dashboard() {
   const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [monthVerifications, setMonthVerifications] = useState<MonthVerification[]>([])
+  const [loadingVerifications, setLoadingVerifications] = useState(false)
 
   // Load fiscal years when company changes
   useEffect(() => {
@@ -90,6 +104,33 @@ export default function Dashboard() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(value)
+  }
+
+  const handleMonthClick = async (month: string) => {
+    if (!selectedCompany || !selectedFiscalYear) return
+
+    try {
+      setLoadingVerifications(true)
+      setSelectedMonth(month)
+      const params = new URLSearchParams({
+        company_id: selectedCompany.id.toString(),
+        fiscal_year_id: selectedFiscalYear.id.toString(),
+        month: month
+      })
+      const response = await api.get(`/api/dashboard/month-verifications?${params}`)
+      setMonthVerifications(response.data)
+    } catch (error) {
+      console.error('Failed to load month verifications:', error)
+      alert('Kunde inte ladda verifikationer för denna månad')
+      setSelectedMonth(null)
+    } finally {
+      setLoadingVerifications(false)
+    }
+  }
+
+  const handleCloseModal = () => {
+    setSelectedMonth(null)
+    setMonthVerifications([])
   }
 
   if (!selectedCompany) {
@@ -221,7 +262,7 @@ export default function Dashboard() {
       </div>
 
       {/* Revenue & Expense Chart */}
-      <RevenueExpenseChart data={data.monthly_trend} />
+      <RevenueExpenseChart data={data.monthly_trend} onMonthClick={handleMonthClick} />
 
       {/* Recent Verifications */}
       <div className="bg-white rounded-lg shadow">
@@ -282,6 +323,15 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Month Verifications Modal */}
+      {selectedMonth && !loadingVerifications && (
+        <MonthVerificationsModal
+          month={selectedMonth}
+          verifications={monthVerifications}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   )
 }
