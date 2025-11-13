@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models.user import User
 from app.services import sie4_service
+from app.dependencies import get_current_active_user, get_user_company_ids
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/sie4", tags=["SIE4"])
@@ -32,6 +34,7 @@ class SIE4ExportRequest(BaseModel):
 async def import_sie4_file(
     company_id: int,
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -43,6 +46,14 @@ async def import_sie4_file(
     - Automatically configure default account mappings
     - Optionally import verifications (if included in file)
     """
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
+        )
+
     try:
         # Read file content
         content = await file.read()
@@ -78,6 +89,7 @@ async def import_sie4_file(
 def export_sie4_file(
     company_id: int,
     include_verifications: bool = True,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -85,6 +97,14 @@ def export_sie4_file(
 
     Returns a SIE4 formatted text file.
     """
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
+        )
+
     try:
         sie4_content = sie4_service.export_sie4(db, company_id, include_verifications)
         return PlainTextResponse(
