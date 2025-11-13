@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     app_name: str = "Reknir - Swedish Bookkeeping"
     debug: bool = True
 
+    # Authentication
+    secret_key: str = "your-secret-key-change-in-production-use-openssl-rand-hex-32"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+
     class Config:
         env_file = ".env"
         case_sensitive = False

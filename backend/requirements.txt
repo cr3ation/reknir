@@ -18,8 +18,9 @@ python-multipart==0.0.6
 weasyprint==62.3
 jinja2==3.1.2
 
-# CORS
+# Authentication & Security
 python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
 # Development
 pytest==7.4.4
