@@ -121,7 +121,7 @@ def register(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_current_user_info(
+async def get_current_user_info(
     current_user: User = Depends(get_current_active_user)
 ):
     """
@@ -137,7 +137,7 @@ def get_current_user_info(
 
 
 @router.get("/me/companies", response_model=List[CompanyResponse])
-def get_my_companies(
+async def get_my_companies(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -160,7 +160,7 @@ def get_my_companies(
 
 
 @router.put("/me", response_model=UserResponse)
-def update_current_user(
+async def update_current_user(
     user_update: UserUpdate,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -205,7 +205,7 @@ def update_current_user(
 # ==================== Admin Endpoints ====================
 
 @router.get("/users", response_model=List[UserResponse])
-def list_users(
+async def list_users(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
@@ -224,7 +224,7 @@ def list_users(
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def create_new_user(
+async def create_new_user(
     user_data: UserCreate,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
@@ -264,7 +264,7 @@ def create_new_user(
 
 
 @router.post("/users/{user_id}/companies/{company_id}", response_model=CompanyUserResponse)
-def grant_company_access(
+async def grant_company_access(
     user_id: int,
     company_id: int,
     access_data: CompanyAccessRequest,
@@ -332,7 +332,7 @@ def grant_company_access(
 
 
 @router.delete("/users/{user_id}/companies/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
-def revoke_company_access(
+async def revoke_company_access(
     user_id: int,
     company_id: int,
     admin: User = Depends(require_admin),
@@ -366,7 +366,7 @@ def revoke_company_access(
 
 
 @router.get("/users/{user_id}/companies", response_model=List[CompanyResponse])
-def get_user_companies(
+async def get_user_companies(
     user_id: int,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
