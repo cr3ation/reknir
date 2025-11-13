@@ -17,7 +17,7 @@ import Setup from './pages/Setup'
 import Login from './pages/Login'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
 import FiscalYearSelector from './components/FiscalYearSelector'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -38,7 +38,7 @@ function App() {
 
 function AppContent() {
   const location = useLocation()
-  const { user, logout } = require('./contexts/AuthContext').useAuth()
+  const { user, logout } = useAuth()
 
   const menuItems = [
     { path: '/', icon: Home, label: 'Översikt' },
