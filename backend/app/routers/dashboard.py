@@ -69,7 +69,7 @@ async def get_dashboard_overview(
 
     # Calculate revenue this month (credits on revenue accounts)
     revenue_this_month = db.query(
-        func.sum(TransactionLine.credit_amount)
+        func.sum(TransactionLine.credit)
     ).join(Verification).filter(
         Verification.company_id == company_id,
         Verification.transaction_date >= month_start,
@@ -79,7 +79,7 @@ async def get_dashboard_overview(
 
     # Calculate expenses this month (debits on expense accounts)
     expenses_this_month = db.query(
-        func.sum(TransactionLine.debit_amount)
+        func.sum(TransactionLine.debit)
     ).join(Verification).filter(
         Verification.company_id == company_id,
         Verification.transaction_date >= month_start,
@@ -150,7 +150,7 @@ async def get_dashboard_overview(
 
         # Revenue for this month
         revenue_month = db.query(
-            func.sum(TransactionLine.credit_amount)
+            func.sum(TransactionLine.credit)
         ).join(Verification).filter(
             Verification.company_id == company_id,
             Verification.transaction_date >= month_start_trend,
@@ -160,7 +160,7 @@ async def get_dashboard_overview(
 
         # Expenses for this month
         expenses_month = db.query(
-            func.sum(TransactionLine.debit_amount)
+            func.sum(TransactionLine.debit)
         ).join(Verification).filter(
             Verification.company_id == company_id,
             Verification.transaction_date >= month_start_trend,
