@@ -79,15 +79,20 @@ def decode_access_token(token: str) -> Optional[TokenData]:
     """
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        print(f"DEBUG: JWT payload decoded: {payload}")
         user_id: int = payload.get("sub")
         email: str = payload.get("email")
         is_admin: bool = payload.get("is_admin", False)
 
+        print(f"DEBUG: Extracted from payload - user_id={user_id}, email={email}, is_admin={is_admin}")
+
         if user_id is None or email is None:
+            print(f"DEBUG: user_id or email is None, returning None")
             return None
 
         return TokenData(user_id=user_id, email=email, is_admin=is_admin)
-    except JWTError:
+    except JWTError as e:
+        print(f"DEBUG: JWTError occurred: {e}")
         return None
 
 
