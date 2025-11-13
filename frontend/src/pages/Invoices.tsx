@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Download, Plus, X, Eye, DollarSign } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { invoiceApi, companyApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
+import api, { invoiceApi, companyApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 
@@ -51,10 +51,27 @@ export default function Invoices() {
     }
   }
 
-  const downloadInvoicePdf = (invoiceId: number, invoiceNumber: string, series: string) => {
-    // Open PDF download in new tab
-    const url = `http://localhost:8000/api/invoices/${invoiceId}/pdf`
-    window.open(url, '_blank')
+  const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string, series: string) => {
+    try {
+      // Use axios to download with authentication
+      const response = await api.get(`/api/invoices/${invoiceId}/pdf`, {
+        responseType: 'blob'
+      })
+
+      // Create blob URL and download
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `faktura_${series}${invoiceNumber}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download PDF:', error)
+      alert('Kunde inte ladda ner PDF')
+    }
   }
 
   const sendInvoice = async (invoiceId: number) => {
