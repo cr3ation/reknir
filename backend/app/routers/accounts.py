@@ -5,15 +5,29 @@ from datetime import date
 from app.database import get_db
 from app.models.account import Account, AccountType
 from app.models.verification import Verification, TransactionLine
+from app.models.user import User
 from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate, AccountBalance
+from app.dependencies import get_current_active_user, verify_company_access
 from pydantic import BaseModel
 
 router = APIRouter()
 
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
-def create_account(account: AccountCreate, db: Session = Depends(get_db)):
+def create_account(
+    account: AccountCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Create a new account"""
+    # Verify user has access to this company
+    from app.dependencies import get_user_company_ids
+    company_ids = get_user_company_ids(current_user, db)
+    if account.company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You don't have access to company {account.company_id}"
+        )
 
     # Check if account number already exists for this company
     existing = db.query(Account).filter(
@@ -42,7 +56,9 @@ def list_accounts(
     company_id: int = Query(..., description="Company ID"),
     account_type: Optional[AccountType] = None,
     active_only: bool = True,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_company_access)
 ):
     """List all accounts for a company"""
     query = db.query(Account).filter(Account.company_id == company_id)
@@ -61,7 +77,9 @@ def list_accounts(
 def get_account_balances(
     company_id: int = Query(..., description="Company ID"),
     account_type: Optional[AccountType] = None,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_company_access)
 ):
     """Get account balances"""
     query = db.query(Account).filter(
@@ -88,7 +106,11 @@ def get_account_balances(
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
-def get_account(account_id: int, db: Session = Depends(get_db)):
+def get_account(
+    account_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Get a specific account"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
@@ -96,17 +118,41 @@ def get_account(account_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Account {account_id} not found"
         )
+
+    # Verify user has access to this account's company
+    from app.dependencies import get_user_company_ids
+    company_ids = get_user_company_ids(current_user, db)
+    if account.company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account"
+        )
+
     return account
 
 
 @router.patch("/{account_id}", response_model=AccountResponse)
-def update_account(account_id: int, account_update: AccountUpdate, db: Session = Depends(get_db)):
+def update_account(
+    account_id: int,
+    account_update: AccountUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Update an account"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Account {account_id} not found"
+        )
+
+    # Verify user has access to this account's company
+    from app.dependencies import get_user_company_ids
+    company_ids = get_user_company_ids(current_user, db)
+    if account.company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account"
         )
 
     # Update fields
@@ -147,6 +193,7 @@ def get_account_ledger(
     account_id: int,
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -159,6 +206,15 @@ def get_account_ledger(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Account {account_id} not found"
+        )
+
+    # Verify user has access to this account's company
+    from app.dependencies import get_user_company_ids
+    company_ids = get_user_company_ids(current_user, db)
+    if account.company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account"
         )
 
     # Get all transaction lines for this account

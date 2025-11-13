@@ -7,14 +7,20 @@ from app.database import get_db
 from app.models.company import Company
 from app.models.account import Account
 from app.models.default_account import DefaultAccount
+from app.models.user import User, CompanyUser
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
 from app.services import default_account_service
+from app.dependencies import get_current_active_user, get_user_company_ids
 
 router = APIRouter()
 
 
 @router.post("/", response_model=CompanyResponse, status_code=status.HTTP_201_CREATED)
-def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
+def create_company(
+    company: CompanyCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Create a new company"""
 
     # Check if org_number already exists
@@ -31,18 +37,41 @@ def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_company)
 
+    # Auto-grant access to creator (if not admin)
+    # Admins have access to all companies by default, but we can still add them for explicit tracking
+    if not current_user.is_admin:
+        company_user = CompanyUser(
+            company_id=db_company.id,
+            user_id=current_user.id,
+            role="accountant",
+            created_by=current_user.id
+        )
+        db.add(company_user)
+        db.commit()
+
     return db_company
 
 
 @router.get("/", response_model=List[CompanyResponse])
-def list_companies(db: Session = Depends(get_db)):
-    """List all companies"""
-    companies = db.query(Company).all()
+def list_companies(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """List companies user has access to"""
+    # Get company IDs user has access to
+    company_ids = get_user_company_ids(current_user, db)
+
+    # Filter companies by accessible IDs
+    companies = db.query(Company).filter(Company.id.in_(company_ids)).all()
     return companies
 
 
 @router.get("/{company_id}", response_model=CompanyResponse)
-def get_company(company_id: int, db: Session = Depends(get_db)):
+def get_company(
+    company_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Get a specific company"""
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -50,17 +79,39 @@ def get_company(company_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company {company_id} not found"
         )
+
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
+        )
+
     return company
 
 
 @router.patch("/{company_id}", response_model=CompanyResponse)
-def update_company(company_id: int, company_update: CompanyUpdate, db: Session = Depends(get_db)):
+def update_company(
+    company_id: int,
+    company_update: CompanyUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Update a company"""
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company {company_id} not found"
+        )
+
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
         )
 
     # Update fields
@@ -74,7 +125,11 @@ def update_company(company_id: int, company_update: CompanyUpdate, db: Session =
 
 
 @router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_company(company_id: int, db: Session = Depends(get_db)):
+def delete_company(
+    company_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Delete a company (WARNING: deletes all associated data)"""
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -83,13 +138,25 @@ def delete_company(company_id: int, db: Session = Depends(get_db)):
             detail=f"Company {company_id} not found"
         )
 
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
+        )
+
     db.delete(company)
     db.commit()
     return None
 
 
 @router.post("/{company_id}/seed-bas", status_code=status.HTTP_200_OK)
-def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
+def seed_bas_accounts(
+    company_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """Seed BAS 2024 kontoplan for a company"""
     # Check if company exists
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -97,6 +164,14 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company {company_id} not found"
+        )
+
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
         )
 
     # Check if accounts already exist
@@ -149,7 +224,11 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{company_id}/initialize-defaults", status_code=status.HTTP_200_OK)
-def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
+def initialize_default_accounts(
+    company_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """
     Initialize default account mappings for a company based on existing accounts.
     This is useful after importing SIE4 or when setting up an existing company.
@@ -159,6 +238,14 @@ def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company {company_id} not found"
+        )
+
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
         )
 
     # Initialize defaults
