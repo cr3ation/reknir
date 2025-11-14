@@ -87,6 +87,7 @@ nginx/ssl/*.crt
 
 # Cloudflare
 .cloudflared/
+cloudflared-config.yml
 
 # OS
 Thumbs.db
