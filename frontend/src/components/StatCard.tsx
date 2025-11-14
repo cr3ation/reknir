@@ -37,7 +37,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, color = '
             </div>
           )}
         </div>
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
+        <div className={`p-3 rounded-lg flex-shrink-0 ${colorClasses[color]}`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
