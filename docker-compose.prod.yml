@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reknir-db
+    environment:
+      POSTGRES_USER: reknir
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reknir}
+      POSTGRES_DB: reknir
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    # No port exposure - internal only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reknir"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: reknir-backend
+    environment:
+      DATABASE_URL: postgresql://reknir:${POSTGRES_PASSWORD:-reknir}@postgres:5432/reknir
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
+    # No port exposure - accessed via nginx only
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./receipts:/app/receipts
+      - ./invoices:/app/invoices
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+    # Production mode - no reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: reknir-frontend
+    # No port exposure - accessed via nginx only
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+    # Serve production build
+    command: npm run dev -- --host 0.0.0.0
+
+  nginx:
+    image: nginx:alpine
+    container_name: reknir-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Automatic backup service (runs daily at 3 AM)
+  backup:
+    image: postgres:16-alpine
+    container_name: reknir-backup
+    environment:
+      POSTGRES_USER: reknir
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reknir}
+      POSTGRES_DB: reknir
+      BACKUP_DIR: /backups
+      BACKUP_KEEP_DAYS: 2555  # 7 years per Swedish law
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh
+    depends_on:
+      - postgres
+    entrypoint: /bin/sh -c "while true; do sleep 86400; /backup.sh; done"
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  reknir-internal:
+    driver: bridge

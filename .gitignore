@@ -79,8 +79,8 @@ coverage.xml
 # Docker
 .docker/
 
-# Production
-docker-compose.prod.yml
+# Production secrets
+.env.production
 nginx/ssl/*.pem
 nginx/ssl/*.key
 nginx/ssl/*.crt
