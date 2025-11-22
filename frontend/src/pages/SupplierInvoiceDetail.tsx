@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Edit2, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
 import { supplierInvoiceApi, accountApi, companyApi, supplierApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier } from '@/types'
 
@@ -11,7 +11,6 @@ export default function SupplierInvoiceDetail() {
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
 
@@ -132,12 +131,12 @@ export default function SupplierInvoiceDetail() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined) => {
     return new Intl.NumberFormat('sv-SE', {
       style: 'currency',
       currency: 'SEK',
       minimumFractionDigits: 2,
-    }).format(amount)
+    }).format(amount || 0)
   }
 
   const formatDate = (dateString: string) => {
@@ -167,9 +166,6 @@ export default function SupplierInvoiceDetail() {
       </span>
     )
   }
-
-  // Can edit if not registered (no verification) and not paid
-  const canEdit = invoice && !invoice.invoice_verification_id && invoice.status !== 'paid'
 
   if (loading || !invoice) {
     return <div className="flex items-center justify-center h-64"><p className="text-gray-500">Laddar...</p></div>

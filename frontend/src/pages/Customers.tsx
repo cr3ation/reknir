@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Edit2, Trash2, X, Save } from 'lucide-react'
+import { Plus, Edit2, Trash2, X } from 'lucide-react'
 import { customerApi, supplierApi, companyApi } from '@/services/api'
 import type { Customer, Supplier } from '@/types'
 import { getErrorMessage } from '@/utils/errors'

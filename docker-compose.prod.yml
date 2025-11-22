@@ -23,7 +23,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: reknir-backend
     environment:
       DATABASE_URL: postgresql://reknir:${POSTGRES_PASSWORD:-reknir}@postgres:5432/reknir
@@ -40,24 +40,22 @@ services:
     restart: unless-stopped
     networks:
       - reknir-internal
-    # Production mode - no reload
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    # Production mode - no reload, migrations run in Dockerfile.prod CMD
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
       args:
         VITE_API_URL: /api
     container_name: reknir-frontend
-    # No port exposure - accessed via nginx only
+    # No port exposure - accessed via nginx gateway only
     depends_on:
       - backend
     restart: unless-stopped
     networks:
       - reknir-internal
-    # Serve production build
-    command: npm run dev -- --host 0.0.0.0
+    # Dockerfile.prod serves built static files via nginx
 
   nginx:
     image: nginx:alpine
@@ -94,6 +92,20 @@ services:
     depends_on:
       - postgres
     entrypoint: /bin/sh -c "while true; do sleep 86400; /backup.sh; done"
+    restart: unless-stopped
+    networks:
+      - reknir-internal
+
+  # Cloudflare Tunnel - secure access without exposing ports
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: reknir-cloudflared
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared-config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflared-credentials.json:/etc/cloudflared/credentials.json:ro
+    depends_on:
+      - nginx
     restart: unless-stopped
     networks:
       - reknir-internal

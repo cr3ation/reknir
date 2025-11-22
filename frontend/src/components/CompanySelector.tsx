@@ -24,7 +24,7 @@ export default function CompanySelector({ selectedCompanyId, onCompanyChange }: 
 
   const loadCompanies = async () => {
     try {
-      const response = await api.get('/api/auth/me/companies')
+      const response = await api.get('/auth/me/companies')
       setCompanies(response.data)
 
       // Auto-select first company if none selected

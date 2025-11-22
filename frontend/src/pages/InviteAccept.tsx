@@ -33,7 +33,7 @@ export default function InviteAccept() {
 
   const validateToken = async () => {
     try {
-      const response = await api.get(`/api/invitations/validate/${token}`)
+      const response = await api.get(`/invitations/validate/${token}`)
       setValidation(response.data)
     } catch (error) {
       setValidation({
@@ -63,7 +63,7 @@ export default function InviteAccept() {
 
     try {
       setSubmitting(true)
-      await api.post(`/api/invitations/accept/${token}`, {
+      await api.post(`/invitations/accept/${token}`, {
         full_name: formData.full_name,
         email: formData.email,
         password: formData.password

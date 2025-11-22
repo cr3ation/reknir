@@ -793,7 +793,7 @@ export default function Reports() {
                 <button
                   onClick={() => {
                     if (!company || !selectedPeriod) return
-                    const url = new URL('/api/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000')
+                    const url = new URL('/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
                     url.searchParams.append('company_id', company.id.toString())
                     url.searchParams.append('start_date', selectedPeriod.start_date)
                     url.searchParams.append('end_date', selectedPeriod.end_date)

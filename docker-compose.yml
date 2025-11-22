@@ -55,7 +55,7 @@ services:
       - ./frontend:/app
       - /app/node_modules  # Prevent overwriting node_modules
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
     restart: unless-stopped
     command: npm run dev -- --host 0.0.0.0
 

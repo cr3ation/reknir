@@ -406,7 +406,7 @@ function CreateVerificationModal({
           account_id: Number(line.account_id),
           debit: Number(line.debit) || 0,
           credit: Number(line.credit) || 0,
-          description: line.description || null,
+          description: line.description || undefined,
         })),
       }
 

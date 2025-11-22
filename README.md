@@ -24,7 +24,7 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 - Docker and Docker Compose
 - (For development: Node.js 18+, Python 3.11+)
 
-### Production Deployment (Docker)
+### Development Setup (Local)
 
 ```bash
 # Clone the repository
@@ -40,6 +40,21 @@ docker-compose exec backend python -m app.cli seed-bas
 # Access the application
 # Frontend: http://localhost:5173
 # API docs: http://localhost:8000/docs
+```
+
+### Production Deployment
+
+For production deployment with Cloudflare Tunnel, HTTPS, and automatic backups:
+
+📖 **See [PRODUCTION.md](PRODUCTION.md) for complete production deployment guide**
+
+Quick production start:
+```bash
+# Run interactive setup script
+./setup-production.sh
+
+# Deploy with production configuration
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
 ### Development Setup

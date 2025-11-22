@@ -54,7 +54,7 @@ export default function Invoices() {
   const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string, series: string) => {
     try {
       // Use axios to download with authentication
-      const response = await api.get(`/api/invoices/${invoiceId}/pdf`, {
+      const response = await api.get(`/invoices/${invoiceId}/pdf`, {
         responseType: 'blob'
       })
 
@@ -810,7 +810,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   const [ocrNumber, setOcrNumber] = useState('')
   const [reference, setReference] = useState('')
   const [lines, setLines] = useState<InvoiceLine[]>([
-    { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }
+    { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -828,7 +828,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   }, [supplierId, invoiceDate, suppliers])
 
   const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }])
+    setLines([...lines, { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }])
   }
 
   const removeLine = (index: number) => {

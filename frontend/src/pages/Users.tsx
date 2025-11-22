@@ -16,13 +16,6 @@ interface Company {
   name: string
 }
 
-interface CompanyUser {
-  company_id: number
-  user_id: number
-  role: string
-  created_at: string
-}
-
 export default function Users() {
   const [users, setUsers] = useState<User[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
@@ -48,7 +41,7 @@ export default function Users() {
 
   const loadUsers = async () => {
     try {
-      const response = await api.get('/api/auth/users')
+      const response = await api.get('/auth/users')
       setUsers(response.data)
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -59,7 +52,7 @@ export default function Users() {
 
   const loadCompanies = async () => {
     try {
-      const response = await api.get('/api/auth/me/companies')
+      const response = await api.get('/auth/me/companies')
       setCompanies(response.data)
     } catch (error) {
       console.error('Failed to load companies:', error)
@@ -68,7 +61,7 @@ export default function Users() {
 
   const loadUserCompanies = async (userId: number) => {
     try {
-      const response = await api.get(`/api/auth/users/${userId}/companies`)
+      const response = await api.get(`/auth/users/${userId}/companies`)
       setUserCompanies(response.data)
     } catch (error) {
       console.error('Failed to load user companies:', error)
@@ -78,7 +71,7 @@ export default function Users() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await api.post('/api/auth/users', newUser)
+      await api.post('/auth/users', newUser)
       setShowCreateModal(false)
       setNewUser({ email: '', full_name: '', password: '' })
       loadUsers()
@@ -92,7 +85,7 @@ export default function Users() {
 
     try {
       await api.post(
-        `/api/auth/users/${selectedUser.id}/companies/${selectedCompanyId}`,
+        `/auth/users/${selectedUser.id}/companies/${selectedCompanyId}`,
         { role: selectedRole }
       )
       loadUserCompanies(selectedUser.id)
@@ -106,7 +99,7 @@ export default function Users() {
     if (!confirm('Är du säker på att du vill ta bort åtkomst till detta företag?')) return
 
     try {
-      await api.delete(`/api/auth/users/${userId}/companies/${companyId}`)
+      await api.delete(`/auth/users/${userId}/companies/${companyId}`)
       if (selectedUser) {
         loadUserCompanies(selectedUser.id)
       }

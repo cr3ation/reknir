@@ -92,7 +92,7 @@ export default function InvoiceDetail() {
 
     try {
       // Use axios to download with authentication
-      const response = await api.get(`/api/invoices/${invoice.id}/pdf`, {
+      const response = await api.get(`/invoices/${invoice.id}/pdf`, {
         responseType: 'blob' // Important for file downloads
       })
 
@@ -112,12 +112,12 @@ export default function InvoiceDetail() {
     }
   }
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined) => {
     return new Intl.NumberFormat('sv-SE', {
       style: 'currency',
       currency: 'SEK',
       minimumFractionDigits: 2,
-    }).format(amount)
+    }).format(amount || 0)
   }
 
   const formatDate = (dateString: string) => {

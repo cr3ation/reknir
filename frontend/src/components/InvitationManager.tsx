@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserPlus, Copy, Trash2, Check, Clock, ExternalLink } from 'lucide-react'
+import { UserPlus, Copy, Trash2, Check, Clock } from 'lucide-react'
 import api from '../services/api'
 import { useCompany } from '../contexts/CompanyContext'
 
@@ -36,7 +36,7 @@ export default function InvitationManager() {
 
     try {
       setLoading(true)
-      const response = await api.get(`/api/invitations/company/${selectedCompany.id}`)
+      const response = await api.get(`/invitations/company/${selectedCompany.id}`)
       setInvitations(response.data)
     } catch (error) {
       console.error('Failed to load invitations:', error)
@@ -50,7 +50,7 @@ export default function InvitationManager() {
     if (!selectedCompany) return
 
     try {
-      const response = await api.post('/api/invitations/', {
+      const response = await api.post('/invitations/', {
         company_id: selectedCompany.id,
         ...newInvitation
       })
@@ -66,7 +66,7 @@ export default function InvitationManager() {
     if (!confirm('Är du säker på att du vill ta bort denna inbjudan?')) return
 
     try {
-      await api.delete(`/api/invitations/${invitationId}`)
+      await api.delete(`/invitations/${invitationId}`)
       setInvitations(invitations.filter(inv => inv.id !== invitationId))
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to delete invitation')

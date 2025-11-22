@@ -316,6 +316,8 @@ export interface SIE4ImportResponse {
   accounts_updated: number
   verifications_created: number
   default_accounts_configured: number
+  errors?: string[]
+  warnings?: string[]
 }
 
 export interface VATReport {
@@ -421,8 +423,8 @@ export interface Expense {
   description: string
   amount: number
   vat_amount: number
-  expense_account_id?: number
-  vat_account_id?: number
+  expense_account_id?: number | null
+  vat_account_id?: number | null
   receipt_filename?: string
   status: ExpenseStatus
   approved_date?: string

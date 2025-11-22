@@ -88,7 +88,7 @@ export default function Dashboard() {
         company_id: selectedCompany.id.toString(),
         fiscal_year_id: selectedFiscalYear.id.toString()
       })
-      const response = await api.get(`/api/dashboard/overview?${params}`)
+      const response = await api.get(`/dashboard/overview?${params}`)
       setData(response.data)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
@@ -117,7 +117,7 @@ export default function Dashboard() {
         fiscal_year_id: selectedFiscalYear.id.toString(),
         month: month
       })
-      const response = await api.get(`/api/dashboard/month-verifications?${params}`)
+      const response = await api.get(`/dashboard/month-verifications?${params}`)
       setMonthVerifications(response.data)
     } catch (error) {
       console.error('Failed to load month verifications:', error)
