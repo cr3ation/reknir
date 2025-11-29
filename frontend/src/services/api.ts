@@ -5,6 +5,10 @@ import type {
   Account,
   Verification,
   VerificationListItem,
+  PostingTemplate,
+  PostingTemplateListItem,
+  TemplateExecutionRequest,
+  TemplateExecutionResult,
   BalanceSheet,
   IncomeStatement,
   Customer,
@@ -86,6 +90,24 @@ export const verificationApi = {
   update: (id: number, data: Partial<Verification>) =>
     api.patch<Verification>(`/api/verifications/${id}`, data),
   delete: (id: number) => api.delete(`/api/verifications/${id}`),
+}
+
+// Posting Templates
+export const postingTemplateApi = {
+  list: (companyId: number, params?: { skip?: number; limit?: number }) =>
+    api.get<PostingTemplateListItem[]>('/api/posting-templates/', {
+      params: { company_id: companyId, ...params },
+    }),
+  get: (id: number) => api.get<PostingTemplate>(`/api/posting-templates/${id}`),
+  create: (data: Omit<PostingTemplate, 'id' | 'created_at' | 'updated_at'>) =>
+    api.post<PostingTemplate>('/api/posting-templates/', data),
+  update: (id: number, data: Partial<PostingTemplate>) =>
+    api.put<PostingTemplate>(`/api/posting-templates/${id}`, data),
+  delete: (id: number) => api.delete(`/api/posting-templates/${id}`),
+  execute: (id: number, request: TemplateExecutionRequest) =>
+    api.post<TemplateExecutionResult>(`/api/posting-templates/${id}/execute`, request),
+  reorder: (companyId: number, templateOrders: { id: number; sort_order: number }[]) =>
+    api.patch(`/api/posting-templates/reorder?company_id=${companyId}`, templateOrders),
 }
 
 // Reports

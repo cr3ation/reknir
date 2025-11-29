@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
-import { verificationApi, accountApi } from '@/services/api'
-import type { VerificationListItem, Account, Verification } from '@/types'
+import { verificationApi, accountApi, postingTemplateApi } from '@/services/api'
+import type { VerificationListItem, Account, Verification, PostingTemplateListItem, TemplateExecutionResult } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
 
@@ -221,71 +221,7 @@ export default function Verifications() {
   )
 }
 
-// Common verification templates
-interface VerificationTemplate {
-  name: string
-  description: string
-  lines: Array<{
-    accountNumber: number
-    debit: boolean // true for debit, false for credit
-    description: string
-  }>
-}
 
-const TEMPLATES: VerificationTemplate[] = [
-  {
-    name: 'Inköp med 25% moms',
-    description: 'Inköp av varor/tjänster med 25% moms',
-    lines: [
-      { accountNumber: 4000, debit: true, description: 'Inköp varor' },
-      { accountNumber: 2640, debit: true, description: 'Ingående moms 25%' },
-      { accountNumber: 2440, debit: false, description: 'Leverantörsskuld' },
-    ],
-  },
-  {
-    name: 'Försäljning med 25% moms',
-    description: 'Försäljning av varor/tjänster med 25% moms',
-    lines: [
-      { accountNumber: 1510, debit: true, description: 'Kundfordran' },
-      { accountNumber: 3001, debit: false, description: 'Försäljning 25% moms' },
-      { accountNumber: 2611, debit: false, description: 'Utgående moms 25%' },
-    ],
-  },
-  {
-    name: 'Betalning till leverantör',
-    description: 'Betala leverantörsfaktura från bank',
-    lines: [
-      { accountNumber: 2440, debit: true, description: 'Leverantörsskuld' },
-      { accountNumber: 1930, debit: false, description: 'Betalning från bankkonto' },
-    ],
-  },
-  {
-    name: 'Betalning från kund',
-    description: 'Kundfaktura betalad till bank',
-    lines: [
-      { accountNumber: 1930, debit: true, description: 'Inbetalning till bankkonto' },
-      { accountNumber: 1510, debit: false, description: 'Kundfordran' },
-    ],
-  },
-  {
-    name: 'Lokalhyra',
-    description: 'Betala hyra för lokaler',
-    lines: [
-      { accountNumber: 5010, debit: true, description: 'Lokalhyra' },
-      { accountNumber: 1930, debit: false, description: 'Betalning från bankkonto' },
-    ],
-  },
-  {
-    name: 'Lön och avgifter',
-    description: 'Löneutbetalning med arbetsgivaravgifter',
-    lines: [
-      { accountNumber: 7210, debit: true, description: 'Lön tjänstemän' },
-      { accountNumber: 7510, debit: true, description: 'Arbetsgivaravgifter' },
-      { accountNumber: 2710, debit: false, description: 'Personalskatt' },
-      { accountNumber: 1930, debit: false, description: 'Utbetalning från bankkonto' },
-    ],
-  },
-]
 
 // Create/Edit Verification Modal Component
 interface CreateVerificationModalProps {
@@ -321,49 +257,57 @@ function CreateVerificationModal({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [templates, setTemplates] = useState<PostingTemplateListItem[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
 
-  // Helper to find account by account number
-  const findAccountByNumber = (accountNumber: number): Account | undefined => {
-    return accounts.find((acc) => acc.account_number === accountNumber)
+  // Load templates when component mounts
+  useEffect(() => {
+    if (!isEditing) {
+      loadTemplates()
+    }
+  }, [isEditing])
+
+  const loadTemplates = async () => {
+    try {
+      setTemplatesLoading(true)
+      const response = await postingTemplateApi.list(companyId)
+      setTemplates(response.data)
+    } catch (error) {
+      console.error('Failed to load templates:', error)
+    } finally {
+      setTemplatesLoading(false)
+    }
   }
 
-  // Apply template
-  const applyTemplate = (template: VerificationTemplate, amount: number) => {
-    setFormData({ ...formData, description: template.description })
+  // Apply template using the new API
+  const applyTemplate = async (templateId: number, amount: number) => {
+    try {
+      setLoading(true)
+      const executionResult = await postingTemplateApi.execute(templateId, { amount })
+      const result = executionResult.data
 
-    // Calculate amounts based on template structure
-    const newLines = template.lines.map((line) => {
-      const account = findAccountByNumber(line.accountNumber)
-      let lineAmount = 0
+      // Apply template metadata
+      setFormData({
+        ...formData,
+        description: result.template_name // Use template name as default description
+      })
 
-      // Simple amount distribution
-      if (template.name.includes('moms')) {
-        // For VAT transactions
-        if (line.accountNumber === 2640 || line.accountNumber === 2611) {
-          // VAT is 20% of the amount (25% VAT means amount/(1+0.25) * 0.25)
-          lineAmount = amount * 0.2
-        } else if (line.accountNumber === 4000 || line.accountNumber === 3001) {
-          // Net amount is 80% of the amount
-          lineAmount = amount * 0.8
-        } else {
-          // Total amount (including VAT)
-          lineAmount = amount
-        }
-      } else {
-        // For non-VAT transactions, use the full amount
-        lineAmount = amount
-      }
+      // Convert template execution result to transaction lines
+      const newLines = result.posting_lines.map((line) => ({
+        account_id: line.account_id,
+        debit: line.debit,
+        credit: line.credit,
+        description: line.description || '',
+      }))
 
-      return {
-        account_id: account?.id || 0,
-        debit: line.debit ? lineAmount : 0,
-        credit: line.debit ? 0 : lineAmount,
-        description: line.description,
-      }
-    })
-
-    setLines(newLines)
-    setShowTemplates(false)
+      setLines(newLines)
+      setShowTemplates(false)
+    } catch (error: any) {
+      console.error('Failed to execute template:', error)
+      setError(error.response?.data?.detail || 'Kunde inte tillämpa mall')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const addLine = () => {
@@ -459,34 +403,51 @@ function CreateVerificationModal({
               </div>
 
               {showTemplates && (
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  {TEMPLATES.map((template, idx) => (
-                    <div key={idx} className="bg-white p-3 rounded border border-blue-200">
-                      <h4 className="font-medium text-sm mb-1">{template.name}</h4>
-                      <p className="text-xs text-gray-600 mb-2">{template.description}</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          placeholder="Belopp"
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                          id={`template-amount-${idx}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const amountInput = document.getElementById(
-                              `template-amount-${idx}`
-                            ) as HTMLInputElement
-                            const amount = Number(amountInput.value) || 1000
-                            applyTemplate(template, amount)
-                          }}
-                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                          Använd
-                        </button>
-                      </div>
+                <div className="mt-3">
+                  {templatesLoading ? (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-500">Laddar mallar...</p>
                     </div>
-                  ))}
+                  ) : templates.length === 0 ? (
+                    <div className="text-center py-4 bg-gray-50 rounded border">
+                      <p className="text-sm text-gray-600">Inga mallar hittades</p>
+                      <p className="text-xs text-gray-500 mt-1">Skapa mallar i administrationen för att använda dem här</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {templates.map((template) => (
+                        <div key={template.id} className="bg-white p-3 rounded border border-blue-200">
+                          <h4 className="font-medium text-sm mb-1">{template.name}</h4>
+                          <p className="text-xs text-gray-600 mb-2">{template.description}</p>
+                          <p className="text-xs text-gray-500 mb-2">
+                            {template.line_count} rader • Senast uppdaterad: {new Date(template.updated_at).toLocaleDateString('sv-SE')}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              placeholder="Belopp"
+                              className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                              id={`template-amount-${template.id}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const amountInput = document.getElementById(
+                                  `template-amount-${template.id}`
+                                ) as HTMLInputElement
+                                const amount = Number(amountInput.value) || 1000
+                                applyTemplate(template.id, amount)
+                              }}
+                              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                              disabled={loading}
+                            >
+                              {loading ? 'Tillämpar...' : 'Använd'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

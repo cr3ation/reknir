@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company } from '@/types'
-import { Plus, Trash2, Calendar, Building2, Edit2, Save, X } from 'lucide-react'
+import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
@@ -25,6 +25,17 @@ export default function SettingsPage() {
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
+  const [templates, setTemplates] = useState<PostingTemplateListItem[]>([])
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [templateForm, setTemplateForm] = useState<PostingTemplate>({
+    company_id: 0,
+    name: '',
+    description: '',
+    default_series: '',
+    default_journal_text: '',
+    template_lines: []
+  })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
@@ -56,7 +67,6 @@ export default function SettingsPage() {
 
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
-    // Find the highest year in existing fiscal years, or use current year
     const nextYear = fiscalYears.length > 0
       ? Math.max(...fiscalYears.map(fy => fy.year)) + 1
       : currentYear
@@ -83,14 +93,16 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      const [defaultsRes, accountsRes, fiscalYearsRes] = await Promise.all([
+      const [defaultsRes, accountsRes, fiscalYearsRes, templatesRes] = await Promise.all([
         defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
         accountApi.list(selectedCompany.id),
         fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
       ])
       setDefaultAccounts(defaultsRes.data)
       setAllAccounts(accountsRes.data)
       setFiscalYears(fiscalYearsRes.data)
+      setTemplates(templatesRes.data)
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
@@ -141,10 +153,6 @@ export default function SettingsPage() {
   }
 
   const formatErrorMessage = (error: any): string => {
-    console.log('Full error:', error)
-    console.log('Error response data:', error.response?.data)
-
-    // Handle FastAPI validation errors (422)
     if (error.response?.data?.detail) {
       const detail = error.response.data.detail
       // If detail is an array of validation errors
@@ -200,7 +208,7 @@ export default function SettingsPage() {
         fiscal_year_start: new Date().getFullYear() + '-01-01',
         fiscal_year_end: new Date().getFullYear() + '-12-31',
         accounting_basis: 'accrual',
-        vat_reporting_period: 'quarterly',
+        vat_reporting_period: 'quarterly' as VATReportingPeriod,
       })
       await loadCompanies()
       setSelectedCompany(response.data)
@@ -400,6 +408,197 @@ export default function SettingsPage() {
     const account = allAccounts.find((a) => a.id === accountId)
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
   }
+
+  const handleCreateTemplate = () => {
+    setEditingTemplate(null)
+    setTemplateForm({
+      company_id: selectedCompany?.id || 0,
+      name: '',
+      description: '',
+      default_series: '',
+      default_journal_text: '',
+      template_lines: [{
+        account_id: 0,
+        formula: '{belopp}',
+        description: '',
+        sort_order: 0
+      }]
+    })
+    setShowCreateTemplate(true)
+  }
+
+  const handleEditTemplate = async (template: PostingTemplateListItem) => {
+    if (!selectedCompany) return
+
+    try {
+      const response = await postingTemplateApi.get(template.id)
+      setEditingTemplate(template)
+      setTemplateForm(response.data)
+      setShowCreateTemplate(true)
+    } catch (error) {
+      showMessage('Kunde inte ladda mall', 'error')
+    }
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!selectedCompany) return
+
+    if (!templateForm.name || !templateForm.description || templateForm.template_lines.length === 0) {
+      showMessage('Fyll i alla obligatoriska fält', 'error')
+      return
+    }
+
+    // Validate template lines
+    for (const line of templateForm.template_lines) {
+      if (!line.account_id || !line.formula) {
+        showMessage('Alla rader måste ha konto och formel', 'error')
+        return
+      }
+    }
+
+    try {
+      setLoading(true)
+
+      if (editingTemplate) {
+        await postingTemplateApi.update(editingTemplate.id, templateForm)
+        showMessage('Mall uppdaterad', 'success')
+      } else {
+        await postingTemplateApi.create(templateForm)
+        showMessage('Mall skapad', 'success')
+      }
+
+      setShowCreateTemplate(false)
+      setEditingTemplate(null)
+      loadData()
+    } catch (error: any) {
+      showMessage(error.response?.data?.detail || 'Kunde inte spara mall', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addTemplateLine = () => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: [...prev.template_lines, {
+        account_id: 0,
+        formula: '{belopp}',
+        description: '',
+        sort_order: prev.template_lines.length
+      }]
+    }))
+  }
+
+  const removeTemplateLine = (index: number) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: prev.template_lines.filter((_, i) => i !== index)
+    }))
+  }
+
+  const updateTemplateLine = (index: number, field: keyof PostingTemplateLine, value: any) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: prev.template_lines.map((line, i) => 
+        i === index ? { ...line, [field]: value } : line
+      )
+    }))
+  }
+
+  // Simple drag and drop state
+  const [draggedTemplate, setDraggedTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<{ templateId: number; position: 'before' | 'after' } | null>(null)
+
+  const handleDragStart = (e: any, template: PostingTemplateListItem) => {
+    setDraggedTemplate(template)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', template.id.toString())
+  }
+
+  const handleDragEnd = () => {
+    setDraggedTemplate(null)
+    setDropIndicator(null)
+  }
+
+  const handleDragOver = (e: any, template: PostingTemplateListItem) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    
+    if (!draggedTemplate || draggedTemplate.id === template.id) return
+
+    // Calculate if drop should be before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'before' : 'after'
+    
+    setDropIndicator({ templateId: template.id, position })
+  }
+
+  const handleDragLeave = (e: any) => {
+    // Only clear if we're leaving the container entirely
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDropIndicator(null)
+    }
+  }
+
+  const handleDrop = async (e: any, targetTemplate: PostingTemplateListItem) => {
+    e.preventDefault()
+    
+    if (!draggedTemplate || !selectedCompany || draggedTemplate.id === targetTemplate.id || !dropIndicator) {
+      handleDragEnd()
+      return
+    }
+
+    const sortedTemplates = templates.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+    const draggedIndex = sortedTemplates.findIndex((t: any) => t.id === draggedTemplate.id)
+    const targetIndex = sortedTemplates.findIndex((t: any) => t.id === targetTemplate.id)
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+      handleDragEnd()
+      return
+    }
+
+    // Calculate the insertion point based on drop indicator
+    let insertIndex = targetIndex
+    if (dropIndicator.position === 'after') {
+      insertIndex = targetIndex + 1
+    }
+    
+    // Adjust for removal of dragged item
+    if (draggedIndex < insertIndex) {
+      insertIndex -= 1
+    }
+
+    // Create reordered list
+    const reorderedTemplates = Array.from(sortedTemplates)
+    const [movedTemplate] = reorderedTemplates.splice(draggedIndex, 1)
+    reorderedTemplates.splice(insertIndex, 0, movedTemplate)
+
+    // Update local state immediately for smooth UX
+    setTemplates(reorderedTemplates)
+    handleDragEnd()
+
+    try {
+      // Create the new order array with sort_order values
+      const templateOrders = reorderedTemplates.map((template: any, index: number) => ({
+        id: template.id,
+        sort_order: index + 1
+      }))
+
+      await postingTemplateApi.reorder(selectedCompany.id, templateOrders)
+      showMessage('Ordning uppdaterad', 'success')
+    } catch (error: any) {
+      // Revert the local change if API call fails
+      setTemplates(templates)
+      showMessage('Kunde inte uppdatera ordning', 'error')
+    }
+  }
+
+
 
   if (!selectedCompany && !loading) {
     return (
@@ -1125,6 +1324,113 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Posting Templates Section */}
+      <div className="card mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Konteringsmallar</h2>
+          <button
+            onClick={handleCreateTemplate}
+            disabled={loading}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Skapa mall
+          </button>
+        </div>
+        
+
+        {templates.length > 0 ? (
+          <div className="space-y-2">
+            {templates
+              .sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+              .map((template: any) => (
+                <div key={template.id} className="relative">
+                  {/* Drop indicator line BEFORE this template */}
+                  {dropIndicator?.templateId === template.id && dropIndicator?.position === 'before' && (
+                    <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
+                  )}
+                  
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, template)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, template)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, template)}
+                    className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-200 cursor-move relative ${
+                      draggedTemplate?.id === template.id 
+                        ? 'bg-blue-50 border-blue-300 shadow-lg opacity-50' 
+                        : 'bg-white hover:bg-gray-50 hover:shadow-sm border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">{template.name}</h3>
+                        <p className="text-sm text-gray-500">{template.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditTemplate(template)}
+                        className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                        title="Redigera mall (dra handtaget för att ändra ordning)"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!selectedCompany || !confirm(`Är du säker på att du vill radera mallen "${template.name}"?`)) return
+
+                          try {
+                            await postingTemplateApi.delete(template.id)
+                            setTemplates((prev: any) => prev.filter((t: any) => t.id !== template.id))
+                            showMessage('Mall raderad', 'success')
+                          } catch (error: any) {
+                            showMessage('Kunde inte radera mall', 'error')
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-800 p-1 rounded"
+                        title="Radera mall"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Drop indicator line AFTER this template */}
+                  {dropIndicator?.templateId === template.id && dropIndicator?.position === 'after' && (
+                    <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
+                  )}
+                </div>
+              ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p className="mb-4">Inga konteringsmallar skapade ännu.</p>
+            <button
+              onClick={handleCreateTemplate}
+              className="btn btn-primary"
+            >
+              Skapa din första mall
+            </button>
+          </div>
+        )}
+
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-blue-800">
+            <strong>Tips:</strong> Skapa mallar för återkommande transaktioner som försäljning, inköp, eller lönutbetalningar.
+            Använd formler som {'{amount * 0.25}'} för att automatiska beräkningar.
+          </p>
+        </div>
+      </div>
+
       {/* Import Summary Modal */}
       {showImportSummary && importSummary && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1200,6 +1506,186 @@ export default function SettingsPage() {
               >
                 Stäng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Modal */}
+      {showCreateTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingTemplate ? 'Redigera mall' : 'Skapa ny mall'}
+                </h3>
+                <button
+                  onClick={() => setShowCreateTemplate(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Namn *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Inköp med 25% moms"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Beskrivning *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.description}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Försäljning med 25% moms"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Standard verifikationsserie
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.default_series || ''}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, default_series: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. A"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Standard verifikationstext
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.default_journal_text || ''}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, default_journal_text: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Försäljning"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-md font-medium text-gray-900">Konteringsrader</h4>
+                  <button
+                    onClick={addTemplateLine}
+                    className="btn btn-secondary inline-flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Lägg till rad
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {templateForm.template_lines.map((line, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="font-medium text-gray-700">Rad {index + 1}</h5>
+                        {templateForm.template_lines.length > 1 && (
+                          <button
+                            onClick={() => removeTemplateLine(index)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Konto *
+                          </label>
+                          <select
+                            value={line.account_id}
+                            onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value={0}>Välj konto...</option>
+                            {allAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.account_number} - {account.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Formel *
+                          </label>
+                          <input
+                            type="text"
+                            value={line.formula}
+                            onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="t.ex. {belopp} * 0.25"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Beskrivning
+                          </label>
+                          <input
+                            type="text"
+                            value={line.description || ''}
+                            onChange={(e) => updateTemplateLine(index, 'description', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-800">
+                    <strong>Formel-tips:</strong> Använd <code>{'{belopp}'}</code> som variabel i formler. Exempel: <code>{'{belopp} * 0.25'}</code> för 25% moms, <code>{'{belopp} * -1'}</code> för negativt belopp, <code>{'100'}</code> för fast belopp.
+                  </p>
+                  <p className="text-sm text-blue-800 mt-2">
+                    Positiva värden bokförs som <strong>debet</strong>, 
+                    negativa värden som <strong>kredit</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCreateTemplate(false)}
+                  className="btn btn-secondary"
+                  disabled={loading}
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={loading}
+                  className="btn btn-primary"
+                >
+                  {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

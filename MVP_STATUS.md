@@ -11,11 +11,14 @@
   - Account (BAS kontoplan support)
   - Verification (verifikationer)
   - TransactionLine (debit/credit entries)
+  - PostingTemplate (konteringsmallar) with formula support
+  - PostingTemplateLine (reusable transaction templates)
 
 - **API Endpoints**
   - `/api/companies/` - CRUD for companies
   - `/api/accounts/` - CRUD for accounts, balance queries
   - `/api/verifications/` - CRUD for verifications with automatic balance updates
+  - `/api/posting-templates/` - CRUD for posting templates with drag-and-drop reordering
   - `/api/reports/balance-sheet` - Balance sheet generation
   - `/api/reports/income-statement` - Income statement
   - `/api/reports/trial-balance` - Trial balance (råbalans)
@@ -82,6 +85,8 @@
 ✅ Create and manage companies
 ✅ Import BAS kontoplan
 ✅ Create verifications (via API)
+✅ Posting Templates (konteringsmallar) with drag-and-drop UI
+✅ Formula-based template lines with {belopp} variable
 ✅ Automatic debit/credit balancing
 ✅ Account balance tracking
 ✅ Basic reports (balance sheet, income statement)

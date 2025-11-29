@@ -1,5 +1,6 @@
 from app.models.account import Account
 from app.models.verification import Verification, TransactionLine
+from app.models.posting_template import PostingTemplate, PostingTemplateLine
 from app.models.company import Company
 from app.models.customer import Customer, Supplier
 from app.models.invoice import (
@@ -16,6 +17,8 @@ __all__ = [
     "Account",
     "Verification",
     "TransactionLine",
+    "PostingTemplate",
+    "PostingTemplateLine",
     "Company",
     "Customer",
     "Supplier",
