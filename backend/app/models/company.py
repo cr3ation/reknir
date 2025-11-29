@@ -50,6 +50,9 @@ class Company(Base):
         nullable=False
     )
 
+    # Logo
+    logo_filename = Column(String, nullable=True)  # Filename of uploaded logo
+
     # Relationships
     accounts = relationship("Account", back_populates="company", cascade="all, delete-orphan")
     verifications = relationship("Verification", back_populates="company", cascade="all, delete-orphan")
@@ -60,3 +63,22 @@ class Company(Base):
 
     def __repr__(self):
         return f"<Company {self.name} ({self.org_number})>"
+    
+    @property
+    def vat_number(self) -> str:
+        """
+        Calculate Swedish VAT number from organization number.
+        Swedish VAT numbers follow the format: SE + 10-digit org_number (without dash) + 01
+        Example: 556644-4354 becomes SE5566444354001
+        """
+        if not self.org_number:
+            return ""
+        
+        # Remove any dashes and spaces from org_number
+        clean_org_number = self.org_number.replace('-', '').replace(' ', '')
+        
+        # Swedish VAT number format: SE + org_number (10 digits) + 01
+        if len(clean_org_number) == 10 and clean_org_number.isdigit():
+            return f"SE{clean_org_number}01"
+        
+        return ""

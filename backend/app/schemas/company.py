@@ -17,6 +17,7 @@ class CompanyBase(BaseModel):
     fiscal_year_end: date
     accounting_basis: AccountingBasis = AccountingBasis.ACCRUAL
     vat_reporting_period: VATReportingPeriod = VATReportingPeriod.QUARTERLY
+    logo_filename: Optional[str] = None
 
 
 class CompanyCreate(CompanyBase):
@@ -36,11 +37,13 @@ class CompanyUpdate(BaseModel):
     fiscal_year_end: Optional[date] = None
     accounting_basis: Optional[AccountingBasis] = None
     vat_reporting_period: Optional[VATReportingPeriod] = None
+    logo_filename: Optional[str] = None
 
 
 class CompanyResponse(CompanyBase):
     """Schema for company response"""
     id: int
+    vat_number: str = Field(..., description="Calculated Swedish VAT number (SE + org_number + 01)")
 
     class Config:
         from_attributes = True

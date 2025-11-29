@@ -45,6 +45,15 @@ export const companyApi = {
     api.post<{ message: string; default_accounts_configured: number }>(
       `/api/companies/${id}/initialize-defaults`
     ),
+  uploadLogo: (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<Company>(`/api/companies/${id}/logo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  getLogo: (id: number) => `${API_BASE_URL}/api/companies/${id}/logo`,
+  deleteLogo: (id: number) => api.delete<Company>(`/api/companies/${id}/logo`),
 }
 
 // Fiscal Years

@@ -38,6 +38,7 @@ services:
       - ./database:/database
       - ./receipts:/app/receipts
       - ./invoices:/app/invoices
+      - ./uploads:/app/uploads
       - /app/.venv  # Prevent overwriting venv
     restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

@@ -26,6 +26,7 @@ export interface Company {
   id: number
   name: string
   org_number: string
+  vat_number: string
   address?: string
   postal_code?: string
   city?: string
@@ -35,6 +36,7 @@ export interface Company {
   fiscal_year_end: string
   accounting_basis: AccountingBasis
   vat_reporting_period: VATReportingPeriod
+  logo_filename?: string
 }
 
 export interface FiscalYear {
