@@ -425,8 +425,6 @@ export default function SettingsPage() {
       template_lines: [{
         account_id: 0,
         formula: '{belopp}',
-        cost_center: '',
-        project: '',
         description: '',
         sort_order: 0
       }]
@@ -490,8 +488,6 @@ export default function SettingsPage() {
       template_lines: [...prev.template_lines, {
         account_id: 0,
         formula: '{belopp}',
-        cost_center: '',
-        project: '',
         description: '',
         sort_order: prev.template_lines.length
       }]
@@ -1526,29 +1522,8 @@ export default function SettingsPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Kostnadsställe
-                          </label>
-                          <input
-                            type="text"
-                            value={line.cost_center || ''}
-                            onChange={(e) => updateTemplateLine(index, 'cost_center', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Projekt
-                          </label>
-                          <input
-                            type="text"
-                            value={line.project || ''}
-                            onChange={(e) => updateTemplateLine(index, 'project', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 gap-3">
+
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Beskrivning

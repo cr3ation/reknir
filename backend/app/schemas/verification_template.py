@@ -9,8 +9,6 @@ class VerificationTemplateLineBase(BaseModel):
     """Base verification template line schema"""
     account_id: int = Field(..., description="Account ID for this posting line")
     formula: str = Field(..., description="Formula for calculating the amount (e.g., '{belopp} * 0.25')")
-    cost_center: Optional[str] = Field(None, max_length=50, description="Optional cost center")
-    project: Optional[str] = Field(None, max_length=50, description="Optional project")
     description: Optional[str] = Field(None, max_length=255, description="Optional line description")
     sort_order: int = Field(0, description="Sort order for line ordering")
 
@@ -46,8 +44,6 @@ class VerificationTemplateLineUpdate(BaseModel):
     """Schema for updating a verification template line"""
     account_id: Optional[int] = None
     formula: Optional[str] = None
-    cost_center: Optional[str] = Field(None, max_length=50)
-    project: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = Field(None, max_length=255)
     sort_order: Optional[int] = None
 
@@ -141,8 +137,6 @@ class TemplateExecutionLine(BaseModel):
     debit: Decimal
     credit: Decimal
     description: Optional[str]
-    cost_center: Optional[str]
-    project: Optional[str]
 
 
 class TemplateExecutionResult(BaseModel):

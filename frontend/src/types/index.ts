@@ -104,8 +104,6 @@ export interface VerificationTemplateLine {
   template_id?: number
   account_id: number
   formula: string
-  cost_center?: string
-  project?: string
   description?: string
   sort_order: number
 }
@@ -143,8 +141,6 @@ export interface TemplateExecutionLine {
   debit: number
   credit: number
   description?: string
-  cost_center?: string
-  project?: string
 }
 
 export interface TemplateExecutionResult {

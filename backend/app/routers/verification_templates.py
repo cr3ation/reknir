@@ -79,8 +79,6 @@ def create_verification_template(
             template_id=db_template.id,
             account_id=line.account_id,
             formula=line.formula,
-            cost_center=line.cost_center,
-            project=line.project,
             description=line.description,
             sort_order=line.sort_order if line.sort_order > 0 else i
         )
@@ -231,8 +229,6 @@ def update_verification_template(
                 template_id=template_id,
                 account_id=line.account_id,
                 formula=line.formula,
-                cost_center=line.cost_center,
-                project=line.project,
                 description=line.description,
                 sort_order=line.sort_order if line.sort_order > 0 else i
             )
@@ -310,9 +306,7 @@ def execute_verification_template(
                 account_id=line_data['account_id'],
                 debit=debit,
                 credit=credit,
-                description=line_data['description'],
-                cost_center=line_data['cost_center'],
-                project=line_data['project']
+                description=line_data['description']
             )
             posting_lines.append(posting_line)
             

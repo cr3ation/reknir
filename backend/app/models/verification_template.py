@@ -54,9 +54,7 @@ class VerificationTemplate(Base):
                 "account_id": line.account_id,
                 "debit": debit,
                 "credit": credit,
-                "description": line.description,
-                "cost_center": line.cost_center,
-                "project": line.project
+                "description": line.description
             }
             posting_lines.append(posting_line)
         
@@ -76,10 +74,6 @@ class VerificationTemplateLine(Base):
 
     # Formula for amount calculation
     formula = Column(String(500), nullable=False)  # e.g., "{belopp} * 0.25", "-{belopp}"
-
-    # Optional dimensions
-    cost_center = Column(String(50), nullable=True)  # Kostnadställe
-    project = Column(String(50), nullable=True)  # Projekt
     
     # Optional line description (overrides template description)
     description = Column(String(255), nullable=True)

@@ -41,8 +41,6 @@ def upgrade() -> None:
         sa.Column('template_id', sa.Integer(), nullable=False),
         sa.Column('account_id', sa.Integer(), nullable=False),
         sa.Column('formula', sa.String(length=500), nullable=False),
-        sa.Column('cost_center', sa.String(length=50), nullable=True),
-        sa.Column('project', sa.String(length=50), nullable=True),
         sa.Column('description', sa.String(length=255), nullable=True),
         sa.Column('sort_order', sa.Integer(), nullable=False, server_default='0'),
         sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
