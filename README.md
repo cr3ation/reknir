@@ -7,6 +7,7 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 - ✅ Swedish BAS 2024 kontoplan
 - ✅ Double-entry bookkeeping (verifikationer)
 - ✅ Transaction management with audit trail
+- ✅ Posting Templates (konteringsmallar) with drag-and-drop reordering
 - ✅ Balance sheet and income statement
 - ✅ SIE4 export for årsredovisning
 - ✅ PostgreSQL with automatic backups
@@ -41,8 +42,8 @@ docker compose exec backend alembic upgrade head
 # Frontend: http://localhost:5173
 # API docs: http://localhost:8000/docs
 
-# That's it! BAS kontoplan and konteringsmallar are imported automatically 
-# when you create a company via the web interface.
+# That's it! BAS kontoplan is imported automatically when you create a company.
+# Create posting templates (konteringsmallar) in Settings to speed up data entry.
 ```
 
 ### Development Setup
@@ -97,7 +98,7 @@ reknir/
 │   ├── alembic/          # Database migrations
 │   └── requirements.txt
 ├── database/
-│   └── seeds/            # Initial data (BAS kontoplan, posting templates)
+│   └── seeds/            # Initial data (BAS kontoplan)
 ├── docker-compose.yml
 └── README.md
 ```
