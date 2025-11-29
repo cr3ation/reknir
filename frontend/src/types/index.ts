@@ -35,6 +35,7 @@ export interface Company {
   fiscal_year_end: string
   accounting_basis: AccountingBasis
   vat_reporting_period: VATReportingPeriod
+  logo_filename?: string
 }
 
 export interface FiscalYear {

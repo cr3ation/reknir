@@ -50,6 +50,9 @@ class Company(Base):
         nullable=False
     )
 
+    # Logo
+    logo_filename = Column(String, nullable=True)  # Filename of uploaded logo
+
     # Relationships
     accounts = relationship("Account", back_populates="company", cascade="all, delete-orphan")
     verifications = relationship("Verification", back_populates="company", cascade="all, delete-orphan")

@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
 import json
 import os
+import uuid
+import shutil
 from app.database import get_db
 from app.models.company import Company
 from app.models.account import Account
@@ -247,3 +250,132 @@ def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
         "message": f"Successfully initialized {defaults_count} default account mappings",
         "default_accounts_configured": defaults_count
     }
+
+
+@router.post("/{company_id}/logo", response_model=CompanyResponse)
+async def upload_company_logo(
+    company_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload a company logo (PNG or JPG only)"""
+    # Check if company exists
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company {company_id} not found"
+        )
+
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image"
+        )
+    
+    allowed_types = ['image/png', 'image/jpeg', 'image/jpg']
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PNG and JPG files are allowed"
+        )
+
+    # Validate file size (5MB max)
+    file_size = 0
+    content = await file.read()
+    file_size = len(content)
+    if file_size > 5 * 1024 * 1024:  # 5MB
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size must be less than 5MB"
+        )
+
+    # Create uploads directory if it doesn't exist
+    upload_dir = "/app/uploads/logos"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Generate unique filename
+    file_extension = file.filename.split('.')[-1].lower()
+    unique_filename = f"{company_id}_{uuid.uuid4().hex}.{file_extension}"
+    file_path = os.path.join(upload_dir, unique_filename)
+
+    # Remove old logo file if exists
+    if company.logo_filename:
+        old_file_path = os.path.join(upload_dir, company.logo_filename)
+        if os.path.exists(old_file_path):
+            os.remove(old_file_path)
+
+    # Save new file
+    with open(file_path, "wb") as buffer:
+        buffer.write(content)
+
+    # Update company record
+    company.logo_filename = unique_filename
+    db.commit()
+    db.refresh(company)
+
+    return company
+
+
+@router.get("/{company_id}/logo")
+async def get_company_logo(company_id: int, db: Session = Depends(get_db)):
+    """Download company logo"""
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company {company_id} not found"
+        )
+
+    if not company.logo_filename:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No logo found for this company"
+        )
+
+    file_path = f"/app/uploads/logos/{company.logo_filename}"
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Logo file not found on disk"
+        )
+
+    # Determine media type from file extension
+    file_extension = company.logo_filename.split('.')[-1].lower()
+    media_type = "image/png" if file_extension == "png" else "image/jpeg"
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=f"company_{company_id}_logo.{file_extension}"
+    )
+
+
+@router.delete("/{company_id}/logo", response_model=CompanyResponse)
+async def delete_company_logo(company_id: int, db: Session = Depends(get_db)):
+    """Delete company logo"""
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company {company_id} not found"
+        )
+
+    if not company.logo_filename:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No logo found for this company"
+        )
+
+    # Remove file from disk
+    file_path = f"/app/uploads/logos/{company.logo_filename}"
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    # Clear logo_filename from database
+    company.logo_filename = None
+    db.commit()
+    db.refresh(company)
+
+    return company

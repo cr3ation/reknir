@@ -21,6 +21,10 @@
     @apply bg-gray-200 text-gray-900 hover:bg-gray-300;
   }
 
+  .btn-outline-danger {
+    @apply border border-red-300 text-red-700 hover:bg-red-50;
+  }
+
   .card {
     @apply bg-white rounded-lg shadow p-6;
   }

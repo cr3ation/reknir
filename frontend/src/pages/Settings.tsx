@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
 import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
@@ -42,6 +42,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'company' | 'accounts' | 'fiscal' | 'templates' | 'import'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [importSummary, setImportSummary] = useState<{
     accounts_created: number
     accounts_updated: number
@@ -116,6 +117,59 @@ export default function SettingsPage() {
     setMessage(msg)
     setMessageType(type)
     setTimeout(() => setMessage(''), 5000)
+  }
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedCompany || !event.target.files || event.target.files.length === 0) return
+
+    const file = event.target.files[0]
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showMessage('Filen måste vara en bild', 'error')
+      return
+    }
+    
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      showMessage('Endast PNG och JPG filer är tillåtna', 'error')
+      return
+    }
+    
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      showMessage('Filstorleken får inte överstiga 5MB', 'error')
+      return
+    }
+
+    setUploadingLogo(true)
+    try {
+      const response = await companyApi.uploadLogo(selectedCompany.id, file)
+      setSelectedCompany(response.data)
+      showMessage('Logotyp uppladdad', 'success')
+      
+      // Clear the input so the same file can be selected again if needed
+      event.target.value = ''
+    } catch (error: any) {
+      console.error('Logo upload failed:', error)
+      showMessage(error.response?.data?.detail || 'Uppladdning misslyckades', 'error')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleLogoDelete = async () => {
+    if (!selectedCompany || !selectedCompany.logo_filename) return
+    
+    if (!confirm('Är du säker på att du vill ta bort logotypen?')) return
+
+    try {
+      const response = await companyApi.deleteLogo(selectedCompany.id)
+      setSelectedCompany(response.data)
+      showMessage('Logotyp borttagen', 'success')
+    } catch (error: any) {
+      console.error('Logo delete failed:', error)
+      showMessage(error.response?.data?.detail || 'Borttagning misslyckades', 'error')
+    }
   }
 
   const startEditCompany = () => {
@@ -1085,6 +1139,73 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+          {/* Company Logo Section */}
+          {selectedCompany && (
+            <div className="card mb-6">
+              <h2 className="text-xl font-semibold mb-4">Företagslogotyp</h2>
+              <div className="flex items-start space-x-6">
+                {selectedCompany.logo_filename ? (
+                  <div className="flex-shrink-0">
+                    <div className="relative">
+                      <img
+                        src={companyApi.getLogo(selectedCompany.id)}
+                        alt="Företagslogotyp"
+                        className="w-40 h-40 object-contain border-2 border-gray-300 rounded-lg bg-white shadow-sm"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                        }}
+                      />
+                      <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                        ✓
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0">
+                    <div className="w-40 h-40 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50">
+                      <Image className="w-12 h-12 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500 text-center">Ingen logotyp<br/>uppladdad</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex flex-col space-y-3">
+                    <label className="btn btn-primary cursor-pointer inline-flex items-center w-fit">
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingLogo ? 'Laddar upp...' : (selectedCompany.logo_filename ? 'Byt logotyp' : 'Ladda upp logotyp')}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg"
+                        onChange={handleLogoUpload}
+                        disabled={uploadingLogo}
+                        className="hidden"
+                      />
+                    </label>
+                    {selectedCompany.logo_filename && (
+                      <button
+                        onClick={handleLogoDelete}
+                        disabled={uploadingLogo}
+                        className="btn btn-outline-danger w-fit inline-flex items-center"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Ta bort logotyp
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-sm text-gray-600 mb-1">
+                      Rekommenderad storlek: 200x200 pixlar eller större
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Filformat: PNG eller JPG, max 5MB
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
