@@ -1612,38 +1612,38 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
-                    <table className="min-w-full bg-white">
-                      <thead className="bg-gray-50 border-b border-gray-200">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border border-gray-200">
+                      <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 w-12">
                             #
                           </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
                             Konto *
                           </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
                             Formel *
                           </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 hidden sm:table-cell">
                             Beskrivning
                           </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 w-16">
                             Åtgärd
                           </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {templateForm.template_lines.map((line, index) => (
-                          <tr key={index} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-3 py-3 text-sm font-medium text-gray-700 bg-gray-25">
+                          <tr key={index}>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-700">
                               {index + 1}
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-4 py-2">
                               <select
                                 value={line.account_id}
                                 onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                               >
                                 <option value={0}>Välj konto...</option>
                                 {allAccounts.map((account) => (
@@ -1653,29 +1653,29 @@ export default function SettingsPage() {
                                 ))}
                               </select>
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-4 py-2">
                               <input
                                 type="text"
                                 value={line.formula}
                                 onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white font-mono"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
                                 placeholder="{belopp}"
                               />
                             </td>
-                            <td className="px-3 py-3 hidden sm:table-cell">
+                            <td className="px-4 py-2 hidden sm:table-cell">
                               <input
                                 type="text"
                                 value={line.description || ''}
                                 onChange={(e) => updateTemplateLine(index, 'description', e.target.value)}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                                 placeholder="Beskrivning..."
                               />
                             </td>
-                            <td className="px-3 py-3 text-center">
+                            <td className="px-4 py-2 text-center">
                               {templateForm.template_lines.length > 1 && (
                                 <button
                                   onClick={() => removeTemplateLine(index)}
-                                  className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition-colors"
+                                  className="text-red-600 hover:text-red-800"
                                   title="Ta bort rad"
                                 >
                                   <Trash2 className="w-4 h-4" />
