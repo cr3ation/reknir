@@ -32,14 +32,17 @@ git clone <repo-url>
 cd reknir
 
 # Start all services
-docker-compose up -d
+docker compose up -d
 
-# Initialize database with BAS kontoplan
-docker-compose exec backend python -m app.cli seed-bas
+# Run database migrations to create tables
+docker compose exec backend alembic upgrade head
 
-# Access the application
+# Access the application and create your first company
 # Frontend: http://localhost:5173
 # API docs: http://localhost:8000/docs
+
+# That's it! BAS kontoplan and konteringsmallar are imported automatically 
+# when you create a company via the web interface.
 ```
 
 ### Development Setup
@@ -94,7 +97,7 @@ reknir/
 │   ├── alembic/          # Database migrations
 │   └── requirements.txt
 ├── database/
-│   └── seeds/            # Initial data (BAS kontoplan)
+│   └── seeds/            # Initial data (BAS kontoplan, posting templates)
 ├── docker-compose.yml
 └── README.md
 ```

@@ -148,6 +148,79 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/{company_id}/seed-templates", status_code=status.HTTP_200_OK)
+def seed_posting_templates(company_id: int, db: Session = Depends(get_db)):
+    """Seed Swedish posting templates for a company"""
+    from app.cli import load_posting_templates
+    from app.models.posting_template import PostingTemplate, PostingTemplateLine
+    
+    # Check if company exists
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company {company_id} not found"
+        )
+
+    # Check if templates already exist
+    existing_count = db.query(PostingTemplate).filter(PostingTemplate.company_id == company_id).count()
+    if existing_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Company already has {existing_count} posting templates. Delete them first if you want to re-seed."
+        )
+
+    try:
+        templates_data = load_posting_templates()
+        created_templates = []
+        
+        for template_data in templates_data:
+            # Create template
+            template = PostingTemplate(
+                company_id=company_id,
+                name=template_data['name'],
+                description=template_data['description'],
+                default_series=template_data['default_series'],
+                default_journal_text=template_data['default_journal_text']
+            )
+            
+            db.add(template)
+            db.flush()  # Get template ID
+            
+            # Create template lines
+            for line_data in template_data['lines']:
+                account = db.query(Account).filter(
+                    Account.company_id == company_id,
+                    Account.account_number == line_data['account_number']
+                ).first()
+                
+                if account:  # Only create line if account exists
+                    line = PostingTemplateLine(
+                        template_id=template.id,
+                        account_id=account.id,
+                        formula=line_data['formula'],
+                        description=line_data['description'],
+                        sort_order=line_data['sort_order']
+                    )
+                    db.add(line)
+            
+            created_templates.append(template)
+        
+        db.commit()
+        
+        return {
+            "message": f"Successfully seeded {len(created_templates)} posting templates",
+            "templates_created": len(created_templates)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to seed posting templates: {str(e)}"
+        )
+
+
 @router.post("/{company_id}/initialize-defaults", status_code=status.HTTP_200_OK)
 def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
     """

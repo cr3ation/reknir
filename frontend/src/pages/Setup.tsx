@@ -44,6 +44,14 @@ const Setup: React.FC = () => {
         // Continue anyway - user can seed later
       }
 
+      // Seed posting templates
+      try {
+        await api.post(`/api/companies/${companyId}/seed-templates`);
+      } catch (err) {
+        console.error('Failed to seed posting templates:', err);
+        // Continue anyway - user can seed later
+      }
+
       setStep('complete');
 
       // Redirect to dashboard after 2 seconds (force page reload to update App state)
@@ -192,6 +200,7 @@ const Setup: React.FC = () => {
             <ul className="text-sm text-blue-800 space-y-1">
               <li>✓ Ditt företag skapas i systemet</li>
               <li>✓ BAS 2024 kontoplan importeras automatiskt (43 konton)</li>
+              <li>✓ Konteringsmallar importeras automatiskt (6 mallar)</li>
               <li>✓ Du omdirigeras till instrumentpanelen</li>
             </ul>
           </div>

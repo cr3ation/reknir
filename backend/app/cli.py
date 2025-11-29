@@ -105,6 +105,41 @@ def load_posting_templates():
         return json.load(f)
 
 
+def seed_all(company_id: int):
+    """
+    Seed both BAS accounts and posting templates for a company
+
+    Args:
+        company_id: Company ID to seed for
+    """
+    print(f"Complete setup for company ID {company_id}")
+    print("=" * 50)
+    
+    # Seed BAS accounts first
+    print("1. Seeding BAS kontoplan...")
+    bas_success = seed_bas_accounts(company_id)
+    
+    if not bas_success:
+        print("ERROR: BAS seeding failed, aborting complete setup")
+        return False
+    
+    print("SUCCESS: BAS kontoplan seeded successfully!")
+    print()
+    
+    # Seed posting templates
+    print("2. Seeding posting templates...")
+    template_success = seed_posting_templates(company_id)
+    
+    if not template_success:
+        print("ERROR: Template seeding failed")
+        return False
+    
+    print("SUCCESS: Posting templates seeded successfully!")
+    print()
+    print("Complete setup finished! Your company is ready to use.")
+    return True
+
+
 def seed_posting_templates(company_id: int):
     """
     Seed Swedish posting templates for a company
@@ -208,10 +243,12 @@ def main():
         print("\nCommands:")
         print("  seed-bas [company_id]       - Import BAS 2024 kontoplan for a company")
         print("  seed-templates [company_id] - Import Swedish posting templates for a company")
+        print("  seed-all [company_id]       - Import both BAS and templates (complete setup)")
         print("                                Default company_id: 1")
         print("\nExamples:")
         print("  python -m app.cli seed-bas")
         print("  python -m app.cli seed-templates")
+        print("  python -m app.cli seed-all          # Complete setup")
         print("  python -m app.cli seed-bas 2")
         print("  python -m app.cli seed-templates 2")
         sys.exit(1)
@@ -236,6 +273,13 @@ def main():
         print()
 
         success = seed_posting_templates(company_id)
+        sys.exit(0 if success else 1)
+
+    elif command == "seed-all":
+        # Get company_id from args or default to 1
+        company_id = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+
+        success = seed_all(company_id)
         sys.exit(0 if success else 1)
 
     else:
