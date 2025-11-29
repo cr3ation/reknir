@@ -88,6 +88,25 @@ Visit http://localhost:5173 - you should now see your company and accounts in th
 
 You can also check the API documentation at http://localhost:8000/docs
 
+## Setting Up Posting Templates (Konteringsmallar)
+
+Posting Templates allow you to create reusable transaction templates for common business operations. This speeds up data entry significantly.
+
+### Template Formula System
+
+- Use `{belopp}` as the base amount variable
+- Formulas support basic math: `{belopp} * 0.25` for VAT calculation
+- Positive values = debit, negative values = credit
+- Each line has a sort_order for display consistency
+
+### Managing Templates via UI
+
+Visit http://localhost:5173/settings to:
+- Create new posting templates
+- Edit existing templates with drag-and-drop formula builders
+- Reorder templates by dragging (changes are saved automatically)
+- Delete unused templates
+
 ## Creating Your First Transaction (Verifikation)
 
 Here's an example of creating a simple transaction:
