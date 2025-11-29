@@ -419,7 +419,7 @@ export default function SettingsPage() {
       default_journal_text: '',
       template_lines: [{
         account_id: 0,
-        formula: '{belopp}',
+        formula: '{total}',
         description: '',
         sort_order: 0
       }]
@@ -482,7 +482,7 @@ export default function SettingsPage() {
       ...prev,
       template_lines: [...prev.template_lines, {
         account_id: 0,
-        formula: '{belopp}',
+        formula: '{total}',
         description: '',
         sort_order: prev.template_lines.length
       }]
@@ -1659,7 +1659,7 @@ export default function SettingsPage() {
                                 value={line.formula}
                                 onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
-                                placeholder="{belopp}"
+                                placeholder="{total}"
                               />
                             </td>
                             <td className="px-4 py-2 hidden sm:table-cell">
@@ -1691,7 +1691,7 @@ export default function SettingsPage() {
 
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                   <p className="text-sm text-blue-800">
-                    <strong>Formel-tips:</strong> Använd <code>{'{belopp}'}</code> som variabel i formler. Exempel: <code>{'{belopp} * 0.25'}</code> för 25% moms, <code>{'{belopp} * -1'}</code> för negativt belopp, <code>{'100'}</code> för fast belopp.
+                    <strong>Formel-tips:</strong> Använd <code>{'{total}'}</code> som variabel i formler. Exempel: <code>{'{total} * 0.25'}</code> för 25% moms, <code>{'{total} * -1'}</code> för negativt belopp, <code>{'100'}</code> för fast belopp.
                   </p>
                   <p className="text-sm text-blue-800 mt-2">
                     Positiva värden bokförs som <strong>debet</strong>, 

@@ -425,7 +425,7 @@ function CreateVerificationModal({
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
-                              placeholder="Belopp"
+                              placeholder="Total"
                               className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
                               id={`template-amount-${template.id}`}
                             />

@@ -86,7 +86,7 @@
 ✅ Import BAS kontoplan
 ✅ Create verifications (via API)
 ✅ Posting Templates (konteringsmallar) with drag-and-drop UI
-✅ Formula-based template lines with {belopp} variable
+✅ Formula-based template lines with {total} variable
 ✅ Automatic debit/credit balancing
 ✅ Account balance tracking
 ✅ Basic reports (balance sheet, income statement)

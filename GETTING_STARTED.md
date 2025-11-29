@@ -94,8 +94,8 @@ Posting Templates allow you to create reusable transaction templates for common 
 
 ### Template Formula System
 
-- Use `{belopp}` as the base amount variable
-- Formulas support basic math: `{belopp} * 0.25` for VAT calculation
+- Use `{total}` as the base amount variable
+- Formulas support basic math: `{total} * 0.25` for VAT calculation
 - Positive values = debit, negative values = credit
 - Each line has a sort_order for display consistency
 
