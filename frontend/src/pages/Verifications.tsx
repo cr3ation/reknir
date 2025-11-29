@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
-import { verificationApi, accountApi, verificationTemplateApi } from '@/services/api'
-import type { VerificationListItem, Account, Verification, VerificationTemplateListItem, TemplateExecutionResult } from '@/types'
+import { verificationApi, accountApi, postingTemplateApi } from '@/services/api'
+import type { VerificationListItem, Account, Verification, PostingTemplateListItem, TemplateExecutionResult } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
 
@@ -257,7 +257,7 @@ function CreateVerificationModal({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
-  const [templates, setTemplates] = useState<VerificationTemplateListItem[]>([])
+  const [templates, setTemplates] = useState<PostingTemplateListItem[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
 
   // Load templates when component mounts
@@ -270,7 +270,7 @@ function CreateVerificationModal({
   const loadTemplates = async () => {
     try {
       setTemplatesLoading(true)
-      const response = await verificationTemplateApi.list(companyId)
+      const response = await postingTemplateApi.list(companyId)
       setTemplates(response.data)
     } catch (error) {
       console.error('Failed to load templates:', error)
@@ -283,7 +283,7 @@ function CreateVerificationModal({
   const applyTemplate = async (templateId: number, amount: number) => {
     try {
       setLoading(true)
-      const executionResult = await verificationTemplateApi.execute(templateId, { amount })
+      const executionResult = await postingTemplateApi.execute(templateId, { amount })
       const result = executionResult.data
 
       // Apply template metadata

@@ -5,14 +5,14 @@ from typing import List, Optional
 from datetime import date
 from decimal import Decimal
 from app.database import get_db
-from app.models.verification_template import VerificationTemplate, VerificationTemplateLine
+from app.models.posting_template import PostingTemplate, PostingTemplateLine
 from app.models.account import Account
 from app.models.company import Company
-from app.schemas.verification_template import (
-    VerificationTemplateCreate,
-    VerificationTemplateUpdate,
-    VerificationTemplateResponse,
-    VerificationTemplateListItem,
+from app.schemas.posting_template import (
+    PostingTemplateCreate,
+    PostingTemplateUpdate,
+    PostingTemplateResponse,
+    PostingTemplateListItem,
     TemplateExecutionRequest,
     TemplateExecutionResult,
     TemplateExecutionLine
@@ -21,12 +21,12 @@ from app.schemas.verification_template import (
 router = APIRouter()
 
 
-@router.post("/", response_model=VerificationTemplateResponse, status_code=status.HTTP_201_CREATED)
-def create_verification_template(
-    template: VerificationTemplateCreate, 
+@router.post("/", response_model=PostingTemplateResponse, status_code=status.HTTP_201_CREATED)
+def create_posting_template(
+    template: PostingTemplateCreate, 
     db: Session = Depends(get_db)
 ):
-    """Create a new verification template"""
+    """Create a new posting template"""
     
     # Verify company exists
     company = db.query(Company).filter(Company.id == template.company_id).first()
@@ -37,9 +37,9 @@ def create_verification_template(
         )
     
     # Check if template name already exists for this company
-    existing = db.query(VerificationTemplate).filter(
-        VerificationTemplate.company_id == template.company_id,
-        VerificationTemplate.name == template.name
+    existing = db.query(PostingTemplate).filter(
+        PostingTemplate.company_id == template.company_id,
+        PostingTemplate.name == template.name
     ).first()
     if existing:
         raise HTTPException(
@@ -62,8 +62,8 @@ def create_verification_template(
             detail=f"Accounts not found: {list(missing_ids)}"
         )
     
-    # Create the verification template
-    db_template = VerificationTemplate(
+    # Create the posting template
+    db_template = PostingTemplate(
         company_id=template.company_id,
         name=template.name,
         description=template.description,
@@ -75,7 +75,7 @@ def create_verification_template(
     
     # Create template lines
     for i, line in enumerate(template.template_lines):
-        db_line = VerificationTemplateLine(
+        db_line = PostingTemplateLine(
             template_id=db_template.id,
             account_id=line.account_id,
             formula=line.formula,
@@ -90,14 +90,14 @@ def create_verification_template(
     return db_template
 
 
-@router.get("/", response_model=List[VerificationTemplateListItem])
-def list_verification_templates(
+@router.get("/", response_model=List[PostingTemplateListItem])
+def list_posting_templates(
     company_id: int = Query(..., description="Company ID"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     db: Session = Depends(get_db)
 ):
-    """List all verification templates for a company"""
+    """List all posting templates for a company"""
     
     # Verify company exists
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -109,23 +109,23 @@ def list_verification_templates(
     
     # Query templates with line count
     templates = db.query(
-        VerificationTemplate,
-        func.count(VerificationTemplateLine.id).label('line_count')
+        PostingTemplate,
+        func.count(PostingTemplateLine.id).label('line_count')
     ).outerjoin(
-        VerificationTemplateLine,
-        VerificationTemplate.id == VerificationTemplateLine.template_id
+        PostingTemplateLine,
+        PostingTemplate.id == PostingTemplateLine.template_id
     ).filter(
-        VerificationTemplate.company_id == company_id
+        PostingTemplate.company_id == company_id
     ).group_by(
-        VerificationTemplate.id
+        PostingTemplate.id
     ).order_by(
-        VerificationTemplate.name
+        PostingTemplate.name
     ).offset(skip).limit(limit).all()
     
     # Convert to list items
     result = []
     for template, line_count in templates:
-        item = VerificationTemplateListItem(
+        item = PostingTemplateListItem(
             id=template.id,
             name=template.name,
             description=template.description,
@@ -139,18 +139,18 @@ def list_verification_templates(
     return result
 
 
-@router.get("/{template_id}", response_model=VerificationTemplateResponse)
-def get_verification_template(template_id: int, db: Session = Depends(get_db)):
-    """Get a specific verification template with all its lines"""
+@router.get("/{template_id}", response_model=PostingTemplateResponse)
+def get_posting_template(template_id: int, db: Session = Depends(get_db)):
+    """Get a specific posting template with all its lines"""
     
-    template = db.query(VerificationTemplate).options(
-        joinedload(VerificationTemplate.template_lines).joinedload(VerificationTemplateLine.account)
-    ).filter(VerificationTemplate.id == template_id).first()
+    template = db.query(PostingTemplate).options(
+        joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account)
+    ).filter(PostingTemplate.id == template_id).first()
     
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Verification template with id {template_id} not found"
+            detail=f"Posting template with id {template_id} not found"
         )
     
     # Sort template lines by sort_order
@@ -159,31 +159,31 @@ def get_verification_template(template_id: int, db: Session = Depends(get_db)):
     return template
 
 
-@router.put("/{template_id}", response_model=VerificationTemplateResponse)
-def update_verification_template(
+@router.put("/{template_id}", response_model=PostingTemplateResponse)
+def update_posting_template(
     template_id: int,
-    template_update: VerificationTemplateUpdate,
+    template_update: PostingTemplateUpdate,
     db: Session = Depends(get_db)
 ):
-    """Update a verification template"""
+    """Update a posting template"""
     
     # Get existing template
-    db_template = db.query(VerificationTemplate).filter(
-        VerificationTemplate.id == template_id
+    db_template = db.query(PostingTemplate).filter(
+        PostingTemplate.id == template_id
     ).first()
     
     if not db_template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Verification template with id {template_id} not found"
+            detail=f"Posting template with id {template_id} not found"
         )
     
     # Check for name conflicts if name is being updated
     if template_update.name and template_update.name != db_template.name:
-        existing = db.query(VerificationTemplate).filter(
-            VerificationTemplate.company_id == db_template.company_id,
-            VerificationTemplate.name == template_update.name,
-            VerificationTemplate.id != template_id
+        existing = db.query(PostingTemplate).filter(
+            PostingTemplate.company_id == db_template.company_id,
+            PostingTemplate.name == template_update.name,
+            PostingTemplate.id != template_id
         ).first()
         if existing:
             raise HTTPException(
@@ -204,8 +204,8 @@ def update_verification_template(
     # Update template lines if provided
     if template_update.template_lines is not None:
         # Delete existing lines
-        db.query(VerificationTemplateLine).filter(
-            VerificationTemplateLine.template_id == template_id
+        db.query(PostingTemplateLine).filter(
+            PostingTemplateLine.template_id == template_id
         ).delete()
         
         # Verify all accounts exist
@@ -225,7 +225,7 @@ def update_verification_template(
         
         # Create new lines
         for i, line in enumerate(template_update.template_lines):
-            db_line = VerificationTemplateLine(
+            db_line = PostingTemplateLine(
                 template_id=template_id,
                 account_id=line.account_id,
                 formula=line.formula,
@@ -241,17 +241,17 @@ def update_verification_template(
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_verification_template(template_id: int, db: Session = Depends(get_db)):
-    """Delete a verification template"""
+def delete_posting_template(template_id: int, db: Session = Depends(get_db)):
+    """Delete a posting template"""
     
-    template = db.query(VerificationTemplate).filter(
-        VerificationTemplate.id == template_id
+    template = db.query(PostingTemplate).filter(
+        PostingTemplate.id == template_id
     ).first()
     
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Verification template with id {template_id} not found"
+            detail=f"Posting template with id {template_id} not found"
         )
     
     # Delete template (cascade will handle lines)
@@ -262,25 +262,25 @@ def delete_verification_template(template_id: int, db: Session = Depends(get_db)
 
 
 @router.post("/{template_id}/execute", response_model=TemplateExecutionResult)
-def execute_verification_template(
+def execute_posting_template(
     template_id: int,
     execution_request: TemplateExecutionRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Execute a verification template with a given amount
+    Execute a posting template with a given amount
     Returns the calculated posting lines without creating a verification
     """
     
     # Get template with lines
-    template = db.query(VerificationTemplate).options(
-        joinedload(VerificationTemplate.template_lines)
-    ).filter(VerificationTemplate.id == template_id).first()
+    template = db.query(PostingTemplate).options(
+        joinedload(PostingTemplate.template_lines)
+    ).filter(PostingTemplate.id == template_id).first()
     
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Verification template with id {template_id} not found"
+            detail=f"Posting template with id {template_id} not found"
         )
     
     if not template.template_lines:

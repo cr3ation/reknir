@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, verificationTemplateApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company, VerificationTemplateListItem, VerificationTemplate, VerificationTemplateLine } from '@/types'
+import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
 import { Plus, Trash2, Calendar, Building2, Edit2, Save, X, FileText, Copy } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
@@ -25,10 +25,10 @@ export default function SettingsPage() {
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
-  const [templates, setTemplates] = useState<VerificationTemplateListItem[]>([])
+  const [templates, setTemplates] = useState<PostingTemplateListItem[]>([])
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState<VerificationTemplateListItem | null>(null)
-  const [templateForm, setTemplateForm] = useState<VerificationTemplate>({
+  const [editingTemplate, setEditingTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [templateForm, setTemplateForm] = useState<PostingTemplate>({
     company_id: 0,
     name: '',
     description: '',
@@ -98,7 +98,7 @@ export default function SettingsPage() {
         defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
         accountApi.list(selectedCompany.id),
         fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        verificationTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
       ])
       setDefaultAccounts(defaultsRes.data)
       setAllAccounts(accountsRes.data)
@@ -432,11 +432,11 @@ export default function SettingsPage() {
     setShowCreateTemplate(true)
   }
 
-  const handleEditTemplate = async (template: VerificationTemplateListItem) => {
+  const handleEditTemplate = async (template: PostingTemplateListItem) => {
     if (!selectedCompany) return
 
     try {
-      const response = await verificationTemplateApi.get(template.id)
+      const response = await postingTemplateApi.get(template.id)
       setEditingTemplate(template)
       setTemplateForm(response.data)
       setShowCreateTemplate(true)
@@ -465,10 +465,10 @@ export default function SettingsPage() {
       setLoading(true)
 
       if (editingTemplate) {
-        await verificationTemplateApi.update(editingTemplate.id, templateForm)
+        await postingTemplateApi.update(editingTemplate.id, templateForm)
         showMessage('Mall uppdaterad', 'success')
       } else {
-        await verificationTemplateApi.create(templateForm)
+        await postingTemplateApi.create(templateForm)
         showMessage('Mall skapad', 'success')
       }
 
@@ -501,7 +501,7 @@ export default function SettingsPage() {
     }))
   }
 
-  const updateTemplateLine = (index: number, field: keyof VerificationTemplateLine, value: any) => {
+  const updateTemplateLine = (index: number, field: keyof PostingTemplateLine, value: any) => {
     setTemplateForm(prev => ({
       ...prev,
       template_lines: prev.template_lines.map((line, i) => 
@@ -1234,10 +1234,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Verification Templates Section */}
+      {/* Posting Templates Section */}
       <div className="card mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Verifikationsmallar</h2>
+          <h2 className="text-xl font-semibold">Konteringsmallar</h2>
           <button
             onClick={handleCreateTemplate}
             disabled={loading}
@@ -1276,7 +1276,7 @@ export default function SettingsPage() {
                       if (!selectedCompany || !confirm(`Är du säker på att du vill radera mallen "${template.name}"?`)) return
 
                       try {
-                        await verificationTemplateApi.delete(template.id)
+                        await postingTemplateApi.delete(template.id)
                         setTemplates(prev => prev.filter(t => t.id !== template.id))
                         showMessage('Mall raderad', 'success')
                       } catch (error: any) {
@@ -1294,7 +1294,7 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
-            <p className="mb-4">Inga verifikationsmallar skapade ännu.</p>
+            <p className="mb-4">Inga konteringsmallar skapade ännu.</p>
             <button
               onClick={handleCreateTemplate}
               className="btn btn-primary"

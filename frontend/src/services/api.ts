@@ -5,8 +5,8 @@ import type {
   Account,
   Verification,
   VerificationListItem,
-  VerificationTemplate,
-  VerificationTemplateListItem,
+  PostingTemplate,
+  PostingTemplateListItem,
   TemplateExecutionRequest,
   TemplateExecutionResult,
   BalanceSheet,
@@ -92,20 +92,20 @@ export const verificationApi = {
   delete: (id: number) => api.delete(`/api/verifications/${id}`),
 }
 
-// Verification Templates
-export const verificationTemplateApi = {
+// Posting Templates
+export const postingTemplateApi = {
   list: (companyId: number, params?: { skip?: number; limit?: number }) =>
-    api.get<VerificationTemplateListItem[]>('/api/verification-templates/', {
+    api.get<PostingTemplateListItem[]>('/api/posting-templates/', {
       params: { company_id: companyId, ...params },
     }),
-  get: (id: number) => api.get<VerificationTemplate>(`/api/verification-templates/${id}`),
-  create: (data: Omit<VerificationTemplate, 'id' | 'created_at' | 'updated_at'>) =>
-    api.post<VerificationTemplate>('/api/verification-templates/', data),
-  update: (id: number, data: Partial<VerificationTemplate>) =>
-    api.put<VerificationTemplate>(`/api/verification-templates/${id}`, data),
-  delete: (id: number) => api.delete(`/api/verification-templates/${id}`),
+  get: (id: number) => api.get<PostingTemplate>(`/api/posting-templates/${id}`),
+  create: (data: Omit<PostingTemplate, 'id' | 'created_at' | 'updated_at'>) =>
+    api.post<PostingTemplate>('/api/posting-templates/', data),
+  update: (id: number, data: Partial<PostingTemplate>) =>
+    api.put<PostingTemplate>(`/api/posting-templates/${id}`, data),
+  delete: (id: number) => api.delete(`/api/posting-templates/${id}`),
   execute: (id: number, request: TemplateExecutionRequest) =>
-    api.post<TemplateExecutionResult>(`/api/verification-templates/${id}/execute`, request),
+    api.post<TemplateExecutionResult>(`/api/posting-templates/${id}/execute`, request),
 }
 
 // Reports

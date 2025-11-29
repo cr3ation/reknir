@@ -5,7 +5,7 @@ from typing import List, Optional
 import re
 
 
-class VerificationTemplateLineBase(BaseModel):
+class PostingTemplateLineBase(BaseModel):
     """Base verification template line schema"""
     account_id: int = Field(..., description="Account ID for this posting line")
     formula: str = Field(..., description="Formula for calculating the amount (e.g., '{belopp} * 0.25')")
@@ -35,12 +35,12 @@ class VerificationTemplateLineBase(BaseModel):
         return v
 
 
-class VerificationTemplateLineCreate(VerificationTemplateLineBase):
+class PostingTemplateLineCreate(PostingTemplateLineBase):
     """Schema for creating a verification template line"""
     pass
 
 
-class VerificationTemplateLineUpdate(BaseModel):
+class PostingTemplateLineUpdate(BaseModel):
     """Schema for updating a verification template line"""
     account_id: Optional[int] = None
     formula: Optional[str] = None
@@ -52,11 +52,11 @@ class VerificationTemplateLineUpdate(BaseModel):
     def validate_formula(cls, v):
         """Validate formula if provided"""
         if v is not None:
-            return VerificationTemplateLineBase.validate_formula(v)
+            return PostingTemplateLineBase.validate_formula(v)
         return v
 
 
-class VerificationTemplateLineResponse(VerificationTemplateLineBase):
+class PostingTemplateLineResponse(PostingTemplateLineBase):
     """Schema for verification template line response"""
     id: int
     template_id: int
@@ -64,7 +64,7 @@ class VerificationTemplateLineResponse(VerificationTemplateLineBase):
     model_config = {"from_attributes": True}
 
 
-class VerificationTemplateBase(BaseModel):
+class PostingTemplateBase(BaseModel):
     """Base verification template schema"""
     name: str = Field(..., max_length=100, description="Template name (e.g., 'Inköp med 25% moms', 'Löner')")
     description: str = Field(..., max_length=255, description="Template description")
@@ -74,10 +74,10 @@ class VerificationTemplateBase(BaseModel):
 
 
 
-class VerificationTemplateCreate(VerificationTemplateBase):
+class PostingTemplateCreate(PostingTemplateBase):
     """Schema for creating a verification template"""
     company_id: int = Field(..., description="Company ID")
-    template_lines: List[VerificationTemplateLineCreate] = Field(..., description="Template posting lines")
+    template_lines: List[PostingTemplateLineCreate] = Field(..., description="Template posting lines")
 
     @field_validator('template_lines')
     @classmethod
@@ -88,29 +88,29 @@ class VerificationTemplateCreate(VerificationTemplateBase):
         return v
 
 
-class VerificationTemplateUpdate(BaseModel):
+class PostingTemplateUpdate(BaseModel):
     """Schema for updating a verification template"""
     name: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=255)
     default_series: Optional[str] = Field(None, max_length=10)
     default_journal_text: Optional[str] = None
-    template_lines: Optional[List[VerificationTemplateLineCreate]] = None
+    template_lines: Optional[List[PostingTemplateLineCreate]] = None
 
 
 
 
-class VerificationTemplateResponse(VerificationTemplateBase):
+class PostingTemplateResponse(PostingTemplateBase):
     """Schema for verification template response"""
     id: int
     company_id: int
     created_at: datetime
     updated_at: datetime
-    template_lines: List[VerificationTemplateLineResponse] = []
+    template_lines: List[PostingTemplateLineResponse] = []
     
     model_config = {"from_attributes": True}
 
 
-class VerificationTemplateListItem(BaseModel):
+class PostingTemplateListItem(BaseModel):
     """Schema for verification template list items (without template lines)"""
     id: int
     name: str

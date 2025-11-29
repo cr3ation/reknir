@@ -98,8 +98,8 @@ export interface VerificationListItem {
   locked: boolean
 }
 
-// Verification Templates
-export interface VerificationTemplateLine {
+// Posting Templates
+export interface PostingTemplateLine {
   id?: number
   template_id?: number
   account_id: number
@@ -108,7 +108,7 @@ export interface VerificationTemplateLine {
   sort_order: number
 }
 
-export interface VerificationTemplate {
+export interface PostingTemplate {
   id?: number
   company_id: number
   name: string
@@ -117,10 +117,10 @@ export interface VerificationTemplate {
   default_journal_text?: string
   created_at?: string
   updated_at?: string
-  template_lines: VerificationTemplateLine[]
+  template_lines: PostingTemplateLine[]
 }
 
-export interface VerificationTemplateListItem {
+export interface PostingTemplateListItem {
   id: number
   name: string
   description: string

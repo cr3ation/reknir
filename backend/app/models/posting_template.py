@@ -5,12 +5,12 @@ from app.database import Base
 import re
 
 
-class VerificationTemplate(Base):
+class PostingTemplate(Base):
     """
-    Verification Template (Verifikationsmall)
+    Posting Template (Bokföringsmall)
     A template for creating recurring journal entries with predefined posting logic
     """
-    __tablename__ = "verification_templates"
+    __tablename__ = "posting_templates"
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
@@ -26,15 +26,15 @@ class VerificationTemplate(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
-    company = relationship("Company", back_populates="verification_templates")
+    company = relationship("Company", back_populates="posting_templates")
     template_lines = relationship(
-        "VerificationTemplateLine",
+        "PostingTemplateLine",
         back_populates="template",
         cascade="all, delete-orphan"
     )
 
     def __repr__(self):
-        return f"<VerificationTemplate {self.code} - {self.description}>"
+        return f"<PostingTemplate {self.name} - {self.description}>"
 
     def evaluate_template(self, amount: float) -> list:
         """
@@ -61,15 +61,15 @@ class VerificationTemplate(Base):
         return posting_lines
 
 
-class VerificationTemplateLine(Base):
+class PostingTemplateLine(Base):
     """
-    Individual posting line in a verification template
+    Individual posting line in a posting template
     Contains account, optional dimensions, and a formula for amount calculation
     """
-    __tablename__ = "verification_template_lines"
+    __tablename__ = "posting_template_lines"
 
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("verification_templates.id"), nullable=False)
+    template_id = Column(Integer, ForeignKey("posting_templates.id"), nullable=False)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
 
     # Formula for amount calculation
@@ -82,11 +82,11 @@ class VerificationTemplateLine(Base):
     sort_order = Column(Integer, default=0, nullable=False)
 
     # Relationships
-    template = relationship("VerificationTemplate", back_populates="template_lines")
+    template = relationship("PostingTemplate", back_populates="template_lines")
     account = relationship("Account")
 
     def __repr__(self):
-        return f"<VerificationTemplateLine Account:{self.account_id} Formula:{self.formula}>"
+        return f"<PostingTemplateLine Account:{self.account_id} Formula:{self.formula}>"
 
     def evaluate_formula(self, amount: float) -> float:
         """

@@ -1,4 +1,4 @@
-"""add verification templates
+"""add posting templates
 
 Revision ID: 009
 Revises: 008
@@ -19,8 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create verification_templates table
-    op.create_table('verification_templates',
+    # Create posting_templates table
+    op.create_table('posting_templates',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('company_id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(length=100), nullable=False),
@@ -32,11 +32,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['company_id'], ['companies.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_verification_templates_id'), 'verification_templates', ['id'], unique=False)
-    op.create_index(op.f('ix_verification_templates_name'), 'verification_templates', ['name'], unique=False)
+    op.create_index(op.f('ix_posting_templates_id'), 'posting_templates', ['id'], unique=False)
+    op.create_index(op.f('ix_posting_templates_name'), 'posting_templates', ['name'], unique=False)
 
-    # Create verification_template_lines table
-    op.create_table('verification_template_lines',
+    # Create posting_template_lines table
+    op.create_table('posting_template_lines',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('template_id', sa.Integer(), nullable=False),
         sa.Column('account_id', sa.Integer(), nullable=False),
@@ -44,23 +44,23 @@ def upgrade() -> None:
         sa.Column('description', sa.String(length=255), nullable=True),
         sa.Column('sort_order', sa.Integer(), nullable=False, server_default='0'),
         sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
-        sa.ForeignKeyConstraint(['template_id'], ['verification_templates.id'], ),
+        sa.ForeignKeyConstraint(['template_id'], ['posting_templates.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_verification_template_lines_id'), 'verification_template_lines', ['id'], unique=False)
+    op.create_index(op.f('ix_posting_template_lines_id'), 'posting_template_lines', ['id'], unique=False)
 
-    # Add unique constraint on company_id + name for verification_templates
-    op.create_unique_constraint('uq_verification_templates_company_name', 'verification_templates', ['company_id', 'name'])
+    # Add unique constraint on company_id + name for posting_templates
+    op.create_unique_constraint('uq_posting_templates_company_name', 'posting_templates', ['company_id', 'name'])
 
 
 def downgrade() -> None:
     # Drop unique constraint
-    op.drop_constraint('uq_verification_templates_company_name', 'verification_templates', type_='unique')
+    op.drop_constraint('uq_posting_templates_company_name', 'posting_templates', type_='unique')
     
     # Drop indexes and tables
-    op.drop_index(op.f('ix_verification_template_lines_id'), table_name='verification_template_lines')
-    op.drop_table('verification_template_lines')
+    op.drop_index(op.f('ix_posting_template_lines_id'), table_name='posting_template_lines')
+    op.drop_table('posting_template_lines')
     
-    op.drop_index(op.f('ix_verification_templates_name'), table_name='verification_templates')
-    op.drop_index(op.f('ix_verification_templates_id'), table_name='verification_templates')
-    op.drop_table('verification_templates')
+    op.drop_index(op.f('ix_posting_templates_name'), table_name='posting_templates')
+    op.drop_index(op.f('ix_posting_templates_id'), table_name='posting_templates')
+    op.drop_table('posting_templates')

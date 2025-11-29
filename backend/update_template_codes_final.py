@@ -3,7 +3,7 @@ sys.path.append('/app')
 
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models.verification_template import VerificationTemplate
+from app.models.posting_template import PostingTemplate
 
 # Updated mapping following project standards (lowercase with underscores + VAT percentage)
 CODE_MAPPING = {

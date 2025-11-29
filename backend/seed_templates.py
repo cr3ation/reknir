@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.company import Company  
 from app.models.account import Account
-from app.models.verification_template import VerificationTemplate, VerificationTemplateLine
+from app.models.posting_template import PostingTemplate, PostingTemplateLine
 
 # Common Swedish verification templates
 SWEDISH_TEMPLATES = [
@@ -15,9 +15,9 @@ SWEDISH_TEMPLATES = [
         'default_series': 'A',
         'default_journal_text': 'Inköp varor/tjänster med moms',
         'lines': [
-            {'account_number': 4000, 'formula': '{belopp} / 1.25', 'description': 'Inköp varor exkl moms', 'sort_order': 1},
-            {'account_number': 2640, 'formula': '{belopp} * 0.2', 'description': 'Ingående moms 25%', 'sort_order': 2},
-            {'account_number': 2440, 'formula': '-{belopp}', 'description': 'Leverantörsskuld', 'sort_order': 3},
+            {'account_number': 4000, 'formula': '{belopp} / 1.25', 'description': '', 'sort_order': 1},
+            {'account_number': 2640, 'formula': '{belopp} * 0.2', 'description': '', 'sort_order': 2},
+            {'account_number': 2440, 'formula': '-{belopp}', 'description': '', 'sort_order': 3},
         ]
     },
     {
@@ -26,19 +26,51 @@ SWEDISH_TEMPLATES = [
         'default_series': 'A',
         'default_journal_text': 'Försäljning varor/tjänster med moms',
         'lines': [
-            {'account_number': 1510, 'formula': '{belopp}', 'description': 'Kundfordran', 'sort_order': 1},
-            {'account_number': 3001, 'formula': '-{belopp} / 1.25', 'description': 'Försäljning 25% moms', 'sort_order': 2},
-            {'account_number': 2611, 'formula': '-{belopp} * 0.2', 'description': 'Utgående moms 25%', 'sort_order': 3},
+            {'account_number': 1510, 'formula': '{belopp}', 'description': '', 'sort_order': 1},
+            {'account_number': 3001, 'formula': '-{belopp} / 1.25', 'description': '', 'sort_order': 2},
+            {'account_number': 2611, 'formula': '-{belopp} * 0.2', 'description': '', 'sort_order': 3},
         ]
     },
     {
-        'code': 'BETALNING_LEV',
+        'name': 'Betalning till leverantör',
         'description': 'Betalning till leverantör',
         'default_series': 'A',
         'default_journal_text': 'Betalning leverantörsfaktura',
         'lines': [
-            {'account_number': 2440, 'formula': '{belopp}', 'description': 'Leverantörsskuld', 'sort_order': 1},
-            {'account_number': 1930, 'formula': '-{belopp}', 'description': 'Bankkonto', 'sort_order': 2},
+            {'account_number': 1930, 'formula': '-{belopp}', 'description': '', 'sort_order': 1},
+            {'account_number': 2440, 'formula': '{belopp}', 'description': '', 'sort_order': 2},
+        ]
+    },
+    {
+        'name': 'Lokalhyra',
+        'description': 'Betalning av lokalhyra med 25% moms',
+        'default_series': 'A',
+        'default_journal_text': 'Lokalhyra',
+        'lines': [
+            {'account_number': 1930, 'formula': '-{belopp}', 'description': '', 'sort_order': 1},
+            {'account_number': 5010, 'formula': '{belopp} / 1.25', 'description': '', 'sort_order': 2},
+            {'account_number': 2640, 'formula': '{belopp} * 0.2', 'description': '', 'sort_order': 3},
+        ]
+    },
+    {
+        'name': 'Lön och avgifter',
+        'description': 'Utbetalning av löner och arbetsgivaravgifter',
+        'default_series': 'A',
+        'default_journal_text': 'Lön och arbetsgivaravgifter',
+        'lines': [
+            {'account_number': 1930, 'formula': '-{belopp}', 'description': '', 'sort_order': 1},
+            {'account_number': 7210, 'formula': '{belopp} * 0.6887', 'description': '', 'sort_order': 2},
+            {'account_number': 7510, 'formula': '{belopp} * 0.3113', 'description': '', 'sort_order': 3},
+        ]
+    },
+    {
+        'name': 'Betalning från kund',
+        'description': 'Inbetalning från kund',
+        'default_series': 'A',
+        'default_journal_text': 'Betalning från kund',
+        'lines': [
+            {'account_number': 1930, 'formula': '{belopp}', 'description': '', 'sort_order': 1},
+            {'account_number': 1510, 'formula': '-{belopp}', 'description': '', 'sort_order': 2},
         ]
     }
 ]
@@ -59,9 +91,9 @@ def create_templates_for_company(db: Session, company_id: int):
     
     for template_data in SWEDISH_TEMPLATES:
         # Check if template already exists
-        existing = db.query(VerificationTemplate).filter(
-            VerificationTemplate.company_id == company_id,
-            VerificationTemplate.name == template_data['name']
+        existing = db.query(PostingTemplate).filter(
+            PostingTemplate.company_id == company_id,
+            PostingTemplate.name == template_data['name']
         ).first()
         
         if existing:
@@ -69,7 +101,7 @@ def create_templates_for_company(db: Session, company_id: int):
             continue
         
         # Create template
-        template = VerificationTemplate(
+        template = PostingTemplate(
             company_id=company_id,
             name=template_data['name'],
             description=template_data['description'],
@@ -85,7 +117,7 @@ def create_templates_for_company(db: Session, company_id: int):
             try:
                 account = find_account_by_number(db, company_id, line_data['account_number'])
                 
-                line = VerificationTemplateLine(
+                line = PostingTemplateLine(
                     template_id=template.id,
                     account_id=account.id,
                     formula=line_data['formula'],
@@ -124,7 +156,7 @@ def main():
         print('✅ Template seeding completed successfully!')
         
     except Exception as e:
-        print(f'❌ Error: {e}')
+        print(f'❌ Error: {str(e)}')
         db.rollback()
     finally:
         db.close()

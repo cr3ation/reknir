@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine
 from app.models.company import Company
 from app.models.account import Account
-from app.models.verification_template import VerificationTemplate, VerificationTemplateLine
+from app.models.posting_template import PostingTemplate, PostingTemplateLine
 
 
 # Common Swedish verification templates (names in English, descriptions in Swedish)
@@ -125,9 +125,9 @@ def create_templates_for_company(db: Session, company_id: int):
     
     for template_data in SWEDISH_TEMPLATES:
         # Check if template already exists
-        existing = db.query(VerificationTemplate).filter(
-            VerificationTemplate.company_id == company_id,
-            VerificationTemplate.name == template_data["name"]
+        existing = db.query(PostingTemplate).filter(
+            PostingTemplate.company_id == company_id,
+            PostingTemplate.name == template_data["name"]
         ).first()
         
         if existing:
@@ -135,7 +135,7 @@ def create_templates_for_company(db: Session, company_id: int):
             continue
         
         # Create template
-        template = VerificationTemplate(
+        template = PostingTemplate(
             company_id=company_id,
             name=template_data["name"],
             description=template_data["description"],
@@ -151,7 +151,7 @@ def create_templates_for_company(db: Session, company_id: int):
             try:
                 account = find_account_by_number(db, company_id, line_data["account_number"])
                 
-                line = VerificationTemplateLine(
+                line = PostingTemplateLine(
                     template_id=template.id,
                     account_id=account.id,
                     formula=line_data["formula"],
