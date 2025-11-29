@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
-import { Plus, Trash2, Calendar, Building2, Edit2, Save, X, FileText, Copy, GripVertical } from 'lucide-react'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
@@ -67,7 +67,6 @@ export default function SettingsPage() {
 
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
-    // Find the highest year in existing fiscal years, or use current year
     const nextYear = fiscalYears.length > 0
       ? Math.max(...fiscalYears.map(fy => fy.year)) + 1
       : currentYear
@@ -154,10 +153,6 @@ export default function SettingsPage() {
   }
 
   const formatErrorMessage = (error: any): string => {
-    console.log('Full error:', error)
-    console.log('Error response data:', error.response?.data)
-
-    // Handle FastAPI validation errors (422)
     if (error.response?.data?.detail) {
       const detail = error.response.data.detail
       // If detail is an array of validation errors
@@ -213,7 +208,7 @@ export default function SettingsPage() {
         fiscal_year_start: new Date().getFullYear() + '-01-01',
         fiscal_year_end: new Date().getFullYear() + '-12-31',
         accounting_basis: 'accrual',
-        vat_reporting_period: 'quarterly',
+        vat_reporting_period: 'quarterly' as VATReportingPeriod,
       })
       await loadCompanies()
       setSelectedCompany(response.data)
@@ -1348,10 +1343,10 @@ export default function SettingsPage() {
           <div className="space-y-2">
             {templates
               .sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
-              .map((template: any, index: number) => (
+              .map((template: any) => (
                 <div key={template.id} className="relative">
                   {/* Drop indicator line BEFORE this template */}
-                  {dropIndicator?.templateId === template.id && dropIndicator.position === 'before' && (
+                  {dropIndicator?.templateId === template.id && dropIndicator?.position === 'before' && (
                     <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
                   )}
                   
@@ -1410,7 +1405,7 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Drop indicator line AFTER this template */}
-                  {dropIndicator?.templateId === template.id && dropIndicator.position === 'after' && (
+                  {dropIndicator?.templateId === template.id && dropIndicator?.position === 'after' && (
                     <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
                   )}
                 </div>
@@ -1431,7 +1426,7 @@ export default function SettingsPage() {
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
           <p className="text-sm text-blue-800">
             <strong>Tips:</strong> Skapa mallar för återkommande transaktioner som försäljning, inköp, eller lönutbetalningar.
-            Använd formler som {'{amount * 0.25}'} för att automatiskt beräkna momssummer.
+            Använd formler som {'{amount * 0.25}'} för att automatiska beräkningar.
           </p>
         </div>
       </div>
