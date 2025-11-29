@@ -20,6 +20,7 @@ class PostingTemplate(Base):
     description = Column(String(255), nullable=False)  # Template description
     default_series = Column(String(10), nullable=True)  # Optional default series (A, B, C, etc.)
     default_journal_text = Column(Text, nullable=True)  # Optional default verification text
+    sort_order = Column(Integer, nullable=False, default=999)  # User-defined sort order for templates
 
     # Audit trail
     created_at = Column(DateTime, server_default=func.now(), nullable=False)

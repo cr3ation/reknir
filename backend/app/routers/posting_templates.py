@@ -119,6 +119,7 @@ def list_posting_templates(
     ).group_by(
         PostingTemplate.id
     ).order_by(
+        PostingTemplate.sort_order,
         PostingTemplate.name
     ).offset(skip).limit(limit).all()
     
@@ -335,4 +336,60 @@ def execute_posting_template(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error executing template: {str(e)}"
+        )
+
+
+@router.patch("/reorder", status_code=status.HTTP_200_OK)
+def reorder_posting_templates(
+    template_orders: List[dict],
+    company_id: int = Query(..., description="Company ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    Update sort order for posting templates
+    
+    Expected format: [{"id": 1, "sort_order": 1}, {"id": 2, "sort_order": 2}, ...]
+    """
+    
+    # Verify company exists
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Company with id {company_id} not found"
+        )
+    
+    try:
+        # Update each template's sort order
+        for item in template_orders:
+            template_id = item.get('id')
+            sort_order = item.get('sort_order')
+            
+            if template_id is None or sort_order is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Each item must have 'id' and 'sort_order' fields"
+                )
+            
+            # Update the template if it belongs to this company
+            template = db.query(PostingTemplate).filter(
+                PostingTemplate.id == template_id,
+                PostingTemplate.company_id == company_id
+            ).first()
+            
+            if template:
+                template.sort_order = sort_order
+        
+        db.commit()
+        
+        return {
+            "message": f"Successfully updated sort order for {len(template_orders)} templates",
+            "templates_updated": len(template_orders)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update template order: {str(e)}"
         )

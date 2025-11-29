@@ -128,6 +128,7 @@ export interface PostingTemplateListItem {
   created_at: string
   updated_at: string
   line_count: number
+  sort_order?: number
 }
 
 export interface TemplateExecutionRequest {

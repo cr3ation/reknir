@@ -70,6 +70,7 @@ class PostingTemplateBase(BaseModel):
     description: str = Field(..., max_length=255, description="Template description")
     default_series: Optional[str] = Field(None, max_length=10, description="Default verification series")
     default_journal_text: Optional[str] = Field(None, description="Default journal text for verifications")
+    sort_order: int = Field(999, description="User-defined sort order for templates")
 
 
 

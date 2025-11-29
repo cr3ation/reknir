@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
 import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
-import { Plus, Trash2, Calendar, Building2, Edit2, Save, X, FileText, Copy } from 'lucide-react'
+import { Plus, Trash2, Calendar, Building2, Edit2, Save, X, FileText, Copy, GripVertical } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
@@ -509,6 +509,101 @@ export default function SettingsPage() {
       )
     }))
   }
+
+  // Simple drag and drop state
+  const [draggedTemplate, setDraggedTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<{ templateId: number; position: 'before' | 'after' } | null>(null)
+
+  const handleDragStart = (e: any, template: PostingTemplateListItem) => {
+    setDraggedTemplate(template)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', template.id.toString())
+  }
+
+  const handleDragEnd = () => {
+    setDraggedTemplate(null)
+    setDropIndicator(null)
+  }
+
+  const handleDragOver = (e: any, template: PostingTemplateListItem) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    
+    if (!draggedTemplate || draggedTemplate.id === template.id) return
+
+    // Calculate if drop should be before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'before' : 'after'
+    
+    setDropIndicator({ templateId: template.id, position })
+  }
+
+  const handleDragLeave = (e: any) => {
+    // Only clear if we're leaving the container entirely
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDropIndicator(null)
+    }
+  }
+
+  const handleDrop = async (e: any, targetTemplate: PostingTemplateListItem) => {
+    e.preventDefault()
+    
+    if (!draggedTemplate || !selectedCompany || draggedTemplate.id === targetTemplate.id || !dropIndicator) {
+      handleDragEnd()
+      return
+    }
+
+    const sortedTemplates = templates.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+    const draggedIndex = sortedTemplates.findIndex((t: any) => t.id === draggedTemplate.id)
+    const targetIndex = sortedTemplates.findIndex((t: any) => t.id === targetTemplate.id)
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+      handleDragEnd()
+      return
+    }
+
+    // Calculate the insertion point based on drop indicator
+    let insertIndex = targetIndex
+    if (dropIndicator.position === 'after') {
+      insertIndex = targetIndex + 1
+    }
+    
+    // Adjust for removal of dragged item
+    if (draggedIndex < insertIndex) {
+      insertIndex -= 1
+    }
+
+    // Create reordered list
+    const reorderedTemplates = Array.from(sortedTemplates)
+    const [movedTemplate] = reorderedTemplates.splice(draggedIndex, 1)
+    reorderedTemplates.splice(insertIndex, 0, movedTemplate)
+
+    // Update local state immediately for smooth UX
+    setTemplates(reorderedTemplates)
+    handleDragEnd()
+
+    try {
+      // Create the new order array with sort_order values
+      const templateOrders = reorderedTemplates.map((template: any, index: number) => ({
+        id: template.id,
+        sort_order: index + 1
+      }))
+
+      await postingTemplateApi.reorder(selectedCompany.id, templateOrders)
+      showMessage('Ordning uppdaterad', 'success')
+    } catch (error: any) {
+      // Revert the local change if API call fails
+      setTemplates(templates)
+      showMessage('Kunde inte uppdatera ordning', 'error')
+    }
+  }
+
+
 
   if (!selectedCompany && !loading) {
     return (
@@ -1247,50 +1342,79 @@ export default function SettingsPage() {
             Skapa mall
           </button>
         </div>
-
-        <p className="text-gray-600 mb-4">
-          Skapa mallar för återkommande transaktioner som automatiskt beräknar belopp baserat på formler.
-        </p>
+        
 
         {templates.length > 0 ? (
           <div className="space-y-2">
-            {templates.map((template) => (
-              <div key={template.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h3 className="font-medium">{template.name}</h3>
-                  <p className="text-sm text-gray-500">{template.description}</p>
-                  <p className="text-xs text-gray-400">Namn: {template.name}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleEditTemplate(template)}
-                    className="text-blue-600 hover:text-blue-800"
-                    title="Redigera mall"
+            {templates
+              .sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+              .map((template: any, index: number) => (
+                <div key={template.id} className="relative">
+                  {/* Drop indicator line BEFORE this template */}
+                  {dropIndicator?.templateId === template.id && dropIndicator.position === 'before' && (
+                    <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
+                  )}
+                  
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, template)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, template)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, template)}
+                    className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-200 cursor-move relative ${
+                      draggedTemplate?.id === template.id 
+                        ? 'bg-blue-50 border-blue-300 shadow-lg opacity-50' 
+                        : 'bg-white hover:bg-gray-50 hover:shadow-sm border-gray-200'
+                    }`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!selectedCompany || !confirm(`Är du säker på att du vill radera mallen "${template.name}"?`)) return
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">{template.name}</h3>
+                        <p className="text-sm text-gray-500">{template.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditTemplate(template)}
+                        className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                        title="Redigera mall (dra handtaget för att ändra ordning)"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!selectedCompany || !confirm(`Är du säker på att du vill radera mallen "${template.name}"?`)) return
 
-                      try {
-                        await postingTemplateApi.delete(template.id)
-                        setTemplates(prev => prev.filter(t => t.id !== template.id))
-                        showMessage('Mall raderad', 'success')
-                      } catch (error: any) {
-                        showMessage('Kunde inte radera mall', 'error')
-                      }
-                    }}
-                    className="text-red-600 hover:text-red-800"
-                    title="Radera mall"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                          try {
+                            await postingTemplateApi.delete(template.id)
+                            setTemplates((prev: any) => prev.filter((t: any) => t.id !== template.id))
+                            showMessage('Mall raderad', 'success')
+                          } catch (error: any) {
+                            showMessage('Kunde inte radera mall', 'error')
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-800 p-1 rounded"
+                        title="Radera mall"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Drop indicator line AFTER this template */}
+                  {dropIndicator?.templateId === template.id && dropIndicator.position === 'after' && (
+                    <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">

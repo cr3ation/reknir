@@ -4,6 +4,7 @@
     "description": "Inköp av varor/tjänster med 25% moms",
     "default_series": "A",
     "default_journal_text": "Inköp varor/tjänster med moms",
+    "sort_order": 1,
     "lines": [
       {
         "account_number": 4000,
@@ -30,6 +31,7 @@
     "description": "Försäljning av varor/tjänster med 25% moms",
     "default_series": "A",
     "default_journal_text": "Försäljning varor/tjänster med moms",
+    "sort_order": 2,
     "lines": [
       {
         "account_number": 1510,
@@ -56,6 +58,7 @@
     "description": "Betalning till leverantör",
     "default_series": "A",
     "default_journal_text": "Betalning leverantörsfaktura",
+    "sort_order": 4,
     "lines": [
       {
         "account_number": 1930,
@@ -76,6 +79,7 @@
     "description": "Betalning av lokalhyra med 25% moms",
     "default_series": "A",
     "default_journal_text": "Lokalhyra",
+    "sort_order": 6,
     "lines": [
       {
         "account_number": 1930,
@@ -102,6 +106,7 @@
     "description": "Utbetalning av löner och arbetsgivaravgifter",
     "default_series": "A",
     "default_journal_text": "Lön och arbetsgivaravgifter",
+    "sort_order": 5,
     "lines": [
       {
         "account_number": 1930,
@@ -128,6 +133,7 @@
     "description": "Inbetalning från kund",
     "default_series": "A",
     "default_journal_text": "Betalning från kund",
+    "sort_order": 3,
     "lines": [
       {
         "account_number": 1930,

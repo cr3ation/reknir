@@ -106,6 +106,8 @@ export const postingTemplateApi = {
   delete: (id: number) => api.delete(`/api/posting-templates/${id}`),
   execute: (id: number, request: TemplateExecutionRequest) =>
     api.post<TemplateExecutionResult>(`/api/posting-templates/${id}/execute`, request),
+  reorder: (companyId: number, templateOrders: { id: number; sort_order: number }[]) =>
+    api.patch(`/api/posting-templates/reorder?company_id=${companyId}`, templateOrders),
 }
 
 // Reports

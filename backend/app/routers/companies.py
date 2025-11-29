@@ -181,7 +181,8 @@ def seed_posting_templates(company_id: int, db: Session = Depends(get_db)):
                 name=template_data['name'],
                 description=template_data['description'],
                 default_series=template_data['default_series'],
-                default_journal_text=template_data['default_journal_text']
+                default_journal_text=template_data['default_journal_text'],
+                sort_order=template_data.get('sort_order', 999)
             )
             
             db.add(template)
