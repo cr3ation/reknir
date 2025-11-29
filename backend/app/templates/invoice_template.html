@@ -18,12 +18,25 @@
 
         .header {
             margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
 
         .company-info {
             font-size: 14pt;
             font-weight: bold;
             margin-bottom: 3px;
+        }
+
+        .company-text {
+            flex: 1;
+        }
+
+        .company-logo {
+            max-width: 120px;
+            max-height: 80px;
+            margin-left: 20px;
         }
 
         .invoice-title {
@@ -185,8 +198,13 @@
 <body>
     <!-- Header -->
     <div class="header">
-        <div class="company-info">{{ company.name }}</div>
-        <div>Org.nr: {{ company.org_number }}</div>
+        <div class="company-text">
+            <div class="company-info">{{ company.name }}</div>
+            <div>Org.nr: {{ company.org_number }}</div>
+        </div>
+        {% if company_logo %}
+        <img src="{{ company_logo }}" alt="Företagslogotyp" class="company-logo">
+        {% endif %}
     </div>
 
     <!-- Invoice Title -->
