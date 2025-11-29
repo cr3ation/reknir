@@ -1514,7 +1514,7 @@ export default function SettingsPage() {
       {/* Template Modal */}
       {showCreateTemplate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -1583,81 +1583,111 @@ export default function SettingsPage() {
               </div>
 
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <h4 className="text-md font-medium text-gray-900">Konteringsrader</h4>
                   <button
                     onClick={addTemplateLine}
-                    className="btn btn-secondary inline-flex items-center"
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     Lägg till rad
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {templateForm.template_lines.map((line, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h5 className="font-medium text-gray-700">Rad {index + 1}</h5>
-                        {templateForm.template_lines.length > 1 && (
-                          <button
-                            onClick={() => removeTemplateLine(index)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Konto *
-                          </label>
-                          <select
-                            value={line.account_id}
-                            onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          >
-                            <option value={0}>Välj konto...</option>
-                            {allAccounts.map((account) => (
-                              <option key={account.id} value={account.id}>
-                                {account.account_number} - {account.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Formel *
-                          </label>
-                          <input
-                            type="text"
-                            value={line.formula}
-                            onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="t.ex. {belopp} * 0.25"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-3">
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Beskrivning
-                          </label>
-                          <input
-                            type="text"
-                            value={line.description || ''}
-                            onChange={(e) => updateTemplateLine(index, 'description', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
+                {templateForm.template_lines.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
+                    <div className="text-gray-500 mb-2">
+                      <Plus className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                      Inga konteringsrader ännu
                     </div>
-                  ))}
-                </div>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Lägg till minst en konteringsrad för att skapa mallen
+                    </p>
+                    <button
+                      onClick={addTemplateLine}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Lägg till första raden
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
+                    <table className="min-w-full bg-white">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                            #
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Konto *
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Formel *
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                            Beskrivning
+                          </th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                            Åtgärd
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {templateForm.template_lines.map((line, index) => (
+                          <tr key={index} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-3 py-3 text-sm font-medium text-gray-700 bg-gray-25">
+                              {index + 1}
+                            </td>
+                            <td className="px-3 py-3">
+                              <select
+                                value={line.account_id}
+                                onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                              >
+                                <option value={0}>Välj konto...</option>
+                                {allAccounts.map((account) => (
+                                  <option key={account.id} value={account.id}>
+                                    {account.account_number} - {account.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-3 py-3">
+                              <input
+                                type="text"
+                                value={line.formula}
+                                onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white font-mono"
+                                placeholder="{belopp}"
+                              />
+                            </td>
+                            <td className="px-3 py-3 hidden sm:table-cell">
+                              <input
+                                type="text"
+                                value={line.description || ''}
+                                onChange={(e) => updateTemplateLine(index, 'description', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                placeholder="Beskrivning..."
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              {templateForm.template_lines.length > 1 && (
+                                <button
+                                  onClick={() => removeTemplateLine(index)}
+                                  className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition-colors"
+                                  title="Ta bort rad"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                   <p className="text-sm text-blue-800">
