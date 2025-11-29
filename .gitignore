@@ -24,6 +24,7 @@ venv/
 env/
 ENV/
 .venv
+.python-version
 
 # Node
 node_modules/
