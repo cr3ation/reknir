@@ -74,7 +74,7 @@ class PostingTemplateLine(Base):
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
 
     # Formula for amount calculation
-    formula = Column(String(500), nullable=False)  # e.g., "{belopp} * 0.25", "-{belopp}"
+    formula = Column(String(500), nullable=False)  # e.g., "{total} * 0.25", "-{total}"
     
     # Optional line description (overrides template description)
     description = Column(String(255), nullable=True)
@@ -92,11 +92,11 @@ class PostingTemplateLine(Base):
     def evaluate_formula(self, amount: float) -> float:
         """
         Evaluate the formula with the given amount
-        Replaces {belopp} variable and calculates the result
+        Replaces {total} variable and calculates the result
         """
         try:
-            # Replace the {belopp} variable with the actual value
-            expression = self.formula.replace("{belopp}", str(amount))
+            # Replace the {total} variable with the actual value
+            expression = self.formula.replace("{total}", str(amount))
             
             # Validate the expression contains only allowed characters
             if not re.match(r'^[0-9+\-*/.() ]+$', expression):
@@ -117,15 +117,15 @@ class PostingTemplateLine(Base):
         Validate that a formula is syntactically correct
         """
         try:
-            # Check if formula contains the required {belopp} variable
-            if "{belopp}" not in formula:
+            # Check if formula contains the required {total} variable
+            if "{total}" not in formula:
                 return False
             
             # Test with a dummy value
-            test_expression = formula.replace("{belopp}", "100")
+            test_expression = formula.replace("{total}", "100")
             
             # Validate allowed characters
-            if not re.match(r'^[0-9+\-*/.(){} ]+$', test_expression.replace("{belopp}", "1")):
+            if not re.match(r'^[0-9+\-*/.(){} ]+$', test_expression.replace("{total}", "1")):
                 return False
             
             # Try to evaluate with test value

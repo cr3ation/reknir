@@ -8,19 +8,19 @@
     "lines": [
       {
         "account_number": 4000,
-        "formula": "{belopp} / 1.25",
+        "formula": "{total} / 1.25",
         "description": "",
         "sort_order": 1
       },
       {
         "account_number": 2640,
-        "formula": "{belopp} * 0.2",
+        "formula": "{total} * 0.2",
         "description": "",
         "sort_order": 2
       },
       {
         "account_number": 2440,
-        "formula": "-{belopp}",
+        "formula": "-{total}",
         "description": "",
         "sort_order": 3
       }
@@ -35,19 +35,19 @@
     "lines": [
       {
         "account_number": 1510,
-        "formula": "{belopp}",
+        "formula": "{total}",
         "description": "",
         "sort_order": 1
       },
       {
         "account_number": 3001,
-        "formula": "-{belopp} / 1.25",
+        "formula": "-{total} / 1.25",
         "description": "",
         "sort_order": 2
       },
       {
         "account_number": 2611,
-        "formula": "-{belopp} * 0.2",
+        "formula": "-{total} * 0.2",
         "description": "",
         "sort_order": 3
       }
@@ -62,13 +62,13 @@
     "lines": [
       {
         "account_number": 1930,
-        "formula": "-{belopp}",
+        "formula": "-{total}",
         "description": "",
         "sort_order": 1
       },
       {
         "account_number": 2440,
-        "formula": "{belopp}",
+        "formula": "{total}",
         "description": "",
         "sort_order": 2
       }
@@ -83,19 +83,19 @@
     "lines": [
       {
         "account_number": 1930,
-        "formula": "-{belopp}",
+        "formula": "-{total}",
         "description": "",
         "sort_order": 1
       },
       {
         "account_number": 5010,
-        "formula": "{belopp} / 1.25",
+        "formula": "{total} / 1.25",
         "description": "",
         "sort_order": 2
       },
       {
         "account_number": 2640,
-        "formula": "{belopp} * 0.2",
+        "formula": "{total} * 0.2",
         "description": "",
         "sort_order": 3
       }
@@ -110,19 +110,19 @@
     "lines": [
       {
         "account_number": 1930,
-        "formula": "-{belopp}",
+        "formula": "-{total}",
         "description": "",
         "sort_order": 1
       },
       {
         "account_number": 7210,
-        "formula": "{belopp} * 0.6887",
+        "formula": "{total} * 0.6887",
         "description": "",
         "sort_order": 2
       },
       {
         "account_number": 7510,
-        "formula": "{belopp} * 0.3113",
+        "formula": "{total} * 0.3113",
         "description": "",
         "sort_order": 3
       }
@@ -137,13 +137,13 @@
     "lines": [
       {
         "account_number": 1930,
-        "formula": "{belopp}",
+        "formula": "{total}",
         "description": "",
         "sort_order": 1
       },
       {
         "account_number": 1510,
-        "formula": "-{belopp}",
+        "formula": "-{total}",
         "description": "",
         "sort_order": 2
       }

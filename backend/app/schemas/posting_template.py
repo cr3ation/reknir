@@ -8,23 +8,23 @@ import re
 class PostingTemplateLineBase(BaseModel):
     """Base verification template line schema"""
     account_id: int = Field(..., description="Account ID for this posting line")
-    formula: str = Field(..., description="Formula for calculating the amount (e.g., '{belopp} * 0.25')")
+    formula: str = Field(..., description="Formula for calculating the amount (e.g., '{total} * 0.25')")
     description: Optional[str] = Field(None, max_length=255, description="Optional line description")
     sort_order: int = Field(0, description="Sort order for line ordering")
 
     @field_validator('formula')
     @classmethod
     def validate_formula(cls, v):
-        """Validate that the formula is syntactically correct and contains {belopp}"""
+        """Validate that the formula is syntactically correct and contains {total}"""
         if not v or not v.strip():
             raise ValueError("Formula cannot be empty")
         
-        if "{belopp}" not in v:
-            raise ValueError("Formula must contain the {belopp} variable")
+        if "{total}" not in v:
+            raise ValueError("Formula must contain the {total} variable")
         
         # Test with a dummy value to check syntax
         try:
-            test_expression = v.replace("{belopp}", "100")
+            test_expression = v.replace("{total}", "100")
             # Only allow safe mathematical characters
             if not re.match(r'^[0-9+\-*/.() ]+$', test_expression):
                 raise ValueError("Formula contains invalid characters")
