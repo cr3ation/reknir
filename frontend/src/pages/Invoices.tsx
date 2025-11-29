@@ -630,50 +630,71 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
               {lines.map((line, index) => (
                 <div key={index} className="space-y-2 p-3 bg-gray-50 rounded">
                   <div className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-12 md:col-span-5">
+                    <div className="col-span-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Beskrivning *
+                      </label>
                       <input
                         type="text"
-                        placeholder="Beskrivning *"
+                        placeholder="Beskrivning av vara/tjänst"
                         value={line.description}
                         onChange={(e) => updateLine(index, 'description', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Antal *
+                      </label>
                       <input
                         type="number"
-                        placeholder="Antal"
-                        value={line.quantity}
-                        onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
-                        step="0.01"
+                        placeholder="1"
+                        value={line.quantity || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'quantity', value)
+                        }}
+                        step="1"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-1">
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Enhet
+                      </label>
                       <input
                         type="text"
-                        placeholder="Enhet"
+                        placeholder="st"
                         value={line.unit}
                         onChange={(e) => updateLine(index, 'unit', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        À-pris *
+                      </label>
                       <input
                         type="number"
-                        placeholder="À-pris"
-                        value={line.unit_price}
-                        onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        placeholder="0,00"
+                        value={line.unit_price || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'unit_price', value)
+                        }}
                         step="0.01"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-2 md:col-span-1">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Moms *
+                      </label>
                       <select
                         value={line.vat_rate}
                         onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
@@ -685,20 +706,28 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
                         <option value={25}>25%</option>
                       </select>
                     </div>
-                    <div className="col-span-11 md:col-span-1 text-right">
-                      {lines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(index)}
-                          className="text-red-600 hover:text-red-800 p-2"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        &nbsp;
+                      </label>
+                      <div className="flex justify-center">
+                        {lines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeLine(index)}
+                            className="text-red-600 hover:text-red-800 p-2"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-12 md:col-span-5">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Intäktskonto
+                      </label>
                       <select
                         value={line.account_id || ''}
                         onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
@@ -791,7 +820,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   const [ocrNumber, setOcrNumber] = useState('')
   const [reference, setReference] = useState('')
   const [lines, setLines] = useState<InvoiceLine[]>([
-    { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }
+    { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -809,7 +838,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   }, [supplierId, invoiceDate, suppliers])
 
   const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }])
+    setLines([...lines, { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }])
   }
 
   const removeLine = (index: number) => {
@@ -1025,8 +1054,12 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
                       <input
                         type="number"
                         placeholder="Antal"
-                        value={line.quantity}
-                        onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                        value={line.quantity || ''} // Show empty string instead of 0 for better UX
+                        onChange={(e) => {
+                          // Handle empty fields as 0, avoid "025000" display issue
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'quantity', value)
+                        }}
                         step="0.01"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
@@ -1036,16 +1069,20 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
                     <div className="col-span-4 md:col-span-2">
                       <input
                         type="number"
-                        placeholder="À-pris"
-                        value={line.unit_price}
-                        onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        placeholder="À-pris (kr per enhet)"
+                        value={line.unit_price || ''}
+                        onChange={(e) => {
+                          // Handle empty fields as 0, avoid "025000" display issue
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'unit_price', value)
+                        }}
                         step="0.01"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-1">
+                    <div className="col-span-4 md:col-span-2">
                       <select
                         value={line.vat_rate}
                         onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
