@@ -98,6 +98,65 @@ export interface VerificationListItem {
   locked: boolean
 }
 
+// Verification Templates
+export interface VerificationTemplateLine {
+  id?: number
+  template_id?: number
+  account_id: number
+  formula: string
+  cost_center?: string
+  project?: string
+  description?: string
+  sort_order: number
+}
+
+export interface VerificationTemplate {
+  id?: number
+  company_id: number
+  name: string
+  description: string
+  default_series?: string
+  default_journal_text?: string
+  created_at?: string
+  updated_at?: string
+  template_lines: VerificationTemplateLine[]
+}
+
+export interface VerificationTemplateListItem {
+  id: number
+  name: string
+  description: string
+  default_series?: string
+  created_at: string
+  updated_at: string
+  line_count: number
+}
+
+export interface TemplateExecutionRequest {
+  amount: number
+  transaction_date?: string
+  description_override?: string
+}
+
+export interface TemplateExecutionLine {
+  account_id: number
+  debit: number
+  credit: number
+  description?: string
+  cost_center?: string
+  project?: string
+}
+
+export interface TemplateExecutionResult {
+  template_id: number
+  template_name: string
+  amount: number
+  posting_lines: TemplateExecutionLine[]
+  total_debit: number
+  total_credit: number
+  is_balanced: boolean
+}
+
 export interface BalanceSheet {
   company_id: number
   report_type: string

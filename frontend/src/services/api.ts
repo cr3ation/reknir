@@ -5,6 +5,10 @@ import type {
   Account,
   Verification,
   VerificationListItem,
+  VerificationTemplate,
+  VerificationTemplateListItem,
+  TemplateExecutionRequest,
+  TemplateExecutionResult,
   BalanceSheet,
   IncomeStatement,
   Customer,
@@ -86,6 +90,22 @@ export const verificationApi = {
   update: (id: number, data: Partial<Verification>) =>
     api.patch<Verification>(`/api/verifications/${id}`, data),
   delete: (id: number) => api.delete(`/api/verifications/${id}`),
+}
+
+// Verification Templates
+export const verificationTemplateApi = {
+  list: (companyId: number, params?: { skip?: number; limit?: number }) =>
+    api.get<VerificationTemplateListItem[]>('/api/verification-templates/', {
+      params: { company_id: companyId, ...params },
+    }),
+  get: (id: number) => api.get<VerificationTemplate>(`/api/verification-templates/${id}`),
+  create: (data: Omit<VerificationTemplate, 'id' | 'created_at' | 'updated_at'>) =>
+    api.post<VerificationTemplate>('/api/verification-templates/', data),
+  update: (id: number, data: Partial<VerificationTemplate>) =>
+    api.put<VerificationTemplate>(`/api/verification-templates/${id}`, data),
+  delete: (id: number) => api.delete(`/api/verification-templates/${id}`),
+  execute: (id: number, request: TemplateExecutionRequest) =>
+    api.post<TemplateExecutionResult>(`/api/verification-templates/${id}/execute`, request),
 }
 
 // Reports

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company } from '@/types'
-import { Plus, Trash2, Calendar, Building2, Edit2, Save, X } from 'lucide-react'
+import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, verificationTemplateApi } from '@/services/api'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company, VerificationTemplateListItem, VerificationTemplate, VerificationTemplateLine } from '@/types'
+import { Plus, Trash2, Calendar, Building2, Edit2, Save, X, FileText, Copy } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
@@ -25,6 +25,17 @@ export default function SettingsPage() {
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
+  const [templates, setTemplates] = useState<VerificationTemplateListItem[]>([])
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<VerificationTemplateListItem | null>(null)
+  const [templateForm, setTemplateForm] = useState<VerificationTemplate>({
+    company_id: 0,
+    name: '',
+    description: '',
+    default_series: '',
+    default_journal_text: '',
+    template_lines: []
+  })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
@@ -83,14 +94,16 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      const [defaultsRes, accountsRes, fiscalYearsRes] = await Promise.all([
+      const [defaultsRes, accountsRes, fiscalYearsRes, templatesRes] = await Promise.all([
         defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
         accountApi.list(selectedCompany.id),
         fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        verificationTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
       ])
       setDefaultAccounts(defaultsRes.data)
       setAllAccounts(accountsRes.data)
       setFiscalYears(fiscalYearsRes.data)
+      setTemplates(templatesRes.data)
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
@@ -399,6 +412,106 @@ export default function SettingsPage() {
   const getAccountDisplay = (accountId: number): string => {
     const account = allAccounts.find((a) => a.id === accountId)
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
+  }
+
+  const handleCreateTemplate = () => {
+    setEditingTemplate(null)
+    setTemplateForm({
+      company_id: selectedCompany?.id || 0,
+      name: '',
+      description: '',
+      default_series: '',
+      default_journal_text: '',
+      template_lines: [{
+        account_id: 0,
+        formula: '{belopp}',
+        cost_center: '',
+        project: '',
+        description: '',
+        sort_order: 0
+      }]
+    })
+    setShowCreateTemplate(true)
+  }
+
+  const handleEditTemplate = async (template: VerificationTemplateListItem) => {
+    if (!selectedCompany) return
+
+    try {
+      const response = await verificationTemplateApi.get(template.id)
+      setEditingTemplate(template)
+      setTemplateForm(response.data)
+      setShowCreateTemplate(true)
+    } catch (error) {
+      showMessage('Kunde inte ladda mall', 'error')
+    }
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!selectedCompany) return
+
+    if (!templateForm.name || !templateForm.description || templateForm.template_lines.length === 0) {
+      showMessage('Fyll i alla obligatoriska fält', 'error')
+      return
+    }
+
+    // Validate template lines
+    for (const line of templateForm.template_lines) {
+      if (!line.account_id || !line.formula) {
+        showMessage('Alla rader måste ha konto och formel', 'error')
+        return
+      }
+    }
+
+    try {
+      setLoading(true)
+
+      if (editingTemplate) {
+        await verificationTemplateApi.update(editingTemplate.id, templateForm)
+        showMessage('Mall uppdaterad', 'success')
+      } else {
+        await verificationTemplateApi.create(templateForm)
+        showMessage('Mall skapad', 'success')
+      }
+
+      setShowCreateTemplate(false)
+      setEditingTemplate(null)
+      loadData()
+    } catch (error: any) {
+      showMessage(error.response?.data?.detail || 'Kunde inte spara mall', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addTemplateLine = () => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: [...prev.template_lines, {
+        account_id: 0,
+        formula: '{belopp}',
+        cost_center: '',
+        project: '',
+        description: '',
+        sort_order: prev.template_lines.length
+      }]
+    }))
+  }
+
+  const removeTemplateLine = (index: number) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: prev.template_lines.filter((_, i) => i !== index)
+    }))
+  }
+
+  const updateTemplateLine = (index: number, field: keyof VerificationTemplateLine, value: any) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: prev.template_lines.map((line, i) => 
+        i === index ? { ...line, [field]: value } : line
+      )
+    }))
   }
 
   if (!selectedCompany && !loading) {
@@ -1125,6 +1238,84 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Verification Templates Section */}
+      <div className="card mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Verifikationsmallar</h2>
+          <button
+            onClick={handleCreateTemplate}
+            disabled={loading}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Skapa mall
+          </button>
+        </div>
+
+        <p className="text-gray-600 mb-4">
+          Skapa mallar för återkommande transaktioner som automatiskt beräknar belopp baserat på formler.
+        </p>
+
+        {templates.length > 0 ? (
+          <div className="space-y-2">
+            {templates.map((template) => (
+              <div key={template.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <h3 className="font-medium">{template.name}</h3>
+                  <p className="text-sm text-gray-500">{template.description}</p>
+                  <p className="text-xs text-gray-400">Namn: {template.name}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleEditTemplate(template)}
+                    className="text-blue-600 hover:text-blue-800"
+                    title="Redigera mall"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!selectedCompany || !confirm(`Är du säker på att du vill radera mallen "${template.name}"?`)) return
+
+                      try {
+                        await verificationTemplateApi.delete(template.id)
+                        setTemplates(prev => prev.filter(t => t.id !== template.id))
+                        showMessage('Mall raderad', 'success')
+                      } catch (error: any) {
+                        showMessage('Kunde inte radera mall', 'error')
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-800"
+                    title="Radera mall"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p className="mb-4">Inga verifikationsmallar skapade ännu.</p>
+            <button
+              onClick={handleCreateTemplate}
+              className="btn btn-primary"
+            >
+              Skapa din första mall
+            </button>
+          </div>
+        )}
+
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-blue-800">
+            <strong>Tips:</strong> Skapa mallar för återkommande transaktioner som försäljning, inköp, eller lönutbetalningar.
+            Använd formler som {'{amount * 0.25}'} för att automatiskt beräkna momssummer.
+          </p>
+        </div>
+      </div>
+
       {/* Import Summary Modal */}
       {showImportSummary && importSummary && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1200,6 +1391,207 @@ export default function SettingsPage() {
               >
                 Stäng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Modal */}
+      {showCreateTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingTemplate ? 'Redigera mall' : 'Skapa ny mall'}
+                </h3>
+                <button
+                  onClick={() => setShowCreateTemplate(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Namn *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Inköp med 25% moms"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Beskrivning *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.description}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Försäljning med 25% moms"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Standard verifikationsserie
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.default_series || ''}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, default_series: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. A"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Standard verifikationstext
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.default_journal_text || ''}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, default_journal_text: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Försäljning"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-md font-medium text-gray-900">Konteringsrader</h4>
+                  <button
+                    onClick={addTemplateLine}
+                    className="btn btn-secondary inline-flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Lägg till rad
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {templateForm.template_lines.map((line, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="font-medium text-gray-700">Rad {index + 1}</h5>
+                        {templateForm.template_lines.length > 1 && (
+                          <button
+                            onClick={() => removeTemplateLine(index)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Konto *
+                          </label>
+                          <select
+                            value={line.account_id}
+                            onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value={0}>Välj konto...</option>
+                            {allAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.account_number} - {account.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Formel *
+                          </label>
+                          <input
+                            type="text"
+                            value={line.formula}
+                            onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="t.ex. {belopp} * 0.25"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Kostnadsställe
+                          </label>
+                          <input
+                            type="text"
+                            value={line.cost_center || ''}
+                            onChange={(e) => updateTemplateLine(index, 'cost_center', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Projekt
+                          </label>
+                          <input
+                            type="text"
+                            value={line.project || ''}
+                            onChange={(e) => updateTemplateLine(index, 'project', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Beskrivning
+                          </label>
+                          <input
+                            type="text"
+                            value={line.description || ''}
+                            onChange={(e) => updateTemplateLine(index, 'description', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-800">
+                    <strong>Formel-tips:</strong> Använd <code>{'{belopp}'}</code> som variabel i formler. Exempel: <code>{'{belopp} * 0.25'}</code> för 25% moms, <code>{'{belopp} * -1'}</code> för negativt belopp, <code>{'100'}</code> för fast belopp.
+                  </p>
+                  <p className="text-sm text-blue-800 mt-2">
+                    Positiva värden bokförs som <strong>debet</strong>, 
+                    negativa värden som <strong>kredit</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCreateTemplate(false)}
+                  className="btn btn-secondary"
+                  disabled={loading}
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={loading}
+                  className="btn btn-primary"
+                >
+                  {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

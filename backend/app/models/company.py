@@ -53,6 +53,7 @@ class Company(Base):
     # Relationships
     accounts = relationship("Account", back_populates="company", cascade="all, delete-orphan")
     verifications = relationship("Verification", back_populates="company", cascade="all, delete-orphan")
+    verification_templates = relationship("VerificationTemplate", back_populates="company", cascade="all, delete-orphan")
     default_accounts = relationship("DefaultAccount", back_populates="company", cascade="all, delete-orphan")
     fiscal_years = relationship("FiscalYear", back_populates="company", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
