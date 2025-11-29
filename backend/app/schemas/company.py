@@ -43,6 +43,7 @@ class CompanyUpdate(BaseModel):
 class CompanyResponse(CompanyBase):
     """Schema for company response"""
     id: int
+    vat_number: str = Field(..., description="Calculated Swedish VAT number (SE + org_number + 01)")
 
     class Config:
         from_attributes = True

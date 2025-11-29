@@ -786,6 +786,10 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
                   <p className="text-gray-900">{selectedCompany.org_number}</p>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">VAT-nummer</label>
+                  <p className="text-gray-900">{selectedCompany.vat_number || '-'}</p>
+                </div>
               </div>
             </div>
 

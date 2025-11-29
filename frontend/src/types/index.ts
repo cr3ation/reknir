@@ -26,6 +26,7 @@ export interface Company {
   id: number
   name: string
   org_number: string
+  vat_number: string
   address?: string
   postal_code?: string
   city?: string
