@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [activeTab, setActiveTab] = useState<'company' | 'accounts' | 'fiscal' | 'templates' | 'import'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
   const [importSummary, setImportSummary] = useState<{
@@ -603,7 +604,7 @@ export default function SettingsPage() {
   if (!selectedCompany && !loading) {
     return (
       <div className="card">
-        <h2 className="text-2xl font-bold mb-4">Företagsinställningar</h2>
+        <h2 className="text-2xl font-bold mb-4">Inställningar</h2>
         <p className="text-gray-600">
           Inget företag hittat. Skapa ett företag först.
         </p>
@@ -613,7 +614,63 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6">Företagsinställningar</h1>
+      <h1 className="text-3xl font-bold mb-6">Inställningar</h1>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('company')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'company'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Företag
+          </button>
+          <button
+            onClick={() => setActiveTab('accounts')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'accounts'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Konton
+          </button>
+          <button
+            onClick={() => setActiveTab('fiscal')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'fiscal'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Räkenskapsår
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'templates'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Konteringsmallar
+          </button>
+          <button
+            onClick={() => setActiveTab('import')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'import'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Import/Export
+          </button>
+        </nav>
+      </div>
 
       {message && (
         <div
@@ -627,8 +684,11 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Company Management Section */}
-      <div className="card mb-6">
+      {/* Company Tab */}
+      {activeTab === 'company' && (
+        <div>
+          {/* Company Management Section */}
+          <div className="card mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Building2 className="w-5 h-5" />
@@ -1025,8 +1085,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+        </div>
+      )}
 
-      {/* SIE4 Import/Export Section */}
+      {/* Import/Export Tab */}
+      {activeTab === 'import' && (
+        <div>
+          {/* SIE4 Import/Export Section */}
       <div className="card mb-6">
         <h2 className="text-xl font-semibold mb-4">SIE4 Import/Export</h2>
         <p className="text-gray-600 mb-4">
@@ -1081,8 +1146,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+        </div>
+      )}
 
-      {/* Default Accounts Section */}
+      {/* Accounts Tab */}
+      {activeTab === 'accounts' && (
+        <div>
+          {/* Default Accounts Section */}
       <div className="card">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Standardkonton</h2>
@@ -1175,8 +1245,13 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+        </div>
+      )}
 
-      {/* Fiscal Years Section */}
+      {/* Fiscal Years Tab */}
+      {activeTab === 'fiscal' && (
+        <div>
+          {/* Fiscal Years Section */}
       <div className="card mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Räkenskapsår</h2>
@@ -1323,8 +1398,13 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+        </div>
+      )}
 
-      {/* Posting Templates Section */}
+      {/* Templates Tab */}
+      {activeTab === 'templates' && (
+        <div>
+          {/* Posting Templates Section */}
       <div className="card mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Konteringsmallar</h2>
@@ -1430,6 +1510,8 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+        </div>
+      )}
 
       {/* Import Summary Modal */}
       {showImportSummary && importSummary && (
