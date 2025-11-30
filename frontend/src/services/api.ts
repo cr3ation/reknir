@@ -220,6 +220,8 @@ export const sie4Api = {
 export const defaultAccountApi = {
   list: (companyId: number) =>
     api.get<DefaultAccount[]>('/api/default-accounts/', { params: { company_id: companyId } }),
+  create: (data: { company_id: number; account_type: string; account_id: number }) =>
+    api.post<DefaultAccount>('/api/default-accounts/', data),
   update: (defaultAccountId: number, data: { account_id: number }) =>
     api.patch<DefaultAccount>(`/api/default-accounts/${defaultAccountId}`, data),
 }

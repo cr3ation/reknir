@@ -469,39 +469,47 @@ export default function SettingsPage() {
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
   }
 
-  const handleUpdateDefaultAccount = async (defaultAccountId: number, newAccountId: number) => {
-    if (!selectedCompany) return
-
-    try {
-      setLoading(true)
-      await defaultAccountApi.update(defaultAccountId, { account_id: newAccountId })
-      showMessage('Standardkonto uppdaterat!', 'success')
-      await loadData()
-      setEditingDefaultAccount(null)
-      setSelectedAccountForDefault(null)
-    } catch (error: any) {
-      console.error('Failed to update default account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleOpenDefaultAccountModal = (type: string) => {
     const defaultAcc = getAccountForType(type)
     if (defaultAcc) {
       setSelectedAccountForDefault(defaultAcc.account_id)
+    } else {
+      setSelectedAccountForDefault(null)
     }
     setEditingDefaultAccount(type)
   }
 
   const handleSaveDefaultAccount = async () => {
-    if (!editingDefaultAccount || !selectedAccountForDefault) return
+    if (!editingDefaultAccount || !selectedAccountForDefault || !selectedCompany) return
 
     const defaultAcc = getAccountForType(editingDefaultAccount)
-    if (!defaultAcc) return
 
-    await handleUpdateDefaultAccount(defaultAcc.id, selectedAccountForDefault)
+    setLoading(true)
+    try {
+      if (!defaultAcc) {
+        // Create new default account
+        await defaultAccountApi.create({
+          company_id: selectedCompany.id,
+          account_type: editingDefaultAccount,
+          account_id: selectedAccountForDefault
+        })
+        showMessage('Standardkonto skapat!', 'success')
+      } else {
+        // Update existing default account
+        await defaultAccountApi.update(defaultAcc.id, { account_id: selectedAccountForDefault })
+        showMessage('Standardkonto uppdaterat!', 'success')
+      }
+
+      // Reload data and close modal
+      await loadData()
+      setEditingDefaultAccount(null)
+      setSelectedAccountForDefault(null)
+    } catch (error: any) {
+      console.error('Failed to save default account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const loadBasAccounts = async () => {
@@ -1431,7 +1439,7 @@ export default function SettingsPage() {
                         <button
                           onClick={() => handleOpenDefaultAccountModal(type)}
                           className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                          disabled={loading || !defaultAcc}
+                          disabled={loading}
                           title="Redigera standardkonto"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1469,7 +1477,7 @@ export default function SettingsPage() {
                         <button
                           onClick={() => handleOpenDefaultAccountModal(type)}
                           className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                          disabled={loading || !defaultAcc}
+                          disabled={loading}
                           title="Redigera standardkonto"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1500,7 +1508,7 @@ export default function SettingsPage() {
                         <button
                           onClick={() => handleOpenDefaultAccountModal(type)}
                           className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                          disabled={loading || !defaultAcc}
+                          disabled={loading}
                           title="Redigera standardkonto"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

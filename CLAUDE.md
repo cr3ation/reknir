@@ -179,7 +179,35 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Hantering av leverantörsregister
 - Koppling till fakturor
 
-### 7. Momsrapportering
+### 7. Standardkonton (Default Accounts)
+- Mappning av konton till funktioner för automatisk bokföring
+- Stöd för olika momssatser (25%, 12%, 6%, 0%)
+- Företagsspecifika konfigurationer
+- Automatisk initialisering vid BAS-import
+- Manuell redigering via inställningar
+
+**Standardkontotyper:**
+- `revenue_25/12/6/0` - Intäktskonton per momssats
+- `vat_outgoing_25/12/6` - Utgående moms
+- `vat_incoming_25/12/6` - Ingående moms
+- `accounts_receivable` - Kundfordringar (1510)
+- `accounts_payable` - Leverantörsskulder (2440)
+- `expense_default` - Standardkostnadskonto (6570)
+
+**API Endpoints:**
+- `GET /api/default-accounts/?company_id={id}` - Lista standardkonton
+- `POST /api/default-accounts/` - Skapa standardkonto
+- `PATCH /api/default-accounts/{id}` - Uppdatera standardkonto
+
+**Validering:**
+- Kontot måste existera i företagets kontoplan
+- Ett standardkontotyp kan bara ha ett konto per företag
+- Kan inte ta bort konto som används som standardkonto
+
+**Routes:**
+- `/settings` - Inställningar (fliken "Standardkonton")
+
+### 8. Momsrapportering
 - Momsrapport per period
 - Filtrering på datum
 - Exkludera momsredovisningsverifikationer
@@ -200,7 +228,7 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Export till SIE4-format
 - Kompatibelt med andra bokföringsprogram
 
-### 10. Konteringsmallar (Posting Templates)
+### 11. Konteringsmallar (Posting Templates)
 - Skapande av återanvändbara konteringsmallar
 - Formelbaserade beräkningar med variabeln `{total}`
 - Automatisk beräkning av konteringsrader
@@ -225,12 +253,13 @@ Kredit: 1930 Bankkonto              [Belopp]
 **Routes:**
 - `/settings` - Inställningar (fliken "Konteringsmallar")
 
-### 11. Företagsinställningar
+### 12. Företagsinställningar
 - Företagsinformation med automatiskt VAT-nummer
 - Logotypuppladdning och visning
-- Flikbaserad navigation (Företag, Konton, Räkenskapsår, Mallar, Import)
-- Hantering av standardkonton (GUI)
+- Flikbaserad navigation (Företag, Konton, Standardkonton, Räkenskapsår, Mallar, Import)
+- Hantering av standardkonton via grafiskt gränssnitt
 - Hantering av kontoplan (Lägg till/ta bort/inaktivera konton)
+- Initialisering av standardkonton
 - Import av BAS-kontoplan
 - Import av standardmallar
 
@@ -265,7 +294,6 @@ Kredit: 1930 Bankkonto              [Belopp]
 - `POST /api/companies/{id}/initialize-defaults` - Initiera standardkonton
 - `POST /api/companies/{id}/seed-bas` - Importera BAS-kontoplan
 - `POST /api/companies/{id}/seed-templates` - Importera standardmallar
-- `PATCH /api/default-accounts/{id}` - Uppdatera standardkonto
 - `POST /api/accounts/` - Skapa nytt konto
 - `DELETE /api/accounts/{id}` - Ta bort eller inaktivera konto
 - `PATCH /api/accounts/{id}` - Uppdatera konto (t.ex. aktivera igen)
@@ -282,20 +310,15 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Leverantörsfakturabetalningar
 
 ### Standardkonton
-Systemet använder default accounts för automatisk bokföring:
-- `ACCOUNTS_RECEIVABLE` - Kundfordringar (1510)
-- `ACCOUNTS_PAYABLE` - Leverantörsskulder (2440)
-- `VAT_OUTGOING_25` - Utgående moms 25% (2611)
-- `VAT_OUTGOING_12` - Utgående moms 12% (2621)
-- `VAT_OUTGOING_6` - Utgående moms 6% (2631)
-- `VAT_INCOMING_25` - Ingående moms 25% (2641)
-- `VAT_INCOMING_12` - Ingående moms 12% (2642)
-- `VAT_INCOMING_6` - Ingående moms 6% (2645)
-- `REVENUE_25` - Intäkt med 25% moms (3001)
-- `REVENUE_12` - Intäkt med 12% moms (3002)
-- `REVENUE_6` - Intäkt med 6% moms (3003)
-- `REVENUE_0` - Intäkt utan moms (3100)
-- `EXPENSE_DEFAULT` - Standardkostnad (6570)
+Systemet använder default accounts för automatisk bokföring. Dessa konfigureras per företag och kan redigeras via Inställningar > Standardkonton. Se **sektion 7** för mer information.
+
+**Standardtyper (med typiska BAS-kontonummer):**
+- `accounts_receivable` - Kundfordringar (1510)
+- `accounts_payable` - Leverantörsskulder (2440)
+- `vat_outgoing_25/12/6` - Utgående moms (2611/2621/2631)
+- `vat_incoming_25/12/6` - Ingående moms (2641/2642/2645)
+- `revenue_25/12/6/0` - Intäktskonton (3001/3002/3003/3044)
+- `expense_default` - Standardkostnad (6570)
 
 ## Arbetsflöden
 
@@ -533,14 +556,21 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 ## Ändringslogg
 
 ### v1.2.0 (2025-11-30)
-- ✅ GUI-hantering av standardkonton (dropdown-menyer för alla standardkontotyper)
-- ✅ Kontohantering i Settings: Lägg till konton från BAS 2024
-- ✅ Intelligent borttagning av konton:
-  - Konton med transaktioner inaktiveras automatiskt
-  - Konton utan transaktioner raderas permanent
-  - Skydd mot borttagning av standardkonton
-- ✅ BAS 2024 referensdata API-endpoint
-- ✅ Konto 3044 tillagt till BAS-referensen
+- ✅ Standardkonton-system (Default Accounts):
+  - Dedicated tab i Settings för hantering av standardkonton
+  - CREATE endpoint för nya standardkonton (`POST /api/default-accounts/`)
+  - UPDATE endpoint för befintliga standardkonton (`PATCH /api/default-accounts/{id}`)
+  - Strikt validering: endast befintliga konton kan användas
+  - Modal-baserad redigering med editerings-ikoner
+  - Skydd mot borttagning av konton som används som standardkonton
+- ✅ Kontohantering i Settings:
+  - Lägg till konton från BAS 2024 referensdata
+  - Intelligent borttagning/inaktivering av konton
+- ✅ BAS 2024 API-förbättringar:
+  - Fixad route-ordning för `/api/companies/bas-accounts`
+  - Konto 3044 (0% moms) tillagt till referensen
+  - Uppdaterad label: "Försäljning 0% moms" (inte bara export)
+- ✅ API-dokumentation: Swagger tags nu lowercase (`default-accounts`)
 
 ### v1.1.0 (2025-11-30)
 - ✅ Konteringsmallar med formelbaserade beräkningar
