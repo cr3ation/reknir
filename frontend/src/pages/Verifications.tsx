@@ -542,7 +542,12 @@ function CreateVerificationModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {lines.map((line, index) => (
+                  {lines.map((line, index) => {
+                    // When editing, include the account from the line even if it's inactive
+                    const accountExists = accounts.find(a => a.id === line.account_id)
+                    const lineHasAccount = line.account_number && line.account_name
+
+                    return (
                     <tr key={index}>
                       <td className="px-4 py-2">
                         <select
@@ -553,6 +558,13 @@ function CreateVerificationModal({
                           disabled={isEditing}
                         >
                           <option value={0}>Välj konto...</option>
+                          {/* Show the line's account first if it's not in the active accounts list (inactive) */}
+                          {isEditing && !accountExists && lineHasAccount && (
+                            <option key={line.account_id} value={line.account_id}>
+                              ⚠ {line.account_number} - {line.account_name}
+                            </option>
+                          )}
+                          {/* Show all active accounts */}
                           {accounts.map((account) => (
                             <option key={account.id} value={account.id}>
                               {account.account_number} - {account.name}
@@ -605,7 +617,8 @@ function CreateVerificationModal({
                         </td>
                       )}
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>

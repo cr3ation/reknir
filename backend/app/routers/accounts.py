@@ -13,7 +13,10 @@ router = APIRouter()
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(account: AccountCreate, db: Session = Depends(get_db)):
-    """Create a new account"""
+    """
+    Create a new account.
+    If an inactive account with the same number exists, it will be reactivated.
+    """
 
     # Check if account number already exists for this company
     existing = db.query(Account).filter(
@@ -22,10 +25,25 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Account {account.account_number} already exists for this company"
-        )
+        # If account exists but is inactive, reactivate it
+        if not existing.active:
+            existing.active = True
+            # Update other fields if provided
+            for field, value in account.model_dump(exclude={'company_id', 'account_number'}).items():
+                setattr(existing, field, value)
+            db.commit()
+            db.refresh(existing)
+            # Return HTTP 200 with special message to indicate reactivation
+            raise HTTPException(
+                status_code=status.HTTP_200_OK,
+                detail=f"Konto {account.account_number} var inaktivt och har nu aktiverats igen."
+            )
+        else:
+            # Account exists and is already active
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Konto {account.account_number} finns redan och är aktivt."
+            )
 
     # Create account
     db_account = Account(**account.model_dump())
@@ -117,6 +135,52 @@ def update_account(account_id: int, account_update: AccountUpdate, db: Session =
     db.commit()
     db.refresh(account)
     return account
+
+
+@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(account_id: int, db: Session = Depends(get_db)):
+    """
+    Delete or deactivate an account.
+    - If account has transactions: marks it as inactive (can be reactivated later via PATCH)
+    - If account has no transactions: deletes it completely
+    """
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found"
+        )
+
+    # Check if account is used in default accounts (FIRST - most restrictive)
+    from app.models.default_account import DefaultAccount
+    default_account = db.query(DefaultAccount).filter(
+        DefaultAccount.account_id == account_id
+    ).first()
+
+    if default_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kan inte ta bort konto som används som standardkonto ({default_account.account_type}). Ändra standardkontomappningen först."
+        )
+
+    # Check if account has any transactions
+    transaction_count = db.query(TransactionLine).filter(
+        TransactionLine.account_id == account_id
+    ).count()
+
+    if transaction_count > 0:
+        # Cannot delete - mark as inactive instead
+        account.active = False
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_200_OK,
+            detail=f"Kontot har {transaction_count} bokförda transaktioner och har därför markerats som inaktivt istället för att tas bort. Det kommer inte längre visas i kontolistan men finns kvar i bokföringshistoriken."
+        )
+
+    # Safe to delete - no transactions or default account references
+    db.delete(account)
+    db.commit()
+    return None
 
 
 # Account Ledger models

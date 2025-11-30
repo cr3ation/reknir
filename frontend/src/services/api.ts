@@ -45,6 +45,7 @@ export const companyApi = {
     api.post<{ message: string; default_accounts_configured: number }>(
       `/api/companies/${id}/initialize-defaults`
     ),
+  getBasAccounts: () => api.get<{ version: string; description: string; accounts: any[] }>('/api/companies/bas-accounts'),
   uploadLogo: (id: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -75,6 +76,7 @@ export const accountApi = {
   create: (data: Omit<Account, 'id' | 'current_balance'>) =>
     api.post<Account>('/api/accounts/', data),
   update: (id: number, data: Partial<Account>) => api.patch<Account>(`/api/accounts/${id}`, data),
+  delete: (id: number) => api.delete(`/api/accounts/${id}`),
   getLedger: (accountId: number, params?: { start_date?: string; end_date?: string }) =>
     api.get(`/api/accounts/${accountId}/ledger`, { params }),
 }
@@ -218,12 +220,10 @@ export const sie4Api = {
 export const defaultAccountApi = {
   list: (companyId: number) =>
     api.get<DefaultAccount[]>('/api/default-accounts/', { params: { company_id: companyId } }),
-  update: (companyId: number, accountType: string, accountId: number) =>
-    api.post<DefaultAccount>('/api/default-accounts/', {
-      company_id: companyId,
-      account_type: accountType,
-      account_id: accountId,
-    }),
+  create: (data: { company_id: number; account_type: string; account_id: number }) =>
+    api.post<DefaultAccount>('/api/default-accounts/', data),
+  update: (defaultAccountId: number, data: { account_id: number }) =>
+    api.patch<DefaultAccount>(`/api/default-accounts/${defaultAccountId}`, data),
 }
 
 // Expenses
