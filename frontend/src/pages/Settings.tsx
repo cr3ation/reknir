@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
 import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
@@ -102,7 +102,7 @@ export default function SettingsPage() {
       setLoading(true)
       const [defaultsRes, accountsRes, fiscalYearsRes, templatesRes] = await Promise.all([
         defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        accountApi.list(selectedCompany.id),
+        accountApi.list(selectedCompany.id, { active_only: false }),
         fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
         postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
       ])
@@ -574,6 +574,22 @@ export default function SettingsPage() {
       } else {
         showMessage(formatErrorMessage(error), 'error')
       }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleReactivateAccount = async (accountId: number) => {
+    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
+
+    try {
+      setLoading(true)
+      await accountApi.update(accountId, { active: true })
+      showMessage('Konto aktiverat!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to reactivate account:', error)
+      showMessage(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
     }
@@ -1595,7 +1611,7 @@ export default function SettingsPage() {
               <div className="text-center py-8">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-            ) : allAccounts.length === 0 ? (
+            ) : allAccounts.filter(a => a.active).length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <p className="mb-4">Inga konton skapade än.</p>
                 <p className="text-sm">
@@ -1625,7 +1641,7 @@ export default function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {allAccounts.map((account) => (
+                    {allAccounts.filter(a => a.active).map((account) => (
                       <tr key={account.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-mono">
                           {account.account_number}
@@ -1659,6 +1675,76 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* Inactive Accounts Section */}
+          {allAccounts.filter(a => !a.active).length > 0 && (
+            <div className="card mt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Inaktiva konton</h2>
+              </div>
+
+              <p className="text-gray-600 mb-4">
+                Dessa konton har markerats som inaktiva eftersom de har bokförda transaktioner. De kan återaktiveras vid behov.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Kontonummer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Namn
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Typ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Saldo
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Åtgärder
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allAccounts.filter(a => !a.active).map((account) => (
+                      <tr key={account.id} className="hover:bg-gray-50 opacity-60">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+                          <span className="text-amber-600 mr-1" title="Inaktivt konto">⚠</span>
+                          {account.account_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {account.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          {account.account_type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                          {account.current_balance?.toLocaleString('sv-SE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }) || '0,00'} kr
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleReactivateAccount(account.id)}
+                            disabled={loading}
+                            className="text-green-600 hover:text-green-900 flex items-center gap-1 ml-auto"
+                            title="Aktivera konto"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Aktivera
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
