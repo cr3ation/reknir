@@ -229,7 +229,8 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Företagsinformation med automatiskt VAT-nummer
 - Logotypuppladdning och visning
 - Flikbaserad navigation (Företag, Konton, Räkenskapsår, Mallar, Import)
-- Initialisering av standardkonton
+- Hantering av standardkonton (GUI)
+- Hantering av kontoplan (Lägg till/ta bort/inaktivera konton)
 - Import av BAS-kontoplan
 - Import av standardmallar
 
@@ -246,13 +247,28 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Automatisk visning på faktura-PDF
 - UUID-baserade filnamn för säkerhet
 
+**Kontohantering (Settings > Konton):**
+- Redigera standardkonton via dropdown-menyer
+- Visa alla företagets konton i tabell
+- Lägg till konton från BAS 2024 referenslista
+- Ta bort/inaktivera konton:
+  - Konton med transaktioner markeras som inaktiva (kan aktiveras igen)
+  - Konton utan transaktioner raderas permanent
+  - Konton som är standardkonton kan inte tas bort
+- Filtrering: Endast konton som inte redan finns visas vid tillägg
+
 **API Endpoints:**
 - `POST /api/companies/{id}/logo` - Ladda upp logotyp
 - `GET /api/companies/{id}/logo` - Hämta logotyp
 - `DELETE /api/companies/{id}/logo` - Ta bort logotyp
+- `GET /api/companies/bas-accounts` - Hämta BAS 2024 referensdata
 - `POST /api/companies/{id}/initialize-defaults` - Initiera standardkonton
 - `POST /api/companies/{id}/seed-bas` - Importera BAS-kontoplan
 - `POST /api/companies/{id}/seed-templates` - Importera standardmallar
+- `PATCH /api/default-accounts/{id}` - Uppdatera standardkonto
+- `POST /api/accounts/` - Skapa nytt konto
+- `DELETE /api/accounts/{id}` - Ta bort eller inaktivera konto
+- `PATCH /api/accounts/{id}` - Uppdatera konto (t.ex. aktivera igen)
 
 **Routes:**
 - `/settings` - Inställningar (flikbaserad vy)
@@ -511,10 +527,20 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 
 ---
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Senast uppdaterad:** 2025-11-30
 
 ## Ändringslogg
+
+### v1.2.0 (2025-11-30)
+- ✅ GUI-hantering av standardkonton (dropdown-menyer för alla standardkontotyper)
+- ✅ Kontohantering i Settings: Lägg till konton från BAS 2024
+- ✅ Intelligent borttagning av konton:
+  - Konton med transaktioner inaktiveras automatiskt
+  - Konton utan transaktioner raderas permanent
+  - Skydd mot borttagning av standardkonton
+- ✅ BAS 2024 referensdata API-endpoint
+- ✅ Konto 3044 tillagt till BAS-referensen
 
 ### v1.1.0 (2025-11-30)
 - ✅ Konteringsmallar med formelbaserade beräkningar

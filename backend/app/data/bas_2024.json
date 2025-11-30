@@ -25,6 +25,7 @@
     {"account_number": "3001", "name": "Försäljning varor och tjänster inom Sverige, 25% moms", "account_type": "revenue", "description": "Sales of goods and services in Sweden, 25% VAT"},
     {"account_number": "3002", "name": "Försäljning varor och tjänster inom Sverige, 12% moms", "account_type": "revenue", "description": "Sales of goods and services in Sweden, 12% VAT"},
     {"account_number": "3003", "name": "Försäljning varor och tjänster inom Sverige, 6% moms", "account_type": "revenue", "description": "Sales of goods and services in Sweden, 6% VAT"},
+    {"account_number": "3044", "name": "Försäljning tjänster inom Sverige, 0% moms", "account_type": "revenue", "description": "Sales of services in Sweden, 0% VAT"},
     {"account_number": "3105", "name": "Försäljning tjänster utanför Sverige, omsättning inom EU", "account_type": "revenue", "description": "Sale of services outside Sweden, turnover within EU"},
     {"account_number": "3106", "name": "Försäljning tjänster utanför Sverige, omsättning utanför EU", "account_type": "revenue", "description": "Sale of services outside Sweden, turnover outside EU"},
     {"account_number": "4000", "name": "Inköp varor och material", "account_type": "cost_goods", "description": "Purchase of goods and materials"},
