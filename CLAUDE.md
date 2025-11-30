@@ -11,6 +11,8 @@ Reknir är ett komplett bokföringssystem byggt för svenska företag med stöd 
 - **PostgreSQL** - Databas
 - **Alembic** - Databasmigrationer
 - **Pydantic** - Datavalidering
+- **WeasyPrint** - PDF-generering
+- **Jinja2** - HTML-mallar för PDF
 
 ### Frontend
 - **React 18** med TypeScript
@@ -41,6 +43,8 @@ reknir/
 │   └── package.json
 ├── receipts/                 # Utläggskvitton
 ├── invoices/                 # Fakturabilagor
+├── uploads/                  # Uppladdade filer (logotyper)
+│   └── logos/                # Företagslogotyper
 └── docker-compose.yml        # Container orchestration
 ```
 
@@ -196,6 +200,63 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Export till SIE4-format
 - Kompatibelt med andra bokföringsprogram
 
+### 10. Konteringsmallar (Posting Templates)
+- Skapande av återanvändbara konteringsmallar
+- Formelbaserade beräkningar med variabeln `{total}`
+- Automatisk beräkning av konteringsrader
+- Malleditor med drag-and-drop sortering
+- Förutfyllda svenska standardmallar
+
+**Formelexempel:**
+- `{total}` - Totalbelopp
+- `{total} * 0.25` - 25% av totalbelopp (t.ex. moms)
+- `-{total}` - Negativt belopp
+- `{total} * 1.25` - Totalbelopp plus 25%
+
+**API Endpoints:**
+- `POST /api/posting-templates/` - Skapa mall
+- `GET /api/posting-templates/` - Lista mallar
+- `GET /api/posting-templates/{id}` - Hämta mall
+- `PUT /api/posting-templates/{id}` - Uppdatera mall
+- `DELETE /api/posting-templates/{id}` - Ta bort mall
+- `POST /api/posting-templates/{id}/execute` - Kör mall med belopp
+- `PATCH /api/posting-templates/reorder` - Ändra sortering
+
+**Routes:**
+- `/settings` - Inställningar (fliken "Konteringsmallar")
+
+### 11. Företagsinställningar
+- Företagsinformation med automatiskt VAT-nummer
+- Logotypuppladdning och visning
+- Flikbaserad navigation (Företag, Konton, Räkenskapsår, Mallar, Import)
+- Initialisering av standardkonton
+- Import av BAS-kontoplan
+- Import av standardmallar
+
+**VAT-nummer:**
+- Automatisk beräkning från organisationsnummer
+- Format: SE + 10 siffror + 01
+- Exempel: 556644-4354 → SE556644435401
+- Visas på fakturor och i företagsinformation
+
+**Logotyphantering:**
+- Format: PNG, JPEG
+- Max storlek: 5MB
+- Förhandsvisning i inställningar
+- Automatisk visning på faktura-PDF
+- UUID-baserade filnamn för säkerhet
+
+**API Endpoints:**
+- `POST /api/companies/{id}/logo` - Ladda upp logotyp
+- `GET /api/companies/{id}/logo` - Hämta logotyp
+- `DELETE /api/companies/{id}/logo` - Ta bort logotyp
+- `POST /api/companies/{id}/initialize-defaults` - Initiera standardkonton
+- `POST /api/companies/{id}/seed-bas` - Importera BAS-kontoplan
+- `POST /api/companies/{id}/seed-templates` - Importera standardmallar
+
+**Routes:**
+- `/settings` - Inställningar (flikbaserad vy)
+
 ## Standardkonfigurationer
 
 ### Bankkonto
@@ -282,6 +343,10 @@ Systemet använder default accounts för automatisk bokföring:
 - `get_revenue_account_for_vat_rate()` - Hämta intäktskonto för momssats
 - `get_vat_outgoing_account_for_rate()` - Hämta utgående momskonto
 
+### `/backend/app/services/pdf_service.py`
+- `generate_invoice_pdf()` - Genererar PDF från faktura med Jinja2-mall och WeasyPrint
+- `save_invoice_pdf()` - Sparar genererad PDF till disk
+
 ## Databasschema
 
 ### Viktiga Tabeller
@@ -298,11 +363,15 @@ Systemet använder default accounts för automatisk bokföring:
 - `customers` - Kunder
 - `suppliers` - Leverantörer
 - `default_accounts` - Standardkonton
+- `posting_templates` - Konteringsmallar
+- `posting_template_lines` - Konteringsmallrader
 
 ### Enum Types
 - `InvoiceStatus`: draft, sent, paid, partial, overdue, cancelled
 - `ExpenseStatus`: draft, submitted, approved, paid, rejected
 - `AccountType`: asset, liability, equity, revenue, expense
+- `AccountingBasis`: accrual, cash
+- `VATReportingPeriod`: monthly, quarterly, yearly
 
 ## Utveckling
 
@@ -341,6 +410,14 @@ docker compose exec backend alembic revision --autogenerate -m "beskrivning"
 - Docker volume: `./invoices:/app/invoices`
 - Format: JPG, JPEG, PNG, PDF, GIF
 - Unika filnamn: UUID
+
+### Företagslogotyper
+- Lagrad i: `/app/uploads/logos/`
+- Docker volume: `./uploads:/app/uploads`
+- Format: PNG, JPEG
+- Max storlek: 5MB
+- Unika filnamn: `{company_id}_{uuid}.{ext}`
+- Visas på faktura-PDF
 
 ## Säkerhet & Validering
 
@@ -402,6 +479,8 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 - [ ] E-postutskick av fakturor
 - [ ] Automatisk momsredovisning
 - [ ] Bokslut och årsbokslut
+- [ ] Integration av konteringsmallar med faktura/utlägg-workflows
+- [ ] Automatisk matchning av banktransaktioner
 
 ### Tekniska Förbättringar
 - [ ] Caching (Redis)
@@ -432,5 +511,18 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 
 ---
 
-**Version:** 1.0.0
-**Senast uppdaterad:** 2025-01-11
+**Version:** 1.1.0
+**Senast uppdaterad:** 2025-11-30
+
+## Ändringslogg
+
+### v1.1.0 (2025-11-30)
+- ✅ Konteringsmallar med formelbaserade beräkningar
+- ✅ Företagslogotyp upload och PDF-integration
+- ✅ Automatisk VAT-nummer beräkning
+- ✅ Flikbaserad inställningssida
+- ✅ Förbättrad faktura-PDF mall
+- ✅ Etiketter på fakturarader
+
+### v1.0.0 (2025-01-11)
+- Initial release med grundläggande bokföringsfunktioner
