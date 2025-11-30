@@ -44,6 +44,22 @@ def list_companies(db: Session = Depends(get_db)):
     return companies
 
 
+@router.get("/bas-accounts", status_code=status.HTTP_200_OK)
+def get_bas_accounts():
+    """Get all BAS 2024 reference accounts"""
+    bas_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'bas_2024.json')
+    if not os.path.exists(bas_file):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="BAS 2024 data file not found"
+        )
+
+    with open(bas_file, 'r', encoding='utf-8') as f:
+        bas_data = json.load(f)
+
+    return bas_data
+
+
 @router.get("/{company_id}", response_model=CompanyResponse)
 def get_company(company_id: int, db: Session = Depends(get_db)):
     """Get a specific company"""
@@ -89,22 +105,6 @@ def delete_company(company_id: int, db: Session = Depends(get_db)):
     db.delete(company)
     db.commit()
     return None
-
-
-@router.get("/bas-accounts", status_code=status.HTTP_200_OK)
-def get_bas_accounts():
-    """Get all BAS 2024 reference accounts"""
-    bas_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'bas_2024.json')
-    if not os.path.exists(bas_file):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="BAS 2024 data file not found"
-        )
-
-    with open(bas_file, 'r', encoding='utf-8') as f:
-        bas_data = json.load(f)
-
-    return bas_data
 
 
 @router.post("/{company_id}/seed-bas", status_code=status.HTTP_200_OK)
