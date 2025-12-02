@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
 import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -22,12 +23,16 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [templates, setTemplates] = useState<PostingTemplateListItem[]>([])
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [showAddAccount, setShowAddAccount] = useState(false)
+  const [basAccounts, setBasAccounts] = useState<any[]>([])
+  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
   const [templateForm, setTemplateForm] = useState<PostingTemplate>({
     company_id: 0,
     name: '',
@@ -85,7 +90,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadData()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadData = async () => {
     if (!selectedCompany) {
@@ -95,16 +100,20 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      const [defaultsRes, accountsRes, fiscalYearsRes, templatesRes] = await Promise.all([
-        defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        accountApi.list(selectedCompany.id),
-        fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-      ])
-      setDefaultAccounts(defaultsRes.data)
-      setAllAccounts(accountsRes.data)
+      const fiscalYearsRes = await fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] }))
       setFiscalYears(fiscalYearsRes.data)
-      setTemplates(templatesRes.data)
+
+      // If we have a selected fiscal year, load accounts and defaults
+      if (selectedFiscalYear) {
+        const [defaultsRes, accountsRes, templatesRes] = await Promise.all([
+          defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+          accountApi.list(selectedCompany.id, selectedFiscalYear.id),
+          postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        ])
+        setDefaultAccounts(defaultsRes.data)
+        setAllAccounts(accountsRes.data)
+        setTemplates(templatesRes.data)
+      }
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
@@ -295,14 +304,17 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Välj ett räkenskapsår först', 'error')
+      return
+    }
 
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
       setLoading(true)
-      const response = await sie4Api.import(selectedCompany.id, file)
+      const response = await sie4Api.import(selectedCompany.id, selectedFiscalYear.id, file)
 
       // Show modal with import summary
       setImportSummary({
@@ -327,11 +339,14 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Export = async (includeVerifications: boolean) => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Välj ett räkenskapsår först', 'error')
+      return
+    }
 
     try {
       setLoading(true)
-      const response = await sie4Api.export(selectedCompany.id, includeVerifications)
+      const response = await sie4Api.export(selectedCompany.id, selectedFiscalYear.id, includeVerifications)
 
       // Create download link
       const blob = new Blob([response.data], { type: 'text/plain' })
@@ -602,7 +617,7 @@ export default function SettingsPage() {
 
   const handleDrop = async (e: any, targetTemplate: PostingTemplateListItem) => {
     e.preventDefault()
-    
+
     if (!draggedTemplate || !selectedCompany || draggedTemplate.id === targetTemplate.id || !dropIndicator) {
       handleDragEnd()
       return
@@ -611,7 +626,7 @@ export default function SettingsPage() {
     const sortedTemplates = templates.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
     const draggedIndex = sortedTemplates.findIndex((t: any) => t.id === draggedTemplate.id)
     const targetIndex = sortedTemplates.findIndex((t: any) => t.id === targetTemplate.id)
-    
+
     if (draggedIndex === -1 || targetIndex === -1) {
       handleDragEnd()
       return
@@ -622,7 +637,7 @@ export default function SettingsPage() {
     if (dropIndicator.position === 'after') {
       insertIndex = targetIndex + 1
     }
-    
+
     // Adjust for removal of dragged item
     if (draggedIndex < insertIndex) {
       insertIndex -= 1
@@ -650,6 +665,91 @@ export default function SettingsPage() {
       // Revert the local change if API call fails
       setTemplates(templates)
       showMessage('Kunde inte uppdatera ordning', 'error')
+    }
+  }
+
+  // Account management functions
+  const loadBasAccounts = async () => {
+    try {
+      const response = await companyApi.getBasAccounts()
+      setBasAccounts(response.data.accounts)
+    } catch (error: any) {
+      console.error('Failed to load BAS accounts:', error)
+      showMessage('Kunde inte ladda BAS-konton', 'error')
+    }
+  }
+
+  const handleShowAddAccount = async () => {
+    await loadBasAccounts()
+    setShowAddAccount(true)
+  }
+
+  const handleAddAccount = async () => {
+    if (!selectedCompany || !selectedFiscalYear || !selectedBasAccount) return
+
+    const basAccount = basAccounts.find(acc => acc.account_number === selectedBasAccount)
+    if (!basAccount) return
+
+    try {
+      setLoading(true)
+      await accountApi.create({
+        company_id: selectedCompany.id,
+        fiscal_year_id: selectedFiscalYear.id,
+        account_number: basAccount.account_number,
+        name: basAccount.name,
+        account_type: basAccount.account_type,
+        description: basAccount.description,
+        active: true,
+        opening_balance: 0,
+        is_bas_account: true,
+      })
+      showMessage('Konto tillagt!', 'success')
+      setShowAddAccount(false)
+      setSelectedBasAccount('')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to add account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async (accountId: number) => {
+    if (!confirm('Är du säker på att du vill ta bort detta konto?\n\nOm kontot har bokförda transaktioner kommer det att inaktiveras istället.')) return
+
+    try {
+      setLoading(true)
+      await accountApi.delete(accountId)
+      showMessage('Konto borttaget!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to delete account:', error)
+      // Special handling for 200 OK response (account was deactivated instead of deleted)
+      if (error.response?.status === 200) {
+        showMessage(error.response.data.detail, 'success')
+        await loadData()
+      } else {
+        showMessage(formatErrorMessage(error), 'error')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleReactivateAccount = async (accountId: number) => {
+    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
+
+    try {
+      setLoading(true)
+      await accountApi.update(accountId, { active: true })
+      showMessage('Konto aktiverat!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to reactivate account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -1370,6 +1470,211 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+          {/* All Accounts Section */}
+          <div className="card mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Alla konton</h2>
+              <button
+                onClick={handleShowAddAccount}
+                disabled={loading}
+                className="btn btn-primary"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Lägg till konto
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-4">
+              Hantera alla konton i kontoplanen.
+            </p>
+
+            {/* Add Account Form */}
+            {showAddAccount && (
+              <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Välj konto
+                  </label>
+                  <select
+                    value={selectedBasAccount}
+                    onChange={(e) => setSelectedBasAccount(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">-- Välj ett BAS-konto --</option>
+                    {basAccounts
+                      .filter(bas => !allAccounts.some(acc => acc.account_number === bas.account_number))
+                      .map(bas => (
+                        <option key={bas.account_number} value={bas.account_number}>
+                          {bas.account_number} - {bas.name}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Endast BAS-konton som inte redan finns i kontoplanen visas
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddAccount}
+                    disabled={loading || !selectedBasAccount}
+                    className="btn btn-primary"
+                  >
+                    Lägg till
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddAccount(false)
+                      setSelectedBasAccount('')
+                    }}
+                    disabled={loading}
+                    className="btn btn-secondary"
+                  >
+                    Avbryt
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : allAccounts.filter(a => a.active).length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="mb-4">Inga konton skapade än.</p>
+                <p className="text-sm">
+                  Importera BAS-kontoplanen under fliken "Import" för att komma igång.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Kontonummer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Namn
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Typ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Saldo
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Åtgärder
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allAccounts.filter(a => a.active).map((account) => (
+                      <tr key={account.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono">
+                          {account.account_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {account.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {account.account_type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                          {account.current_balance?.toLocaleString('sv-SE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }) || '0,00'} kr
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleDeleteAccount(account.id)}
+                            disabled={loading}
+                            className="text-red-600 hover:text-red-900"
+                            title="Ta bort konto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Inactive Accounts Section */}
+          {allAccounts.filter(a => !a.active).length > 0 && (
+            <div className="card mt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Inaktiva konton</h2>
+              </div>
+
+              <p className="text-gray-600 mb-4">
+                Dessa konton har markerats som inaktiva eftersom de har bokförda transaktioner. De kan återaktiveras vid behov.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Kontonummer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Namn
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Typ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Saldo
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Åtgärder
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allAccounts.filter(a => !a.active).map((account) => (
+                      <tr key={account.id} className="hover:bg-gray-50 opacity-60">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+                          <span className="text-amber-600 mr-1" title="Inaktivt konto">⚠</span>
+                          {account.account_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {account.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          {account.account_type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                          {account.current_balance?.toLocaleString('sv-SE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }) || '0,00'} kr
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleReactivateAccount(account.id)}
+                            disabled={loading}
+                            className="text-green-600 hover:text-green-900 flex items-center gap-1 ml-auto"
+                            title="Aktivera konto"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Aktivera
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

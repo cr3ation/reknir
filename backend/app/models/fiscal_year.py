@@ -27,6 +27,7 @@ class FiscalYear(Base):
     # Relationships
     company = relationship("Company", back_populates="fiscal_years")
     verifications = relationship("Verification", back_populates="fiscal_year")
+    accounts = relationship("Account", back_populates="fiscal_year")
 
     def __repr__(self):
         return f"<FiscalYear {self.label} ({self.start_date} - {self.end_date})>"

@@ -49,6 +49,7 @@ class VerificationBase(BaseModel):
 class VerificationCreate(VerificationBase):
     """Schema for creating a verification"""
     company_id: int
+    fiscal_year_id: int
     transaction_lines: List[TransactionLineCreate] = Field(..., min_length=2)
 
     @field_validator('transaction_lines')
@@ -76,6 +77,7 @@ class VerificationResponse(VerificationBase):
     """Schema for verification response"""
     id: int
     company_id: int
+    fiscal_year_id: int
     verification_number: int
     registration_date: date
     locked: bool

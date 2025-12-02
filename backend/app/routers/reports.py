@@ -16,16 +16,18 @@ router = APIRouter()
 @router.get("/balance-sheet")
 def get_balance_sheet(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     db: Session = Depends(get_db)
 ):
     """
-    Generate Balance Sheet (Balansräkning)
+    Generate Balance Sheet (Balansräkning) for a specific fiscal year
     Assets = Liabilities + Equity
     """
 
-    # Get all accounts with balances
+    # Get all accounts with balances for this fiscal year
     accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         Account.active == True
     ).all()
 
@@ -79,16 +81,18 @@ def get_balance_sheet(
 @router.get("/income-statement")
 def get_income_statement(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     db: Session = Depends(get_db)
 ):
     """
-    Generate Income Statement (Resultaträkning)
+    Generate Income Statement (Resultaträkning) for a specific fiscal year
     Revenue - Expenses = Profit/Loss
     """
 
-    # Get all revenue and expense accounts
+    # Get all revenue and expense accounts for this fiscal year
     accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         Account.active == True,
         Account.account_type.in_([
             AccountType.REVENUE,
@@ -137,15 +141,17 @@ def get_income_statement(
 @router.get("/trial-balance")
 def get_trial_balance(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     db: Session = Depends(get_db)
 ):
     """
-    Generate Trial Balance (Råbalans/RAR)
+    Generate Trial Balance (Råbalans/RAR) for a specific fiscal year
     Shows all accounts with opening balance, changes, and closing balance
     """
 
     accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         Account.active == True
     ).order_by(Account.account_number).all()
 
@@ -186,16 +192,17 @@ def get_trial_balance(
 @router.get("/vat-report")
 def get_vat_report(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     start_date: Optional[date] = Query(None, description="Start date for VAT period (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date for VAT period (YYYY-MM-DD)"),
     exclude_vat_settlements: bool = Query(False, description="Exclude VAT settlement/declaration entries"),
     db: Session = Depends(get_db)
 ):
     """
-    Generate VAT Report (Momsrapport) for a specific period
+    Generate VAT Report (Momsrapport) for a specific fiscal year and period
     Shows outgoing VAT (sales) and incoming VAT (purchases) with net amount to pay/refund
 
-    If no dates provided, shows all-time totals.
+    If no dates provided, shows all-time totals for the fiscal year.
     If exclude_vat_settlements is True, filters out verifications that appear to be VAT settlements
     (e.g., entries that zero out VAT accounts when filing declarations).
     """
@@ -207,6 +214,7 @@ def get_vat_report(
     # that still have transactions (e.g., from imported historical data)
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         (
             # Outgoing VAT accounts
             ((Account.account_number >= 2610) & (Account.account_number <= 2619)) |
@@ -260,6 +268,7 @@ def get_vat_report(
         # Find verification IDs that contain settlement accounts
         settlement_accounts = db.query(Account.id).filter(
             Account.company_id == company_id,
+            Account.fiscal_year_id == fiscal_year_id,
             Account.account_number.in_([2650, 2660])  # Momsfordran, Momsskuld
         ).all()
 
@@ -597,16 +606,18 @@ def get_vat_periods(
 @router.get("/vat-debug")
 def get_vat_debug(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
     db: Session = Depends(get_db)
 ):
     """
-    Debug endpoint to see what VAT accounts and transactions exist
+    Debug endpoint to see what VAT accounts and transactions exist for a fiscal year
     """
-    # Get all VAT accounts (including inactive ones)
+    # Get all VAT accounts (including inactive ones) for this fiscal year
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         (
             ((Account.account_number >= 2610) & (Account.account_number <= 2619)) |
             ((Account.account_number >= 2640) & (Account.account_number <= 2649))
@@ -813,23 +824,26 @@ def export_vat_report_xml(
 @router.get("/monthly-statistics")
 def get_monthly_statistics(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     year: int = Query(..., description="Year (e.g., 2024)"),
     db: Session = Depends(get_db)
 ):
     """
-    Get monthly revenue and expense statistics for a specific year.
+    Get monthly revenue and expense statistics for a specific fiscal year.
     Used for dashboard charts to visualize financial performance over time.
     """
-    # Get all revenue accounts (3000-3999)
+    # Get all revenue accounts (3000-3999) for this fiscal year
     revenue_accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         Account.account_number >= 3000,
         Account.account_number < 4000
     ).all()
 
-    # Get all expense accounts (4000-8999)
+    # Get all expense accounts (4000-8999) for this fiscal year
     expense_accounts = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         Account.account_number >= 4000,
         Account.account_number < 9000
     ).all()

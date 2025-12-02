@@ -53,6 +53,7 @@ export interface FiscalYear {
 export interface Account {
   id: number
   company_id: number
+  fiscal_year_id: number
   account_number: number
   name: string
   description?: string

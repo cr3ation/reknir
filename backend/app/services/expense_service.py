@@ -4,7 +4,25 @@ from datetime import date, datetime
 from app.models.expense import Expense
 from app.models.verification import Verification, TransactionLine
 from app.models.account import Account
+from app.models.fiscal_year import FiscalYear
 from typing import Optional
+
+
+def get_fiscal_year_for_date(db: Session, company_id: int, transaction_date: date) -> FiscalYear:
+    """
+    Get the fiscal year for a given transaction date.
+    Raises ValueError if no fiscal year is found.
+    """
+    fiscal_year = db.query(FiscalYear).filter(
+        FiscalYear.company_id == company_id,
+        FiscalYear.start_date <= transaction_date,
+        FiscalYear.end_date >= transaction_date
+    ).first()
+
+    if not fiscal_year:
+        raise ValueError(f"No fiscal year found for date {transaction_date}. Please create a fiscal year that includes this date.")
+
+    return fiscal_year
 
 
 def create_expense_verification(
@@ -23,6 +41,9 @@ def create_expense_verification(
     Credit: 2890 Upplupna kostnader eller annan skuldkonto (Employee payable)
     """
 
+    # Get fiscal year for this expense date
+    fiscal_year = get_fiscal_year_for_date(db, expense.company_id, expense.expense_date)
+
     # Get next verification number
     from app.routers.verifications import get_next_verification_number
     ver_number = get_next_verification_number(db, expense.company_id, "A")
@@ -30,6 +51,7 @@ def create_expense_verification(
     # Create verification
     verification = Verification(
         company_id=expense.company_id,
+        fiscal_year_id=fiscal_year.id,
         verification_number=ver_number,
         series="A",
         transaction_date=expense.expense_date,
@@ -115,6 +137,9 @@ def create_expense_payment_verification(
     Credit: Bank account (e.g., 1930 Företagskonto)
     """
 
+    # Get fiscal year for payment date
+    fiscal_year = get_fiscal_year_for_date(db, expense.company_id, paid_date)
+
     # Get next verification number
     from app.routers.verifications import get_next_verification_number
     ver_number = get_next_verification_number(db, expense.company_id, "A")
@@ -122,6 +147,7 @@ def create_expense_payment_verification(
     # Create verification
     verification = Verification(
         company_id=expense.company_id,
+        fiscal_year_id=fiscal_year.id,
         verification_number=ver_number,
         series="A",
         transaction_date=paid_date,
