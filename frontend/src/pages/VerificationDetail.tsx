@@ -64,7 +64,19 @@ export default function VerificationDetail() {
     return new Date(dateString).toLocaleDateString('sv-SE')
   }
 
-  const getAccountInfo = (accountId: number) => {
+  const getAccountInfo = (accountId: number, accountNumber?: number, accountName?: string) => {
+    // Use account info from transaction line if available (handles inactive accounts)
+    if (accountNumber && accountName) {
+      const account = accounts.find(a => a.id === accountId)
+      const isInactive = account && !account.active
+      return {
+        text: `${accountNumber} - ${accountName}`,
+        isInactive,
+        isMissing: false
+      }
+    }
+
+    // Fallback to lookup in accounts list
     const account = accounts.find(a => a.id === accountId)
     if (!account) return `Konto #${accountId}`
 
@@ -191,10 +203,20 @@ export default function VerificationDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {verification.transaction_lines.map((line, index) => (
+                  {verification.transaction_lines.map((line, index) => {
+                    const accountInfo = getAccountInfo(line.account_id, line.account_number, line.account_name)
+                    return (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium">
-                        {getAccountInfo(line.account_id)}
+                        {accountInfo.isInactive && (
+                          <span className="text-amber-600 mr-1" title="Inaktivt konto">⚠</span>
+                        )}
+                        {accountInfo.isMissing && (
+                          <span className="text-red-600 mr-1" title="Konto saknas">⛔</span>
+                        )}
+                        <span className={accountInfo.isInactive ? 'text-gray-600' : ''}>
+                          {accountInfo.text}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {line.description || '-'}
@@ -210,7 +232,8 @@ export default function VerificationDetail() {
                           : '-'}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {/* Totals Row */}
                   <tr className="bg-gray-50 font-semibold">
                     <td colSpan={2} className="px-4 py-3 text-sm">

@@ -13,7 +13,10 @@ router = APIRouter()
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(account: AccountCreate, db: Session = Depends(get_db)):
-    """Create a new account"""
+    """
+    Create a new account.
+    If an inactive account with the same number exists, it will be reactivated.
+    """
 
     # Check if account number already exists for this fiscal year
     existing = db.query(Account).filter(
@@ -22,10 +25,25 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Account {account.account_number} already exists for this fiscal year"
-        )
+        # If account exists but is inactive, reactivate it
+        if not existing.active:
+            existing.active = True
+            # Update other fields if provided
+            for field, value in account.model_dump(exclude={'company_id', 'account_number'}).items():
+                setattr(existing, field, value)
+            db.commit()
+            db.refresh(existing)
+            # Return HTTP 200 with special message to indicate reactivation
+            raise HTTPException(
+                status_code=status.HTTP_200_OK,
+                detail=f"Konto {account.account_number} var inaktivt och har nu aktiverats igen."
+            )
+        else:
+            # Account exists and is already active
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Konto {account.account_number} finns redan och är aktivt."
+            )
 
     # Create account
     db_account = Account(**account.model_dump())
