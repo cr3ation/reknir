@@ -394,7 +394,9 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      await fiscalYearApi.create({
+
+      // Step 1: Create the new fiscal year
+      const createResponse = await fiscalYearApi.create({
         company_id: selectedCompany.id,
         year: newFiscalYear.year,
         label: newFiscalYear.label,
@@ -402,7 +404,22 @@ export default function SettingsPage() {
         end_date: newFiscalYear.end_date,
         is_closed: false,
       })
-      showMessage('Räkenskapsår skapat!', 'success')
+
+      const newFiscalYearId = createResponse.data.id
+
+      // Step 2: Copy chart of accounts from previous fiscal year
+      // This automatically finds the most recent previous fiscal year
+      showMessage('Räkenskapsår skapat! Kopierar kontoplan från föregående år...', 'success')
+
+      try {
+        const copyResponse = await fiscalYearApi.copyChartOfAccounts(newFiscalYearId)
+        showMessage(`Räkenskapsår och kontoplan skapade! ${copyResponse.data.accounts_copied} konton kopierade från ${copyResponse.data.source_fiscal_year_label}.`, 'success')
+      } catch (copyError: any) {
+        console.error('Failed to copy chart of accounts:', copyError)
+        const errorDetail = copyError.response?.data?.detail || 'Kunde inte kopiera kontoplan'
+        showMessage(`Räkenskapsår skapat, men ${errorDetail}. Du kan importera BAS-kontoplan manuellt i fliken "Import".`, 'error')
+      }
+
       await loadData()
       setShowCreateFiscalYear(false)
       // Reset to next year defaults after creating

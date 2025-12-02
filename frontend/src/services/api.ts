@@ -66,6 +66,17 @@ export const fiscalYearApi = {
   update: (id: number, data: Partial<FiscalYear>) => api.patch<FiscalYear>(`/api/fiscal-years/${id}`, data),
   delete: (id: number) => api.delete(`/api/fiscal-years/${id}`),
   assignVerifications: (id: number) => api.post<{ message: string; verifications_assigned: number }>(`/api/fiscal-years/${id}/assign-verifications`),
+  copyChartOfAccounts: (fiscalYearId: number, sourceFiscalYearId?: number) =>
+    api.post<{
+      message: string;
+      source_fiscal_year_id: number;
+      source_fiscal_year_label: string;
+      target_fiscal_year_id: number;
+      target_fiscal_year_label: string;
+      accounts_copied: number;
+    }>(`/api/fiscal-years/${fiscalYearId}/copy-chart-of-accounts`, null, {
+      params: sourceFiscalYearId ? { source_fiscal_year_id: sourceFiscalYearId } : undefined,
+    }),
 }
 
 // Accounts

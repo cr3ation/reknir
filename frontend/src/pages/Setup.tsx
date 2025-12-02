@@ -239,12 +239,26 @@ export default function Setup() {
                   type="text"
                   required
                   value={companyData.org_number}
-                  onChange={(e) => setCompanyData({ ...companyData, org_number: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  onChange={(e) => {
+                    // Remove all non-digits
+                    let value = e.target.value.replace(/[^0-9]/g, '')
+
+                    // Limit to 10 digits
+                    if (value.length > 10) {
+                      value = value.slice(0, 10)
+                    }
+
+                    // Add dash after 6 digits
+                    if (value.length > 6) {
+                      value = value.slice(0, 6) + '-' + value.slice(6)
+                    }
+
+                    setCompanyData({ ...companyData, org_number: value })
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono tracking-wider"
                   placeholder="XXXXXX-XXXX"
-                  pattern="[0-9]{6}-?[0-9]{4}"
+                  maxLength={11}
                 />
-                <p className="mt-1 text-sm text-gray-500">Format: XXXXXX-XXXX</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -252,29 +266,43 @@ export default function Setup() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Redovisningsmetod
                   </label>
-                  <select
-                    value={companyData.accounting_basis}
-                    onChange={(e) => setCompanyData({ ...companyData, accounting_basis: e.target.value as 'accrual' | 'cash' })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="accrual">Bokföringsmässiga grunder</option>
-                    <option value="cash">Kontantmetoden</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={companyData.accounting_basis}
+                      onChange={(e) => setCompanyData({ ...companyData, accounting_basis: e.target.value as 'accrual' | 'cash' })}
+                      className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-gray-900 font-medium"
+                    >
+                      <option value="accrual">Fakturametoden</option>
+                      <option value="cash">Kontantmetoden</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Momsperiod
                   </label>
-                  <select
-                    value={companyData.vat_reporting_period}
-                    onChange={(e) => setCompanyData({ ...companyData, vat_reporting_period: e.target.value as any })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="monthly">Månadsvis</option>
-                    <option value="quarterly">Kvartalsvis</option>
-                    <option value="yearly">Årsvis</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={companyData.vat_reporting_period}
+                      onChange={(e) => setCompanyData({ ...companyData, vat_reporting_period: e.target.value as any })}
+                      className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-gray-900 font-medium"
+                    >
+                      <option value="monthly">Månadsvis</option>
+                      <option value="quarterly">Kvartalsvis</option>
+                      <option value="yearly">Årsvis</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
