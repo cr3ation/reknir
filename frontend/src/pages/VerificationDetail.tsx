@@ -4,19 +4,26 @@ import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-reac
 import { verificationApi, accountApi } from '@/services/api'
 import type { Verification, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function VerificationDetail() {
   const { verificationId } = useParams<{ verificationId: string }>()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [verification, setVerification] = useState<Verification | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadVerification()
-    loadAccounts()
   }, [verificationId, selectedCompany])
+
+  useEffect(() => {
+    if (selectedFiscalYear) {
+      loadAccounts()
+    }
+  }, [selectedFiscalYear, selectedCompany])
 
   const loadVerification = async () => {
     try {
@@ -31,10 +38,14 @@ export default function VerificationDetail() {
   }
 
   const loadAccounts = async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      const accountsRes = await accountApi.list(
+        selectedCompany.id,
+        selectedFiscalYear.id,
+        { active_only: false }
+      )
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
@@ -55,7 +66,10 @@ export default function VerificationDetail() {
 
   const getAccountInfo = (accountId: number) => {
     const account = accounts.find(a => a.id === accountId)
-    return account ? `${account.account_number} - ${account.name}` : `Konto #${accountId}`
+    if (!account) return `Konto #${accountId}`
+
+    const prefix = account.active ? '' : '⚠️ '
+    return `${prefix}${account.account_number} - ${account.name}`
   }
 
   const calculateTotals = () => {

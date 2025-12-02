@@ -172,8 +172,9 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
         # Cannot delete - mark as inactive instead
         account.active = False
         db.commit()
+        # Return 409 Conflict to indicate account was deactivated, not deleted
         raise HTTPException(
-            status_code=status.HTTP_200_OK,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Kontot har {transaction_count} bokförda transaktioner och har därför markerats som inaktivt istället för att tas bort. Det kommer inte längre visas i kontolistan men finns kvar i bokföringshistoriken."
         )
 

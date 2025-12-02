@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
 import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
@@ -71,6 +71,9 @@ export default function SettingsPage() {
     accounting_basis: 'accrual' as 'accrual' | 'cash',
     vat_reporting_period: 'quarterly' as VATReportingPeriod,
   })
+  const [deleteConfirmAccount, setDeleteConfirmAccount] = useState<Account | null>(null)
+
+  const messageTimeoutRef = useRef<number | null>(null)
 
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
@@ -107,7 +110,7 @@ export default function SettingsPage() {
       if (selectedFiscalYear) {
         const [defaultsRes, accountsRes, templatesRes] = await Promise.all([
           defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-          accountApi.list(selectedCompany.id, selectedFiscalYear.id),
+          accountApi.list(selectedCompany.id, selectedFiscalYear.id, { active_only: false }),
           postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
         ])
         setDefaultAccounts(defaultsRes.data)
@@ -123,9 +126,14 @@ export default function SettingsPage() {
   }
 
   const showMessage = (msg: string, type: 'success' | 'error' = 'success', duration: number = 10000) => {
+    // Clear existing timeout if present
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current)
+    }
+
     setMessage(msg)
     setMessageType(type)
-    setTimeout(() => setMessage(''), duration)
+    messageTimeoutRef.current = setTimeout(() => setMessage(''), duration)
   }
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -732,19 +740,24 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDeleteAccount = async (accountId: number) => {
-    if (!confirm('Är du säker på att du vill ta bort detta konto?\n\nOm kontot har bokförda transaktioner kommer det att inaktiveras istället.')) return
+  const handleDeleteAccount = async (account: Account) => {
+    setDeleteConfirmAccount(account)
+  }
+
+  const confirmDeleteAccount = async () => {
+    if (!deleteConfirmAccount) return
 
     try {
       setLoading(true)
-      await accountApi.delete(accountId)
+      setDeleteConfirmAccount(null)
+      await accountApi.delete(deleteConfirmAccount.id)
       showMessage('Konto borttaget!', 'success')
       await loadData()
     } catch (error: any) {
       console.error('Failed to delete account:', error)
-      // Special handling for 200 OK response (account was deactivated instead of deleted)
-      if (error.response?.status === 200) {
-        showMessage(error.response.data.detail, 'success')
+      // Special handling for 409 Conflict response (account was deactivated instead of deleted)
+      if (error.response?.status === 409) {
+        showMessage(error.response.data.detail, 'error')
         await loadData()
       } else {
         showMessage(formatErrorMessage(error), 'error')
@@ -755,8 +768,6 @@ export default function SettingsPage() {
   }
 
   const handleReactivateAccount = async (accountId: number) => {
-    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
-
     try {
       setLoading(true)
       await accountApi.update(accountId, { active: true })
@@ -1604,7 +1615,7 @@ export default function SettingsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
-                            onClick={() => handleDeleteAccount(account.id)}
+                            onClick={() => handleDeleteAccount(account)}
                             disabled={loading}
                             className="text-red-600 hover:text-red-900"
                             title="Ta bort konto"
@@ -2240,6 +2251,55 @@ export default function SettingsPage() {
                   className="btn btn-primary"
                 >
                   {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {deleteConfirmAccount && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Ta bort konto</h3>
+                  <p className="text-sm text-gray-500">
+                    {deleteConfirmAccount.account_number} - {deleteConfirmAccount.name}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-700 mb-2">
+                  Är du säker på att du vill ta bort detta konto?
+                </p>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>OBS:</strong> Om kontot har bokförda transaktioner kommer det att inaktiveras istället för att tas bort.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteConfirmAccount(null)}
+                  disabled={loading}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50"
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={loading}
+                  className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-medium transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Tar bort...' : 'Ta bort konto'}
                 </button>
               </div>
             </div>

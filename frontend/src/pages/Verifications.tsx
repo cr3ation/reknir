@@ -38,7 +38,7 @@ export default function Verifications() {
 
       // Load accounts for selected fiscal year
       if (selectedFiscalYear) {
-        const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+        const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id, { active_only: false })
         setAccounts(accountsRes.data)
       }
     } catch (error) {
@@ -563,7 +563,7 @@ function CreateVerificationModal({
                           <option value={0}>Välj konto...</option>
                           {accounts.map((account) => (
                             <option key={account.id} value={account.id}>
-                              {account.account_number} - {account.name}
+                              {account.active ? '' : '⚠️ '}{account.account_number} - {account.name}
                             </option>
                           ))}
                         </select>
