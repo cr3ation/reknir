@@ -287,7 +287,10 @@ function CreateVerificationModal({
   const applyTemplate = async (templateId: number, amount: number) => {
     try {
       setLoading(true)
-      const executionResult = await postingTemplateApi.execute(templateId, { amount })
+      const executionResult = await postingTemplateApi.execute(templateId, {
+        amount,
+        fiscal_year_id: fiscalYearId
+      })
       const result = executionResult.data
 
       // Apply template metadata

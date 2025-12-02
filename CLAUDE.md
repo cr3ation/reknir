@@ -50,11 +50,45 @@ reknir/
 
 ## Huvudfunktioner
 
-### 1. Kontoplan (BAS)
+### 1. Räkenskapsår och Kontoplan
+
+#### Räkenskapsår (Fiscal Years)
+Varje företag kan ha flera räkenskapsår. Varje räkenskapsår har sin egen kontoplan.
+
+**Viktiga principer:**
+- Varje konto tillhör ett specifikt räkenskapsår
+- Samma kontonummer kan finnas i flera år, men det är olika konton i systemet
+- Verifikationer kopplas till konton i ett specifikt räkenskapsår
+- Konton med transaktioner kan inte tas bort, endast inaktiveras
+
+#### Skapa första räkenskapsåret
+När ett företag skapas och dess första räkenskapsår läggs upp:
+1. Systemet skapar en kontoplan baserad på BAS-mallen via `POST /api/companies/{id}/seed-bas?fiscal_year_id={fy_id}`
+2. Alla konton skapas knutna till det första räkenskapsåret
+3. Standardkonton (default accounts) initialiseras via `POST /api/companies/{id}/initialize-defaults`
+
+#### Skapa nytt räkenskapsår
+När ett nytt räkenskapsår skapas:
+1. Skapa räkenskapsåret: `POST /api/fiscal-years/`
+2. Kopiera kontoplanen från föregående år: `POST /api/fiscal-years/{new_fy_id}/copy-chart-of-accounts`
+   - Systemet kopierar alla konton från senast avslutade året
+   - Opening balance sätts till 0 för det nya året
+   - Aktiv/inaktiv status bevaras
+3. Default accounts fungerar automatiskt genom att matcha kontonummer
+
+**API Endpoints:**
+- `POST /api/fiscal-years/` - Skapa nytt räkenskapsår
+- `GET /api/fiscal-years/?company_id={id}` - Lista räkenskapsår
+- `GET /api/fiscal-years/current/by-company/{id}` - Hämta aktuellt räkenskapsår
+- `POST /api/fiscal-years/{id}/copy-chart-of-accounts` - Kopiera kontoplan
+- `POST /api/fiscal-years/{id}/assign-verifications` - Tilldela verifikationer
+
+#### Kontoplan (BAS)
 - Import av BAS-kontoplan (svensk standard)
 - Kontohantering med typer (Tillgång, Skuld, Intäkt, Kostnad)
 - Kontoreskontra (huvudbok)
 - Automatisk balansuppdatering
+- Konton är knutna till specifika räkenskapsår
 
 **Viktiga konton:**
 - **1510** - Kundfordringar
@@ -65,6 +99,11 @@ reknir/
 - **2610-2650** - Utgående moms
 - **3xxx** - Intäktskonton
 - **4xxx-8xxx** - Kostnadskonton
+
+**Kontohantering:**
+- Konton kan läggas till, redigeras och inaktiveras per räkenskapsår
+- Konton med transaktioner kan inte tas bort
+- Aktiva/inaktiva konton styr vilka konton som visas i nya verifikationer
 
 ### 2. Verifikationer
 - Automatisk numrering per serie (A, B, C, etc.)
@@ -206,6 +245,7 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Automatisk beräkning av konteringsrader
 - Malleditor med drag-and-drop sortering
 - Förutfyllda svenska standardmallar
+- **Stöd för flera räkenskapsår:** Mallar refererar till konton via kontonummer och översätts automatiskt till rätt räkenskapsår vid användning
 
 **Formelexempel:**
 - `{total}` - Totalbelopp
@@ -213,13 +253,21 @@ Kredit: 1930 Bankkonto              [Belopp]
 - `-{total}` - Negativt belopp
 - `{total} * 1.25` - Totalbelopp plus 25%
 
+**Hantering av räkenskapsår:**
+Mallar skapas med konton från ett specifikt räkenskapsår (vanligtvis det första). När mallen används:
+1. Användaren anger vilket räkenskapsår de arbetar i
+2. Systemet hittar motsvarande konton (samma kontonummer) i det valda räkenskapsåret
+3. Verifikationsrader skapas med konton från det aktuella räkenskapsåret
+
+Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förutsatt att motsvarande konton finns i båda åren.
+
 **API Endpoints:**
 - `POST /api/posting-templates/` - Skapa mall
 - `GET /api/posting-templates/` - Lista mallar
 - `GET /api/posting-templates/{id}` - Hämta mall
 - `PUT /api/posting-templates/{id}` - Uppdatera mall
 - `DELETE /api/posting-templates/{id}` - Ta bort mall
-- `POST /api/posting-templates/{id}/execute` - Kör mall med belopp
+- `POST /api/posting-templates/{id}/execute` - Kör mall (kräver fiscal_year_id i request body)
 - `PATCH /api/posting-templates/reorder` - Ändra sortering
 
 **Routes:**
@@ -511,10 +559,17 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 
 ---
 
-**Version:** 1.1.0
-**Senast uppdaterad:** 2025-11-30
+**Version:** 1.2.0
+**Senast uppdaterad:** 2025-12-02
 
 ## Ändringslogg
+
+### v1.2.0 (2025-12-02)
+- ✅ Fullständigt stöd för flera räkenskapsår med separata kontoplaner
+- ✅ Automatisk kopiering av kontoplan mellan räkenskapsår
+- ✅ Konteringsmallar fungerar över räkenskapsår genom kontonummer-mappning
+- ✅ Default accounts översätts automatiskt till rätt räkenskapsår
+- ✅ Förbättrad dokumentation för räkenskapsår-hantering
 
 ### v1.1.0 (2025-11-30)
 - ✅ Konteringsmallar med formelbaserade beräkningar

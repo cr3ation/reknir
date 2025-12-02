@@ -136,6 +136,7 @@ export interface PostingTemplateListItem {
 
 export interface TemplateExecutionRequest {
   amount: number
+  fiscal_year_id: number
   transaction_date?: string
   description_override?: string
 }
