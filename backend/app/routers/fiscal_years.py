@@ -231,8 +231,19 @@ def copy_chart_of_accounts(
         )
 
     # Copy accounts to target fiscal year
+    from app.models.account import AccountType
     created_accounts = []
+
     for source_account in source_accounts:
+        # Determine opening balance for the new fiscal year:
+        # - Balance accounts (Asset, Equity/Liability): carry forward current_balance from previous year
+        # - Result accounts (Revenue, Cost): reset to 0
+        is_balance_account = source_account.account_type in [
+            AccountType.ASSET,
+            AccountType.EQUITY_LIABILITY
+        ]
+        opening_balance = source_account.current_balance if is_balance_account else 0
+
         new_account = Account(
             company_id=target_fiscal_year.company_id,
             fiscal_year_id=target_fiscal_year.id,
@@ -240,8 +251,8 @@ def copy_chart_of_accounts(
             name=source_account.name,
             description=source_account.description,
             account_type=source_account.account_type,
-            opening_balance=0,  # New fiscal year starts with zero opening balance
-            current_balance=0,
+            opening_balance=opening_balance,
+            current_balance=opening_balance,  # Current balance starts at opening balance
             active=source_account.active,  # Preserve active/inactive status
             is_bas_account=source_account.is_bas_account
         )

@@ -32,7 +32,7 @@ export default function SettingsPage() {
   const [editingTemplate, setEditingTemplate] = useState<PostingTemplateListItem | null>(null)
   const [showAddAccount, setShowAddAccount] = useState(false)
   const [basAccounts, setBasAccounts] = useState<any[]>([])
-  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
+  const [selectedBasAccount, setSelectedBasAccount] = useState<number | ''>('')
   const [templateForm, setTemplateForm] = useState<PostingTemplate>({
     company_id: 0,
     name: '',
@@ -122,10 +122,10 @@ export default function SettingsPage() {
     }
   }
 
-  const showMessage = (msg: string, type: 'success' | 'error' = 'success') => {
+  const showMessage = (msg: string, type: 'success' | 'error' = 'success', duration: number = 10000) => {
     setMessage(msg)
     setMessageType(type)
-    setTimeout(() => setMessage(''), 5000)
+    setTimeout(() => setMessage(''), duration)
   }
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -394,7 +394,9 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      await fiscalYearApi.create({
+
+      // Step 1: Create the new fiscal year
+      const createResponse = await fiscalYearApi.create({
         company_id: selectedCompany.id,
         year: newFiscalYear.year,
         label: newFiscalYear.label,
@@ -402,7 +404,22 @@ export default function SettingsPage() {
         end_date: newFiscalYear.end_date,
         is_closed: false,
       })
-      showMessage('Räkenskapsår skapat!', 'success')
+
+      const newFiscalYearId = createResponse.data.id
+
+      // Step 2: Copy chart of accounts from previous fiscal year
+      // This automatically finds the most recent previous fiscal year
+      showMessage('Räkenskapsår skapat! Kopierar kontoplan från föregående år...', 'success')
+
+      try {
+        const copyResponse = await fiscalYearApi.copyChartOfAccounts(newFiscalYearId)
+        showMessage(`Räkenskapsår och kontoplan skapade! ${copyResponse.data.accounts_copied} konton kopierade från ${copyResponse.data.source_fiscal_year_label}.`, 'success')
+      } catch (copyError: any) {
+        console.error('Failed to copy chart of accounts:', copyError)
+        const errorDetail = copyError.response?.data?.detail || 'Kunde inte kopiera kontoplan'
+        showMessage(`Räkenskapsår skapat, men ${errorDetail}. Du kan importera BAS-kontoplan manuellt i fliken "Import".`, 'error')
+      }
+
       await loadData()
       setShowCreateFiscalYear(false)
       // Reset to next year defaults after creating
@@ -1478,9 +1495,9 @@ export default function SettingsPage() {
               <button
                 onClick={handleShowAddAccount}
                 disabled={loading}
-                className="btn btn-primary"
+                className="btn btn-primary inline-flex items-center gap-2 whitespace-nowrap"
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Plus className="w-4 h-4" />
                 Lägg till konto
               </button>
             </div>
@@ -1494,12 +1511,9 @@ export default function SettingsPage() {
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Välj konto
-                  </label>
                   <select
                     value={selectedBasAccount}
-                    onChange={(e) => setSelectedBasAccount(e.target.value)}
+                    onChange={(e) => setSelectedBasAccount(e.target.value === '' ? '' : parseInt(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
                     <option value="">-- Välj ett BAS-konto --</option>

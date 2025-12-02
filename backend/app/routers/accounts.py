@@ -151,6 +151,18 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
             detail=f"Kan inte ta bort konto som används som standardkonto ({default_account.account_type}). Ändra standardkontomappningen först."
         )
 
+    # Check if account is used in posting templates
+    from app.models.posting_template import PostingTemplateLine
+    template_line_count = db.query(PostingTemplateLine).filter(
+        PostingTemplateLine.account_id == account_id
+    ).count()
+
+    if template_line_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kan inte ta bort konto som används i {template_line_count} konteringsmall(ar). Ta bort eller redigera mallarna först."
+        )
+
     # Check if account has any transaction lines
     transaction_count = db.query(TransactionLine).filter(
         TransactionLine.account_id == account_id
