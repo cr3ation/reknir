@@ -90,7 +90,7 @@ def create_posting_template(
     return db_template
 
 
-@router.get("/", response_model=List[PostingTemplateListItem])
+@router.get("/", response_model=List[PostingTemplateResponse])
 def list_posting_templates(
     company_id: int = Query(..., description="Company ID"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -98,7 +98,7 @@ def list_posting_templates(
     db: Session = Depends(get_db)
 ):
     """List all posting templates for a company"""
-    
+
     # Verify company exists
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -106,38 +106,22 @@ def list_posting_templates(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company with id {company_id} not found"
         )
-    
-    # Query templates with line count
-    templates = db.query(
-        PostingTemplate,
-        func.count(PostingTemplateLine.id).label('line_count')
-    ).outerjoin(
-        PostingTemplateLine,
-        PostingTemplate.id == PostingTemplateLine.template_id
+
+    # Query templates
+    templates = db.query(PostingTemplate).options(
+        joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account)
     ).filter(
         PostingTemplate.company_id == company_id
-    ).group_by(
-        PostingTemplate.id
     ).order_by(
         PostingTemplate.sort_order,
         PostingTemplate.name
     ).offset(skip).limit(limit).all()
-    
-    # Convert to list items
-    result = []
-    for template, line_count in templates:
-        item = PostingTemplateListItem(
-            id=template.id,
-            name=template.name,
-            description=template.description,
-            default_series=template.default_series,
-            created_at=template.created_at,
-            updated_at=template.updated_at,
-            line_count=line_count or 0
-        )
-        result.append(item)
-    
-    return result
+
+    # Sort template lines by sort_order for each template
+    for template in templates:
+        template.template_lines.sort(key=lambda x: x.sort_order)
+
+    return templates
 
 
 @router.get("/{template_id}", response_model=PostingTemplateResponse)

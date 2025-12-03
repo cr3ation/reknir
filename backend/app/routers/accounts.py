@@ -128,9 +128,14 @@ def update_account(account_id: int, account_update: AccountUpdate, db: Session =
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(account_id: int, db: Session = Depends(get_db)):
     """
-    Delete or deactivate an account.
-    - If account has transactions: marks it as inactive (can be reactivated later via PATCH)
-    - If account has no transactions: deletes it completely
+    Delete an account.
+    - If account has transactions: returns 400 error (most restrictive - cannot delete)
+    - If account is used in posting templates: returns 400 error
+    - If account is used as default account: returns 400 error
+    - If none of above: deletes account completely
+
+    Note: Accounts with transactions must remain active in the system.
+    Manual deactivation can be done via PATCH endpoint if needed in the future.
     """
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
@@ -139,7 +144,37 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
             detail=f"Account {account_id} not found"
         )
 
-    # Check if account is used in default accounts (FIRST - most restrictive)
+    # Check if account has any transaction lines (MOST RESTRICTIVE - check first)
+    transaction_count = db.query(TransactionLine).filter(
+        TransactionLine.account_id == account_id
+    ).count()
+
+    if transaction_count > 0:
+        # Cannot delete - account has transactions
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kontot kan inte raderas eftersom det har {transaction_count} bokförda transaktioner för detta räkenskapsår. Kontot måste vara tomt för att kunna raderas."
+        )
+
+    # Check if account is used in posting templates
+    from app.models.posting_template import PostingTemplateLine, PostingTemplate
+    template_line = db.query(PostingTemplateLine).filter(
+        PostingTemplateLine.account_id == account_id
+    ).first()
+
+    if template_line:
+        # Get template name for better error message
+        template = db.query(PostingTemplate).filter(
+            PostingTemplate.id == template_line.template_id
+        ).first()
+        template_name = template.name if template else "okänd mall"
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kan inte ta bort konto som används i konteringsmall '{template_name}'. Ta bort eller redigera mallen först."
+        )
+
+    # Check if account is used in default accounts
     from app.models.default_account import DefaultAccount
     default_account = db.query(DefaultAccount).filter(
         DefaultAccount.account_id == account_id
@@ -149,20 +184,6 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Kan inte ta bort konto som används som standardkonto ({default_account.account_type}). Ändra standardkontomappningen först."
-        )
-
-    # Check if account has any transaction lines
-    transaction_count = db.query(TransactionLine).filter(
-        TransactionLine.account_id == account_id
-    ).count()
-
-    if transaction_count > 0:
-        # Cannot delete - mark as inactive instead
-        account.active = False
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_200_OK,
-            detail=f"Kontot har {transaction_count} bokförda transaktioner och har därför markerats som inaktivt istället för att tas bort. Det kommer inte längre visas i kontolistan men finns kvar i bokföringshistoriken."
         )
 
     # Safe to delete - no transactions or default account references

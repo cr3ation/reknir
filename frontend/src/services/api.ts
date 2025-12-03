@@ -117,7 +117,7 @@ export const verificationApi = {
 // Posting Templates
 export const postingTemplateApi = {
   list: (companyId: number, params?: { skip?: number; limit?: number }) =>
-    api.get<PostingTemplateListItem[]>('/api/posting-templates/', {
+    api.get<PostingTemplate[]>('/api/posting-templates/', {
       params: { company_id: companyId, ...params },
     }),
   get: (id: number) => api.get<PostingTemplate>(`/api/posting-templates/${id}`),
