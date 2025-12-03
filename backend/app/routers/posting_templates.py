@@ -90,7 +90,7 @@ def create_posting_template(
     return db_template
 
 
-@router.get("/", response_model=List[PostingTemplateListItem])
+@router.get("/", response_model=List[PostingTemplateResponse])
 def list_posting_templates(
     company_id: int = Query(..., description="Company ID"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -98,7 +98,7 @@ def list_posting_templates(
     db: Session = Depends(get_db)
 ):
     """List all posting templates for a company"""
-    
+
     # Verify company exists
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -106,38 +106,22 @@ def list_posting_templates(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company with id {company_id} not found"
         )
-    
-    # Query templates with line count
-    templates = db.query(
-        PostingTemplate,
-        func.count(PostingTemplateLine.id).label('line_count')
-    ).outerjoin(
-        PostingTemplateLine,
-        PostingTemplate.id == PostingTemplateLine.template_id
+
+    # Query templates
+    templates = db.query(PostingTemplate).options(
+        joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account)
     ).filter(
         PostingTemplate.company_id == company_id
-    ).group_by(
-        PostingTemplate.id
     ).order_by(
         PostingTemplate.sort_order,
         PostingTemplate.name
     ).offset(skip).limit(limit).all()
-    
-    # Convert to list items
-    result = []
-    for template, line_count in templates:
-        item = PostingTemplateListItem(
-            id=template.id,
-            name=template.name,
-            description=template.description,
-            default_series=template.default_series,
-            created_at=template.created_at,
-            updated_at=template.updated_at,
-            line_count=line_count or 0
-        )
-        result.append(item)
-    
-    return result
+
+    # Sort template lines by sort_order for each template
+    for template in templates:
+        template.template_lines.sort(key=lambda x: x.sort_order)
+
+    return templates
 
 
 @router.get("/{template_id}", response_model=PostingTemplateResponse)
@@ -269,40 +253,64 @@ def execute_posting_template(
     db: Session = Depends(get_db)
 ):
     """
-    Execute a posting template with a given amount
-    Returns the calculated posting lines without creating a verification
+    Execute a posting template with a given amount for a specific fiscal year.
+    Returns the calculated posting lines without creating a verification.
+
+    The template will automatically translate account references to the target fiscal year.
     """
-    
-    # Get template with lines
+    from app.models.fiscal_year import FiscalYear
+
+    # Get template with lines and account relationships
     template = db.query(PostingTemplate).options(
-        joinedload(PostingTemplate.template_lines)
+        joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account)
     ).filter(PostingTemplate.id == template_id).first()
-    
+
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Posting template with id {template_id} not found"
         )
-    
+
     if not template.template_lines:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Template has no posting lines"
         )
-    
+
+    # Verify fiscal year exists and belongs to the same company
+    fiscal_year = db.query(FiscalYear).filter(
+        FiscalYear.id == execution_request.fiscal_year_id
+    ).first()
+
+    if not fiscal_year:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Fiscal year with id {execution_request.fiscal_year_id} not found"
+        )
+
+    if fiscal_year.company_id != template.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fiscal year does not belong to the same company as the template"
+        )
+
     try:
-        # Execute the template to get posting lines
-        posting_lines_data = template.evaluate_template(float(execution_request.amount))
-        
+        # Execute the template to get posting lines for the target fiscal year
+        posting_lines_data = template.evaluate_template(
+            db,
+            float(execution_request.amount),
+            execution_request.fiscal_year_id
+        )
+
         # Convert to response format
         posting_lines = []
         total_debit = Decimal('0')
         total_credit = Decimal('0')
-        
+
         for line_data in posting_lines_data:
             debit = Decimal(str(line_data['debit']))
             credit = Decimal(str(line_data['credit']))
-            
+
             posting_line = TemplateExecutionLine(
                 account_id=line_data['account_id'],
                 debit=debit,
@@ -310,13 +318,13 @@ def execute_posting_template(
                 description=line_data['description']
             )
             posting_lines.append(posting_line)
-            
+
             total_debit += debit
             total_credit += credit
-        
+
         # Check balance
         is_balanced = abs(total_debit - total_credit) < Decimal('0.01')
-        
+
         return TemplateExecutionResult(
             template_id=template_id,
             template_name=template.name,
@@ -326,7 +334,7 @@ def execute_posting_template(
             total_credit=total_credit,
             is_balanced=is_balanced
         )
-        
+
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

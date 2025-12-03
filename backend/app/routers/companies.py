@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
@@ -108,8 +108,14 @@ def delete_company(company_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{company_id}/seed-bas", status_code=status.HTTP_200_OK)
-def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
-    """Seed BAS 2024 kontoplan for a company"""
+def seed_bas_accounts(
+    company_id: int,
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID to seed accounts for"),
+    db: Session = Depends(get_db)
+):
+    """Seed BAS 2024 kontoplan for a fiscal year"""
+    from app.models.fiscal_year import FiscalYear
+
     # Check if company exists
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -118,12 +124,25 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
             detail=f"Company {company_id} not found"
         )
 
-    # Check if accounts already exist
-    existing_count = db.query(Account).filter(Account.company_id == company_id).count()
+    # Check if fiscal year exists and belongs to this company
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+    if not fiscal_year:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Fiscal year {fiscal_year_id} not found"
+        )
+    if fiscal_year.company_id != company_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fiscal year {fiscal_year_id} does not belong to company {company_id}"
+        )
+
+    # Check if fiscal year already has accounts
+    existing_count = db.query(Account).filter(Account.fiscal_year_id == fiscal_year_id).count()
     if existing_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Company already has {existing_count} accounts. Delete them first if you want to re-seed."
+            detail=f"Fiscal year already has {existing_count} accounts. Delete them first if you want to re-seed."
         )
 
     # Load BAS accounts from JSON
@@ -142,6 +161,7 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
     for account_data in bas_data['accounts']:
         account = Account(
             company_id=company_id,
+            fiscal_year_id=fiscal_year_id,
             account_number=account_data['account_number'],
             name=account_data['name'],
             account_type=account_data['account_type'],
@@ -154,14 +174,16 @@ def seed_bas_accounts(company_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     # Also initialize default account mappings
-    default_account_service.initialize_default_accounts_from_existing(db, company_id)
+    default_account_service.initialize_default_accounts_from_existing(db, company_id, fiscal_year_id)
 
     defaults_count = db.query(DefaultAccount).filter(
         DefaultAccount.company_id == company_id
     ).count()
 
     return {
-        "message": f"Successfully seeded {len(created_accounts)} BAS 2024 accounts and configured {defaults_count} default account mappings",
+        "message": f"Successfully seeded {len(created_accounts)} BAS 2024 accounts for fiscal year {fiscal_year.label} and configured {defaults_count} default account mappings",
+        "fiscal_year_id": fiscal_year_id,
+        "fiscal_year_label": fiscal_year.label,
         "accounts_created": len(created_accounts),
         "default_accounts_configured": defaults_count
     }
@@ -172,13 +194,26 @@ def seed_posting_templates(company_id: int, db: Session = Depends(get_db)):
     """Seed Swedish posting templates for a company"""
     from app.cli import load_posting_templates
     from app.models.posting_template import PostingTemplate, PostingTemplateLine
-    
+    from app.models.fiscal_year import FiscalYear
+
     # Check if company exists
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Company {company_id} not found"
+        )
+
+    # Get the first fiscal year for this company to find accounts
+    # Posting templates are company-wide but need to reference accounts from a fiscal year
+    fiscal_year = db.query(FiscalYear).filter(
+        FiscalYear.company_id == company_id
+    ).order_by(FiscalYear.start_date).first()
+
+    if not fiscal_year:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Company must have at least one fiscal year with accounts before seeding templates"
         )
 
     # Check if templates already exist
@@ -211,9 +246,10 @@ def seed_posting_templates(company_id: int, db: Session = Depends(get_db)):
             for line_data in template_data['lines']:
                 account = db.query(Account).filter(
                     Account.company_id == company_id,
+                    Account.fiscal_year_id == fiscal_year.id,
                     Account.account_number == line_data['account_number']
                 ).first()
-                
+
                 if account:  # Only create line if account exists
                     line = PostingTemplateLine(
                         template_id=template.id,
@@ -247,6 +283,8 @@ def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
     Initialize default account mappings for a company based on existing accounts.
     This is useful after importing SIE4 or when setting up an existing company.
     """
+    from app.models.fiscal_year import FiscalYear
+
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(
@@ -254,8 +292,19 @@ def initialize_default_accounts(company_id: int, db: Session = Depends(get_db)):
             detail=f"Company {company_id} not found"
         )
 
+    # Get the first fiscal year for this company
+    fiscal_year = db.query(FiscalYear).filter(
+        FiscalYear.company_id == company_id
+    ).order_by(FiscalYear.start_date).first()
+
+    if not fiscal_year:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Company must have at least one fiscal year before initializing defaults"
+        )
+
     # Initialize defaults
-    default_account_service.initialize_default_accounts_from_existing(db, company_id)
+    default_account_service.initialize_default_accounts_from_existing(db, company_id, fiscal_year.id)
 
     # Count configured defaults
     defaults_count = db.query(DefaultAccount).filter(

@@ -40,6 +40,7 @@ def create_verification(verification: VerificationCreate, db: Session = Depends(
     # Create verification
     db_verification = Verification(
         company_id=verification.company_id,
+        fiscal_year_id=verification.fiscal_year_id,
         verification_number=next_number,
         series=verification.series,
         transaction_date=verification.transaction_date,

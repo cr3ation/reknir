@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
 import { verificationApi, accountApi, postingTemplateApi } from '@/services/api'
-import type { VerificationListItem, Account, Verification, PostingTemplateListItem, TemplateExecutionResult } from '@/types'
+import type { VerificationListItem, Account, Verification, PostingTemplateListItem } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
 
@@ -13,11 +13,11 @@ export default function Verifications() {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
-  const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
+  const { selectedFiscalYear } = useFiscalYear()
 
   useEffect(() => {
     loadData()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   useEffect(() => {
     filterVerificationsByFiscalYear()
@@ -31,15 +31,16 @@ export default function Verifications() {
 
     try {
       setLoading(true)
-      // Load fiscal years for this company
-      await loadFiscalYears(selectedCompany.id)
 
-      const [verificationsRes, accountsRes] = await Promise.all([
-        verificationApi.list(selectedCompany.id),
-        accountApi.list(selectedCompany.id),
-      ])
+      // Load verifications
+      const verificationsRes = await verificationApi.list(selectedCompany.id)
       setAllVerifications(verificationsRes.data)
-      setAccounts(accountsRes.data)
+
+      // Load accounts for selected fiscal year
+      if (selectedFiscalYear) {
+        const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+        setAccounts(accountsRes.data)
+      }
     } catch (error) {
       console.error('Failed to load verifications:', error)
     } finally {
@@ -201,9 +202,10 @@ export default function Verifications() {
       )}
 
       {/* Create/Edit Modal */}
-      {showCreateModal && selectedCompany && (
+      {showCreateModal && selectedCompany && selectedFiscalYear && (
         <CreateVerificationModal
           companyId={selectedCompany.id}
+          fiscalYearId={selectedFiscalYear.id}
           accounts={accounts}
           verification={editingVerification}
           onClose={() => {
@@ -226,6 +228,7 @@ export default function Verifications() {
 // Create/Edit Verification Modal Component
 interface CreateVerificationModalProps {
   companyId: number
+  fiscalYearId: number
   accounts: Account[]
   verification: Verification | null
   onClose: () => void
@@ -234,6 +237,7 @@ interface CreateVerificationModalProps {
 
 function CreateVerificationModal({
   companyId,
+  fiscalYearId,
   accounts,
   verification,
   onClose,
@@ -283,7 +287,10 @@ function CreateVerificationModal({
   const applyTemplate = async (templateId: number, amount: number) => {
     try {
       setLoading(true)
-      const executionResult = await postingTemplateApi.execute(templateId, { amount })
+      const executionResult = await postingTemplateApi.execute(templateId, {
+        amount,
+        fiscal_year_id: fiscalYearId
+      })
       const result = executionResult.data
 
       // Apply template metadata
@@ -343,12 +350,13 @@ function CreateVerificationModal({
     try {
       const data = {
         company_id: companyId,
+        fiscal_year_id: fiscalYearId,
         ...formData,
         transaction_lines: lines.map((line) => ({
           account_id: Number(line.account_id),
           debit: Number(line.debit) || 0,
           credit: Number(line.credit) || 0,
-          description: line.description || null,
+          description: line.description || undefined,
         })),
       }
 

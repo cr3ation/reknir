@@ -17,11 +17,14 @@ class AccountType(str, enum.Enum):
 
 
 class Account(Base):
-    """Chart of accounts (Kontoplan) - Based on BAS 2024"""
+    """Chart of accounts (Kontoplan) - Based on BAS 2024
+    Each account belongs to a specific fiscal year.
+    """
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    fiscal_year_id = Column(Integer, ForeignKey("fiscal_years.id"), nullable=False)
 
     # Account details
     account_number = Column(Integer, nullable=False, index=True)  # 1000-8999
@@ -41,6 +44,7 @@ class Account(Base):
 
     # Relationships
     company = relationship("Company", back_populates="accounts")
+    fiscal_year = relationship("FiscalYear", back_populates="accounts")
     transaction_lines = relationship("TransactionLine", back_populates="account")
 
     def __repr__(self):

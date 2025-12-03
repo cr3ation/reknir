@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplateListItem, PostingTemplate, PostingTemplateLine } from '@/types'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, PostingTemplate, PostingTemplateLine } from '@/types'
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
   revenue_12: 'Försäljning 12% moms',
   revenue_6: 'Försäljning 6% moms',
-  revenue_0: 'Försäljning 0% moms',
+  revenue_0: 'Försäljning 0% moms (export)',
   vat_outgoing_25: 'Utgående moms 25%',
   vat_outgoing_12: 'Utgående moms 12%',
   vat_outgoing_6: 'Utgående moms 6%',
@@ -22,12 +23,16 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
-  const [templates, setTemplates] = useState<PostingTemplateListItem[]>([])
+  const [templates, setTemplates] = useState<PostingTemplate[]>([])
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [editingTemplate, setEditingTemplate] = useState<PostingTemplate | null>(null)
+  const [showAddAccount, setShowAddAccount] = useState(false)
+  const [basAccounts, setBasAccounts] = useState<any[]>([])
+  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
   const [templateForm, setTemplateForm] = useState<PostingTemplate>({
     company_id: 0,
     name: '',
@@ -82,15 +87,10 @@ export default function SettingsPage() {
   }
 
   const [newFiscalYear, setNewFiscalYear] = useState(getNextFiscalYearDefaults())
-  const [showAddAccount, setShowAddAccount] = useState(false)
-  const [basAccounts, setBasAccounts] = useState<any[]>([])
-  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
-  const [editingDefaultAccount, setEditingDefaultAccount] = useState<string | null>(null)
-  const [selectedAccountForDefault, setSelectedAccountForDefault] = useState<number | null>(null)
 
   useEffect(() => {
     loadData()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadData = async () => {
     if (!selectedCompany) {
@@ -100,16 +100,20 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      const [defaultsRes, accountsRes, fiscalYearsRes, templatesRes] = await Promise.all([
-        defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        accountApi.list(selectedCompany.id, { active_only: false }),
-        fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-      ])
-      setDefaultAccounts(defaultsRes.data)
-      setAllAccounts(accountsRes.data)
+      const fiscalYearsRes = await fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] }))
       setFiscalYears(fiscalYearsRes.data)
-      setTemplates(templatesRes.data)
+
+      // If we have a selected fiscal year, load accounts and defaults
+      if (selectedFiscalYear) {
+        const [defaultsRes, accountsRes, templatesRes] = await Promise.all([
+          defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+          accountApi.list(selectedCompany.id, selectedFiscalYear.id),
+          postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        ])
+        setDefaultAccounts(defaultsRes.data)
+        setAllAccounts(accountsRes.data)
+        setTemplates(templatesRes.data)
+      }
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
@@ -300,14 +304,17 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Välj ett räkenskapsår först', 'error')
+      return
+    }
 
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
       setLoading(true)
-      const response = await sie4Api.import(selectedCompany.id, file)
+      const response = await sie4Api.import(selectedCompany.id, selectedFiscalYear.id, file)
 
       // Show modal with import summary
       setImportSummary({
@@ -332,11 +339,14 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Export = async (includeVerifications: boolean) => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Välj ett räkenskapsår först', 'error')
+      return
+    }
 
     try {
       setLoading(true)
-      const response = await sie4Api.export(selectedCompany.id, includeVerifications)
+      const response = await sie4Api.export(selectedCompany.id, selectedFiscalYear.id, includeVerifications)
 
       // Create download link
       const blob = new Blob([response.data], { type: 'text/plain' })
@@ -384,7 +394,9 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      await fiscalYearApi.create({
+
+      // Step 1: Create the new fiscal year
+      const createResponse = await fiscalYearApi.create({
         company_id: selectedCompany.id,
         year: newFiscalYear.year,
         label: newFiscalYear.label,
@@ -392,7 +404,22 @@ export default function SettingsPage() {
         end_date: newFiscalYear.end_date,
         is_closed: false,
       })
-      showMessage('Räkenskapsår skapat!', 'success')
+
+      const newFiscalYearId = createResponse.data.id
+
+      // Step 2: Copy chart of accounts from previous fiscal year
+      // This automatically finds the most recent previous fiscal year
+      showMessage('Räkenskapsår skapat! Kopierar kontoplan från föregående år...', 'success')
+
+      try {
+        const copyResponse = await fiscalYearApi.copyChartOfAccounts(newFiscalYearId)
+        showMessage(`Räkenskapsår och kontoplan skapade! ${copyResponse.data.accounts_copied} konton kopierade från ${copyResponse.data.source_fiscal_year_label}.`, 'success')
+      } catch (copyError: any) {
+        console.error('Failed to copy chart of accounts:', copyError)
+        const errorDetail = copyError.response?.data?.detail || 'Kunde inte kopiera kontoplan'
+        showMessage(`Räkenskapsår skapat, men ${errorDetail}. Du kan importera BAS-kontoplan manuellt i fliken "Import".`, 'error')
+      }
+
       await loadData()
       setShowCreateFiscalYear(false)
       // Reset to next year defaults after creating
@@ -469,132 +496,6 @@ export default function SettingsPage() {
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
   }
 
-  const handleOpenDefaultAccountModal = (type: string) => {
-    const defaultAcc = getAccountForType(type)
-    if (defaultAcc) {
-      setSelectedAccountForDefault(defaultAcc.account_id)
-    } else {
-      setSelectedAccountForDefault(null)
-    }
-    setEditingDefaultAccount(type)
-  }
-
-  const handleSaveDefaultAccount = async () => {
-    if (!editingDefaultAccount || !selectedAccountForDefault || !selectedCompany) return
-
-    const defaultAcc = getAccountForType(editingDefaultAccount)
-
-    setLoading(true)
-    try {
-      if (!defaultAcc) {
-        // Create new default account
-        await defaultAccountApi.create({
-          company_id: selectedCompany.id,
-          account_type: editingDefaultAccount,
-          account_id: selectedAccountForDefault
-        })
-        showMessage('Standardkonto skapat!', 'success')
-      } else {
-        // Update existing default account
-        await defaultAccountApi.update(defaultAcc.id, { account_id: selectedAccountForDefault })
-        showMessage('Standardkonto uppdaterat!', 'success')
-      }
-
-      // Reload data and close modal
-      await loadData()
-      setEditingDefaultAccount(null)
-      setSelectedAccountForDefault(null)
-    } catch (error: any) {
-      console.error('Failed to save default account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadBasAccounts = async () => {
-    try {
-      const response = await companyApi.getBasAccounts()
-      setBasAccounts(response.data.accounts)
-    } catch (error: any) {
-      console.error('Failed to load BAS accounts:', error)
-      showMessage('Kunde inte ladda BAS-konton', 'error')
-    }
-  }
-
-  const handleShowAddAccount = async () => {
-    await loadBasAccounts()
-    setShowAddAccount(true)
-  }
-
-  const handleAddAccount = async () => {
-    if (!selectedCompany || !selectedBasAccount) return
-
-    const basAccount = basAccounts.find(acc => acc.account_number === selectedBasAccount)
-    if (!basAccount) return
-
-    try {
-      setLoading(true)
-      await accountApi.create({
-        company_id: selectedCompany.id,
-        account_number: basAccount.account_number,
-        name: basAccount.name,
-        account_type: basAccount.account_type,
-        description: basAccount.description,
-        active: true,
-        opening_balance: 0,
-        is_bas_account: true,
-      })
-      showMessage('Konto tillagt!', 'success')
-      setShowAddAccount(false)
-      setSelectedBasAccount('')
-      await loadData()
-    } catch (error: any) {
-      console.error('Failed to add account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDeleteAccount = async (accountId: number) => {
-    if (!confirm('Är du säker på att du vill ta bort detta konto?\n\nOm kontot har bokförda transaktioner kommer det att inaktiveras istället.')) return
-
-    try {
-      setLoading(true)
-      await accountApi.delete(accountId)
-      showMessage('Konto borttaget!', 'success')
-      await loadData()
-    } catch (error: any) {
-      console.error('Failed to delete account:', error)
-      // Special handling for 200 OK response (account was deactivated instead of deleted)
-      if (error.response?.status === 200) {
-        showMessage(error.response.data.detail, 'success')
-        await loadData()
-      } else {
-        showMessage(formatErrorMessage(error), 'error')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleReactivateAccount = async (accountId: number) => {
-    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
-
-    try {
-      setLoading(true)
-      await accountApi.update(accountId, { active: true })
-      showMessage('Konto aktiverat!', 'success')
-      await loadData()
-    } catch (error: any) {
-      console.error('Failed to reactivate account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleCreateTemplate = () => {
     setEditingTemplate(null)
     setTemplateForm({
@@ -613,8 +514,8 @@ export default function SettingsPage() {
     setShowCreateTemplate(true)
   }
 
-  const handleEditTemplate = async (template: PostingTemplateListItem) => {
-    if (!selectedCompany) return
+  const handleEditTemplate = async (template: PostingTemplate) => {
+    if (!selectedCompany || !template.id) return
 
     try {
       const response = await postingTemplateApi.get(template.id)
@@ -692,13 +593,26 @@ export default function SettingsPage() {
   }
 
   // Simple drag and drop state
-  const [draggedTemplate, setDraggedTemplate] = useState<PostingTemplateListItem | null>(null)
+  const [draggedTemplate, setDraggedTemplate] = useState<PostingTemplate | null>(null)
   const [dropIndicator, setDropIndicator] = useState<{ templateId: number; position: 'before' | 'after' } | null>(null)
 
-  const handleDragStart = (e: any, template: PostingTemplateListItem) => {
+  // Delete account confirmation state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    show: boolean
+    account: Account | null
+    canDelete: boolean
+    blockingReason: string | null
+  }>({
+    show: false,
+    account: null,
+    canDelete: true,
+    blockingReason: null
+  })
+
+  const handleDragStart = (e: any, template: PostingTemplate) => {
     setDraggedTemplate(template)
     e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', template.id.toString())
+    e.dataTransfer.setData('text/plain', template.id?.toString() || '')
   }
 
   const handleDragEnd = () => {
@@ -706,17 +620,17 @@ export default function SettingsPage() {
     setDropIndicator(null)
   }
 
-  const handleDragOver = (e: any, template: PostingTemplateListItem) => {
+  const handleDragOver = (e: any, template: PostingTemplate) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    
-    if (!draggedTemplate || draggedTemplate.id === template.id) return
+
+    if (!draggedTemplate || !template.id || draggedTemplate.id === template.id) return
 
     // Calculate if drop should be before or after based on mouse position
     const rect = e.currentTarget.getBoundingClientRect()
     const midY = rect.top + rect.height / 2
     const position = e.clientY < midY ? 'before' : 'after'
-    
+
     setDropIndicator({ templateId: template.id, position })
   }
 
@@ -731,9 +645,9 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDrop = async (e: any, targetTemplate: PostingTemplateListItem) => {
+  const handleDrop = async (e: any, targetTemplate: PostingTemplate) => {
     e.preventDefault()
-    
+
     if (!draggedTemplate || !selectedCompany || draggedTemplate.id === targetTemplate.id || !dropIndicator) {
       handleDragEnd()
       return
@@ -742,7 +656,7 @@ export default function SettingsPage() {
     const sortedTemplates = templates.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
     const draggedIndex = sortedTemplates.findIndex((t: any) => t.id === draggedTemplate.id)
     const targetIndex = sortedTemplates.findIndex((t: any) => t.id === targetTemplate.id)
-    
+
     if (draggedIndex === -1 || targetIndex === -1) {
       handleDragEnd()
       return
@@ -753,7 +667,7 @@ export default function SettingsPage() {
     if (dropIndicator.position === 'after') {
       insertIndex = targetIndex + 1
     }
-    
+
     // Adjust for removal of dragged item
     if (draggedIndex < insertIndex) {
       insertIndex -= 1
@@ -781,6 +695,129 @@ export default function SettingsPage() {
       // Revert the local change if API call fails
       setTemplates(templates)
       showMessage('Kunde inte uppdatera ordning', 'error')
+    }
+  }
+
+  // Account management functions
+  const loadBasAccounts = async () => {
+    try {
+      const response = await companyApi.getBasAccounts()
+      setBasAccounts(response.data.accounts)
+    } catch (error: any) {
+      console.error('Failed to load BAS accounts:', error)
+      showMessage('Kunde inte ladda BAS-konton', 'error')
+    }
+  }
+
+  const handleShowAddAccount = async () => {
+    await loadBasAccounts()
+    setShowAddAccount(true)
+  }
+
+  const handleAddAccount = async () => {
+    if (!selectedCompany || !selectedFiscalYear || !selectedBasAccount) return
+
+    const basAccount = basAccounts.find(acc => acc.account_number === selectedBasAccount)
+    if (!basAccount) return
+
+    try {
+      setLoading(true)
+      await accountApi.create({
+        company_id: selectedCompany.id,
+        fiscal_year_id: selectedFiscalYear.id,
+        account_number: basAccount.account_number,
+        name: basAccount.name,
+        account_type: basAccount.account_type,
+        description: basAccount.description,
+        active: true,
+        opening_balance: 0,
+        is_bas_account: true,
+      })
+      showMessage('Konto tillagt!', 'success')
+      setShowAddAccount(false)
+      setSelectedBasAccount('')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to add account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = (account: Account) => {
+    // Check if account can be deleted
+    let canDelete = true
+    let blockingReason: string | null = null
+
+    // Check if account has transactions (balance has changed)
+    if (account.current_balance !== account.opening_balance) {
+      canDelete = false
+      blockingReason = `Kontot har bokförda transaktioner för detta räkenskapsår och kan därför inte raderas.`
+    }
+    // Check if account is used in posting templates
+    else {
+      const usedInTemplate = templates.find(template =>
+        template.template_lines.some(line => line.account_id === account.id)
+      )
+
+      if (usedInTemplate) {
+        canDelete = false
+        blockingReason = `Kontot används i konteringsmall "${usedInTemplate.name}". Ta bort eller redigera mallen först.`
+      }
+      // Check if account is used as default account
+      else {
+        const usedAsDefault = defaultAccounts.find(da => da.account_id === account.id)
+        if (usedAsDefault) {
+          canDelete = false
+          const label = DEFAULT_ACCOUNT_LABELS[usedAsDefault.account_type] || usedAsDefault.account_type
+          blockingReason = `Kontot används som standardkonto för "${label}". Ändra standardkontomappningen först.`
+        }
+      }
+    }
+
+    setDeleteConfirmation({
+      show: true,
+      account,
+      canDelete,
+      blockingReason
+    })
+  }
+
+  const confirmDeleteAccount = async () => {
+    if (!deleteConfirmation.account) return
+
+    try {
+      setLoading(true)
+      await accountApi.delete(deleteConfirmation.account.id)
+      showMessage('Konto borttaget!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to delete account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+      setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
+    }
+  }
+
+  const cancelDeleteAccount = () => {
+    setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
+  }
+
+  const handleReactivateAccount = async (accountId: number) => {
+    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
+
+    try {
+      setLoading(true)
+      await accountApi.update(accountId, { active: true })
+      showMessage('Konto aktiverat!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to reactivate account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -1444,25 +1481,12 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 {['revenue_25', 'revenue_12', 'revenue_6', 'revenue_0'].map((type) => {
                   const defaultAcc = getAccountForType(type)
-                  const account = defaultAcc ? allAccounts.find(acc => acc.id === defaultAcc.account_id) : null
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
                       <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono text-gray-500">
-                          {account ? `${account.account_number} - ${account.name}` : '–'}
-                        </span>
-                        <button
-                          onClick={() => handleOpenDefaultAccountModal(type)}
-                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                          disabled={loading}
-                          title="Redigera standardkonto"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      </div>
+                      <span className="text-sm font-mono">
+                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
+                      </span>
                     </div>
                   )
                 })}
@@ -1482,25 +1506,12 @@ export default function SettingsPage() {
                   'vat_incoming_6',
                 ].map((type) => {
                   const defaultAcc = getAccountForType(type)
-                  const account = defaultAcc ? allAccounts.find(acc => acc.id === defaultAcc.account_id) : null
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
                       <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono text-gray-500">
-                          {account ? `${account.account_number} - ${account.name}` : '–'}
-                        </span>
-                        <button
-                          onClick={() => handleOpenDefaultAccountModal(type)}
-                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                          disabled={loading}
-                          title="Redigera standardkonto"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      </div>
+                      <span className="text-sm font-mono">
+                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
+                      </span>
                     </div>
                   )
                 })}
@@ -1513,25 +1524,12 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 {['accounts_receivable', 'accounts_payable', 'expense_default'].map((type) => {
                   const defaultAcc = getAccountForType(type)
-                  const account = defaultAcc ? allAccounts.find(acc => acc.id === defaultAcc.account_id) : null
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
                       <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono text-gray-500">
-                          {account ? `${account.account_number} - ${account.name}` : '–'}
-                        </span>
-                        <button
-                          onClick={() => handleOpenDefaultAccountModal(type)}
-                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                          disabled={loading}
-                          title="Redigera standardkonto"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      </div>
+                      <span className="text-sm font-mono">
+                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
+                      </span>
                     </div>
                   )
                 })}
@@ -1660,7 +1658,7 @@ export default function SettingsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
-                            onClick={() => handleDeleteAccount(account.id)}
+                            onClick={() => handleDeleteAccount(account)}
                             disabled={loading}
                             className="text-red-600 hover:text-red-900"
                             title="Ta bort konto"
@@ -2013,69 +2011,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Edit Default Account Modal */}
-      {editingDefaultAccount && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Ändra standardkonto
-                </h3>
-                <button
-                  onClick={() => {
-                    setEditingDefaultAccount(null)
-                    setSelectedAccountForDefault(null)
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {DEFAULT_ACCOUNT_LABELS[editingDefaultAccount]}
-                </label>
-                <select
-                  value={selectedAccountForDefault || ''}
-                  onChange={(e) => setSelectedAccountForDefault(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                >
-                  <option value="">-- Välj konto --</option>
-                  {allAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.account_number} - {acc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => {
-                    setEditingDefaultAccount(null)
-                    setSelectedAccountForDefault(null)
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={loading}
-                >
-                  Avbryt
-                </button>
-                <button
-                  onClick={handleSaveDefaultAccount}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                  disabled={loading || !selectedAccountForDefault}
-                >
-                  {loading ? 'Sparar...' : 'Spara'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Import Summary Modal */}
       {showImportSummary && importSummary && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -2361,6 +2296,104 @@ export default function SettingsPage() {
                   {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Dialog */}
+      {deleteConfirmation.show && deleteConfirmation.account && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white bg-opacity-20 p-2 rounded-full">
+                  <Trash2 className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-white">Ta bort konto</h3>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5">
+              <div className="mb-4">
+                <p className="text-gray-700 mb-3">
+                  {deleteConfirmation.canDelete
+                    ? 'Är du säker på att du vill ta bort följande konto?'
+                    : 'Följande konto kan inte raderas:'}
+                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="bg-blue-100 text-blue-600 rounded px-2 py-1 text-sm font-mono font-semibold">
+                        {deleteConfirmation.account.account_number}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">
+                        {deleteConfirmation.account.name}
+                      </p>
+                      {deleteConfirmation.account.description && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          {deleteConfirmation.account.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!deleteConfirmation.canDelete && deleteConfirmation.blockingReason && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800 mb-1">Kan inte raderas</p>
+                      <p className="text-sm text-red-700">
+                        {deleteConfirmation.blockingReason}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={cancelDeleteAccount}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteConfirmation.canDelete ? 'Avbryt' : 'Stäng'}
+              </button>
+              {deleteConfirmation.canDelete && (
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Tar bort...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Ta bort</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

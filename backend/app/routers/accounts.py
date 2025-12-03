@@ -13,37 +13,19 @@ router = APIRouter()
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(account: AccountCreate, db: Session = Depends(get_db)):
-    """
-    Create a new account.
-    If an inactive account with the same number exists, it will be reactivated.
-    """
+    """Create a new account"""
 
-    # Check if account number already exists for this company
+    # Check if account number already exists for this fiscal year
     existing = db.query(Account).filter(
-        Account.company_id == account.company_id,
+        Account.fiscal_year_id == account.fiscal_year_id,
         Account.account_number == account.account_number
     ).first()
 
     if existing:
-        # If account exists but is inactive, reactivate it
-        if not existing.active:
-            existing.active = True
-            # Update other fields if provided
-            for field, value in account.model_dump(exclude={'company_id', 'account_number'}).items():
-                setattr(existing, field, value)
-            db.commit()
-            db.refresh(existing)
-            # Return HTTP 200 with special message to indicate reactivation
-            raise HTTPException(
-                status_code=status.HTTP_200_OK,
-                detail=f"Konto {account.account_number} var inaktivt och har nu aktiverats igen."
-            )
-        else:
-            # Account exists and is already active
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Konto {account.account_number} finns redan och är aktivt."
-            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Account {account.account_number} already exists for this fiscal year"
+        )
 
     # Create account
     db_account = Account(**account.model_dump())
@@ -58,12 +40,16 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[AccountResponse])
 def list_accounts(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     account_type: Optional[AccountType] = None,
     active_only: bool = True,
     db: Session = Depends(get_db)
 ):
-    """List all accounts for a company"""
-    query = db.query(Account).filter(Account.company_id == company_id)
+    """List all accounts for a company and fiscal year"""
+    query = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id
+    )
 
     if account_type:
         query = query.filter(Account.account_type == account_type)
@@ -78,12 +64,14 @@ def list_accounts(
 @router.get("/balances", response_model=List[AccountBalance])
 def get_account_balances(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     account_type: Optional[AccountType] = None,
     db: Session = Depends(get_db)
 ):
-    """Get account balances"""
+    """Get account balances for a company and fiscal year"""
     query = db.query(Account).filter(
         Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
         Account.active == True
     )
 
@@ -140,9 +128,14 @@ def update_account(account_id: int, account_update: AccountUpdate, db: Session =
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(account_id: int, db: Session = Depends(get_db)):
     """
-    Delete or deactivate an account.
-    - If account has transactions: marks it as inactive (can be reactivated later via PATCH)
-    - If account has no transactions: deletes it completely
+    Delete an account.
+    - If account has transactions: returns 400 error (most restrictive - cannot delete)
+    - If account is used in posting templates: returns 400 error
+    - If account is used as default account: returns 400 error
+    - If none of above: deletes account completely
+
+    Note: Accounts with transactions must remain active in the system.
+    Manual deactivation can be done via PATCH endpoint if needed in the future.
     """
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
@@ -151,7 +144,37 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
             detail=f"Account {account_id} not found"
         )
 
-    # Check if account is used in default accounts (FIRST - most restrictive)
+    # Check if account has any transaction lines (MOST RESTRICTIVE - check first)
+    transaction_count = db.query(TransactionLine).filter(
+        TransactionLine.account_id == account_id
+    ).count()
+
+    if transaction_count > 0:
+        # Cannot delete - account has transactions
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kontot kan inte raderas eftersom det har {transaction_count} bokförda transaktioner för detta räkenskapsår. Kontot måste vara tomt för att kunna raderas."
+        )
+
+    # Check if account is used in posting templates
+    from app.models.posting_template import PostingTemplateLine, PostingTemplate
+    template_line = db.query(PostingTemplateLine).filter(
+        PostingTemplateLine.account_id == account_id
+    ).first()
+
+    if template_line:
+        # Get template name for better error message
+        template = db.query(PostingTemplate).filter(
+            PostingTemplate.id == template_line.template_id
+        ).first()
+        template_name = template.name if template else "okänd mall"
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kan inte ta bort konto som används i konteringsmall '{template_name}'. Ta bort eller redigera mallen först."
+        )
+
+    # Check if account is used in default accounts
     from app.models.default_account import DefaultAccount
     default_account = db.query(DefaultAccount).filter(
         DefaultAccount.account_id == account_id
@@ -161,20 +184,6 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Kan inte ta bort konto som används som standardkonto ({default_account.account_type}). Ändra standardkontomappningen först."
-        )
-
-    # Check if account has any transactions
-    transaction_count = db.query(TransactionLine).filter(
-        TransactionLine.account_id == account_id
-    ).count()
-
-    if transaction_count > 0:
-        # Cannot delete - mark as inactive instead
-        account.active = False
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_200_OK,
-            detail=f"Kontot har {transaction_count} bokförda transaktioner och har därför markerats som inaktivt istället för att tas bort. Det kommer inte längre visas i kontolistan men finns kvar i bokföringshistoriken."
         )
 
     # Safe to delete - no transactions or default account references

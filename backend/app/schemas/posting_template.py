@@ -128,6 +128,7 @@ class PostingTemplateListItem(BaseModel):
 class TemplateExecutionRequest(BaseModel):
     """Schema for executing a verification template"""
     amount: Decimal = Field(..., gt=0, description="Total amount to use in formulas")
+    fiscal_year_id: int = Field(..., description="Fiscal year ID to execute the template in")
     transaction_date: Optional[str] = Field(None, description="Override transaction date (YYYY-MM-DD)")
     description_override: Optional[str] = Field(None, description="Override the default journal text")
 

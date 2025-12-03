@@ -50,21 +50,117 @@ reknir/
 
 ## Huvudfunktioner
 
-### 1. Kontoplan (BAS)
-- Import av BAS-kontoplan (svensk standard)
-- Kontohantering med typer (Tillgång, Skuld, Intäkt, Kostnad)
-- Kontoreskontra (huvudbok)
-- Automatisk balansuppdatering
+### 1. Räkenskapsår och Kontoplan
 
-**Viktiga konton:**
-- **1510** - Kundfordringar
-- **1930** - Företagskonto/Bankgiro (standard bankkonto)
-- **2440** - Leverantörsskulder
-- **2641** - Ingående moms 25%
-- **2890** - Upplupna kostnader (anställdas utlägg)
-- **2610-2650** - Utgående moms
-- **3xxx** - Intäktskonton
-- **4xxx-8xxx** - Kostnadskonton
+#### Räkenskapsår (Fiscal Years)
+Varje företag kan ha flera räkenskapsår. Varje räkenskapsår har sin egen kontoplan.
+
+**Viktiga principer:**
+- Varje konto tillhör ett specifikt räkenskapsår
+- Samma kontonummer kan finnas i flera år, men det är olika konton i systemet
+- Verifikationer kopplas till konton i ett specifikt räkenskapsår
+- Konton med transaktioner kan inte tas bort, endast inaktiveras
+
+#### Skapa första räkenskapsåret (Onboarding)
+
+Under onboarding när ett företag skapas:
+1. Användaren skapar företaget via `/setup` (Setup-sidan)
+2. Användaren skapar första räkenskapsåret: `POST /api/fiscal-years/`
+3. Användaren väljer om BAS-kontoplanen ska importeras:
+   - **JA**: `POST /api/companies/{id}/seed-bas?fiscal_year_id={fy_id}`
+     - Systemet skapar 43 BAS-konton knutna till räkenskapsåret
+     - Alla konton får `opening_balance = 0` och `current_balance = 0`
+     - Standardkonton initialiseras automatiskt: `POST /api/companies/{id}/initialize-defaults`
+     - Konteringsmallar skapas: `POST /api/companies/{id}/seed-templates`
+   - **NEJ**: Inga konton skapas, användaren lägger till egna konton senare
+
+**Viktigt**: Alla konton i första räkenskapsåret skapas med `fiscal_year_id` satt till det nya räkenskapsårets ID.
+
+#### Skapa nytt räkenskapsår (Efterföljande år)
+
+När ett nytt räkenskapsår skapas i Settings:
+1. Användaren skapar räkenskapsåret: `POST /api/fiscal-years/`
+2. **Automatiskt**: Frontend anropar `POST /api/fiscal-years/{new_fy_id}/copy-chart-of-accounts`
+   - Backend hittar automatiskt senaste avslutade räkenskapsåret
+   - Alla konton kopieras från föregående år till det nya året
+   - Varje konto får ett nytt `id` men behåller samma `account_number`
+   - **Balanskonton** (Asset, Equity/Liability): `opening_balance` = föregående års `current_balance`
+   - **Resultatkonton** (Revenue, Cost): `opening_balance = 0` (nollställs inför nytt år)
+   - `current_balance` sätts till samma värde som `opening_balance`
+   - `active`/`inactive` status bevaras från föregående år
+   - `is_bas_account` bevaras
+
+**Exempel**:
+```
+År 2024:
+  - Konto ID=100, account_number=1930 (Bankkonto, Asset)
+    opening_balance=0, current_balance=50000
+
+  - Konto ID=101, account_number=3001 (Försäljning, Revenue)
+    opening_balance=0, current_balance=200000
+
+År 2025 (efter kopiering):
+  - Konto ID=200, account_number=1930 (Bankkonto, Asset)
+    opening_balance=50000, current_balance=50000  ← Balanseras från 2024
+
+  - Konto ID=201, account_number=3001 (Försäljning, Revenue)
+    opening_balance=0, current_balance=0  ← Nollställs för nytt år
+```
+
+#### Kontohantering mellan räkenskapsår
+
+**Viktiga principer:**
+- Varje konto är **unikt per räkenskapsår** via `fiscal_year_id`
+- Samma kontonummer kan finnas i flera år, men är olika konton i systemet
+- Ändringar i ett års kontoplan påverkar INTE andra år
+- Default accounts matchar automatiskt via kontonummer mellan år
+
+**Användning av konton:**
+- När användare skapar verifikation väljs räkenskapsår (via datum eller explicit val)
+- Systemet visar bara konton från det valda räkenskapsåret
+- Inaktiva konton visas inte i dropdowns för nya verifikationer
+- Inaktiva konton visas fortfarande i rapporter och historik
+
+**Redigering och borttagning:**
+- Konton kan läggas till i vilket räkenskapsår som helst
+- Konton kan redigeras (namn, beskrivning, typ, aktiv/inaktiv)
+- Konton med transaktioner KAN INTE tas bort
+- Konton utan transaktioner KAN tas bort
+- Inaktivering är det rekommenderade sättet att "gömma" konton
+
+**API Endpoints:**
+- `POST /api/fiscal-years/` - Skapa nytt räkenskapsår
+- `GET /api/fiscal-years/?company_id={id}` - Lista räkenskapsår
+- `GET /api/fiscal-years/current/by-company/{id}` - Hämta aktuellt räkenskapsår
+- `POST /api/fiscal-years/{id}/copy-chart-of-accounts` - Kopiera kontoplan från föregående år
+- `POST /api/fiscal-years/{id}/assign-verifications` - Tilldela verifikationer till räkenskapsår
+- `GET /api/accounts/?company_id={id}&fiscal_year_id={fy_id}` - Lista konton för specifikt räkenskapsår
+- `POST /api/companies/{id}/seed-bas?fiscal_year_id={fy_id}` - Importera BAS-kontoplan för specifikt räkenskapsår
+
+#### Kontoplan (BAS)
+- Import av BAS-kontoplan (svensk standard, 43 konton)
+- Kontohantering med typer baserade på BAS-strukturen:
+  - **ASSET** (1xxx) - Tillgångar
+  - **EQUITY_LIABILITY** (2xxx) - Eget kapital och skulder
+  - **REVENUE** (3xxx) - Intäkter
+  - **COST_GOODS** (4xxx) - Kostnader för varor/material
+  - **COST_LOCAL** (5xxx) - Lokalkostnader
+  - **COST_OTHER** (6xxx) - Övriga kostnader
+  - **COST_PERSONNEL** (7xxx) - Personalkostnader
+  - **COST_MISC** (8xxx) - Diverse kostnader
+- Kontoreskontra (huvudbok per konto)
+- Automatisk balansuppdatering vid bokföring
+- **Konton är alltid knutna till ett specifikt räkenskapsår**
+
+**Viktiga BAS-konton:**
+- **1510** - Kundfordringar (Asset)
+- **1930** - Företagskonto/Bankgiro (Asset, standard bankkonto för alla betalningar)
+- **2440** - Leverantörsskulder (Equity/Liability)
+- **2641** - Ingående moms 25% (Equity/Liability)
+- **2890** - Upplupna kostnader (Equity/Liability, anställdas utlägg)
+- **2610-2650** - Utgående moms (Equity/Liability: 2611=25%, 2621=12%, 2631=6%)
+- **3xxx** - Intäktskonton (Revenue: 3001=25%, 3002=12%, 3003=6%, 3100=0%)
+- **4xxx-8xxx** - Kostnadskonton (Cost)
 
 ### 2. Verifikationer
 - Automatisk numrering per serie (A, B, C, etc.)
@@ -179,35 +275,7 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Hantering av leverantörsregister
 - Koppling till fakturor
 
-### 7. Standardkonton (Default Accounts)
-- Mappning av konton till funktioner för automatisk bokföring
-- Stöd för olika momssatser (25%, 12%, 6%, 0%)
-- Företagsspecifika konfigurationer
-- Automatisk initialisering vid BAS-import
-- Manuell redigering via inställningar
-
-**Standardkontotyper:**
-- `revenue_25/12/6/0` - Intäktskonton per momssats
-- `vat_outgoing_25/12/6` - Utgående moms
-- `vat_incoming_25/12/6` - Ingående moms
-- `accounts_receivable` - Kundfordringar (1510)
-- `accounts_payable` - Leverantörsskulder (2440)
-- `expense_default` - Standardkostnadskonto (6570)
-
-**API Endpoints:**
-- `GET /api/default-accounts/?company_id={id}` - Lista standardkonton
-- `POST /api/default-accounts/` - Skapa standardkonto
-- `PATCH /api/default-accounts/{id}` - Uppdatera standardkonto
-
-**Validering:**
-- Kontot måste existera i företagets kontoplan
-- Ett standardkontotyp kan bara ha ett konto per företag
-- Kan inte ta bort konto som används som standardkonto
-
-**Routes:**
-- `/settings` - Inställningar (fliken "Standardkonton")
-
-### 8. Momsrapportering
+### 7. Momsrapportering
 - Momsrapport per period
 - Filtrering på datum
 - Exkludera momsredovisningsverifikationer
@@ -228,12 +296,13 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Export till SIE4-format
 - Kompatibelt med andra bokföringsprogram
 
-### 11. Konteringsmallar (Posting Templates)
+### 10. Konteringsmallar (Posting Templates)
 - Skapande av återanvändbara konteringsmallar
 - Formelbaserade beräkningar med variabeln `{total}`
 - Automatisk beräkning av konteringsrader
 - Malleditor med drag-and-drop sortering
 - Förutfyllda svenska standardmallar
+- **Stöd för flera räkenskapsår:** Mallar refererar till konton via kontonummer och översätts automatiskt till rätt räkenskapsår vid användning
 
 **Formelexempel:**
 - `{total}` - Totalbelopp
@@ -241,24 +310,30 @@ Kredit: 1930 Bankkonto              [Belopp]
 - `-{total}` - Negativt belopp
 - `{total} * 1.25` - Totalbelopp plus 25%
 
+**Hantering av räkenskapsår:**
+Mallar skapas med konton från ett specifikt räkenskapsår (vanligtvis det första). När mallen används:
+1. Användaren anger vilket räkenskapsår de arbetar i
+2. Systemet hittar motsvarande konton (samma kontonummer) i det valda räkenskapsåret
+3. Verifikationsrader skapas med konton från det aktuella räkenskapsåret
+
+Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förutsatt att motsvarande konton finns i båda åren.
+
 **API Endpoints:**
 - `POST /api/posting-templates/` - Skapa mall
 - `GET /api/posting-templates/` - Lista mallar
 - `GET /api/posting-templates/{id}` - Hämta mall
 - `PUT /api/posting-templates/{id}` - Uppdatera mall
 - `DELETE /api/posting-templates/{id}` - Ta bort mall
-- `POST /api/posting-templates/{id}/execute` - Kör mall med belopp
+- `POST /api/posting-templates/{id}/execute` - Kör mall (kräver fiscal_year_id i request body)
 - `PATCH /api/posting-templates/reorder` - Ändra sortering
 
 **Routes:**
 - `/settings` - Inställningar (fliken "Konteringsmallar")
 
-### 12. Företagsinställningar
+### 11. Företagsinställningar
 - Företagsinformation med automatiskt VAT-nummer
 - Logotypuppladdning och visning
-- Flikbaserad navigation (Företag, Konton, Standardkonton, Räkenskapsår, Mallar, Import)
-- Hantering av standardkonton via grafiskt gränssnitt
-- Hantering av kontoplan (Lägg till/ta bort/inaktivera konton)
+- Flikbaserad navigation (Företag, Konton, Räkenskapsår, Mallar, Import)
 - Initialisering av standardkonton
 - Import av BAS-kontoplan
 - Import av standardmallar
@@ -276,27 +351,13 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Automatisk visning på faktura-PDF
 - UUID-baserade filnamn för säkerhet
 
-**Kontohantering (Settings > Konton):**
-- Redigera standardkonton via dropdown-menyer
-- Visa alla företagets konton i tabell
-- Lägg till konton från BAS 2024 referenslista
-- Ta bort/inaktivera konton:
-  - Konton med transaktioner markeras som inaktiva (kan aktiveras igen)
-  - Konton utan transaktioner raderas permanent
-  - Konton som är standardkonton kan inte tas bort
-- Filtrering: Endast konton som inte redan finns visas vid tillägg
-
 **API Endpoints:**
 - `POST /api/companies/{id}/logo` - Ladda upp logotyp
 - `GET /api/companies/{id}/logo` - Hämta logotyp
 - `DELETE /api/companies/{id}/logo` - Ta bort logotyp
-- `GET /api/companies/bas-accounts` - Hämta BAS 2024 referensdata
 - `POST /api/companies/{id}/initialize-defaults` - Initiera standardkonton
 - `POST /api/companies/{id}/seed-bas` - Importera BAS-kontoplan
 - `POST /api/companies/{id}/seed-templates` - Importera standardmallar
-- `POST /api/accounts/` - Skapa nytt konto
-- `DELETE /api/accounts/{id}` - Ta bort eller inaktivera konto
-- `PATCH /api/accounts/{id}` - Uppdatera konto (t.ex. aktivera igen)
 
 **Routes:**
 - `/settings` - Inställningar (flikbaserad vy)
@@ -310,15 +371,20 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Leverantörsfakturabetalningar
 
 ### Standardkonton
-Systemet använder default accounts för automatisk bokföring. Dessa konfigureras per företag och kan redigeras via Inställningar > Standardkonton. Se **sektion 7** för mer information.
-
-**Standardtyper (med typiska BAS-kontonummer):**
-- `accounts_receivable` - Kundfordringar (1510)
-- `accounts_payable` - Leverantörsskulder (2440)
-- `vat_outgoing_25/12/6` - Utgående moms (2611/2621/2631)
-- `vat_incoming_25/12/6` - Ingående moms (2641/2642/2645)
-- `revenue_25/12/6/0` - Intäktskonton (3001/3002/3003/3044)
-- `expense_default` - Standardkostnad (6570)
+Systemet använder default accounts för automatisk bokföring:
+- `ACCOUNTS_RECEIVABLE` - Kundfordringar (1510)
+- `ACCOUNTS_PAYABLE` - Leverantörsskulder (2440)
+- `VAT_OUTGOING_25` - Utgående moms 25% (2611)
+- `VAT_OUTGOING_12` - Utgående moms 12% (2621)
+- `VAT_OUTGOING_6` - Utgående moms 6% (2631)
+- `VAT_INCOMING_25` - Ingående moms 25% (2641)
+- `VAT_INCOMING_12` - Ingående moms 12% (2642)
+- `VAT_INCOMING_6` - Ingående moms 6% (2645)
+- `REVENUE_25` - Intäkt med 25% moms (3001)
+- `REVENUE_12` - Intäkt med 12% moms (3002)
+- `REVENUE_6` - Intäkt med 6% moms (3003)
+- `REVENUE_0` - Intäkt utan moms (3100)
+- `EXPENSE_DEFAULT` - Standardkostnad (6570)
 
 ## Arbetsflöden
 
@@ -551,26 +617,20 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 ---
 
 **Version:** 1.2.0
-**Senast uppdaterad:** 2025-11-30
+**Senast uppdaterad:** 2025-12-02
 
 ## Ändringslogg
 
-### v1.2.0 (2025-11-30)
-- ✅ Standardkonton-system (Default Accounts):
-  - Dedicated tab i Settings för hantering av standardkonton
-  - CREATE endpoint för nya standardkonton (`POST /api/default-accounts/`)
-  - UPDATE endpoint för befintliga standardkonton (`PATCH /api/default-accounts/{id}`)
-  - Strikt validering: endast befintliga konton kan användas
-  - Modal-baserad redigering med editerings-ikoner
-  - Skydd mot borttagning av konton som används som standardkonton
-- ✅ Kontohantering i Settings:
-  - Lägg till konton från BAS 2024 referensdata
-  - Intelligent borttagning/inaktivering av konton
-- ✅ BAS 2024 API-förbättringar:
-  - Fixad route-ordning för `/api/companies/bas-accounts`
-  - Konto 3044 (0% moms) tillagt till referensen
-  - Uppdaterad label: "Försäljning 0% moms" (inte bara export)
-- ✅ API-dokumentation: Swagger tags nu lowercase (`default-accounts`)
+### v1.2.0 (2025-12-02)
+- ✅ Fullständigt stöd för flera räkenskapsår med separata kontoplaner
+- ✅ Automatisk kopiering av kontoplan mellan räkenskapsår med korrekt balansering
+  - Balanskonton (Asset, Equity/Liability) får ingående saldo från föregående års utgående saldo
+  - Resultatkonton (Revenue, Cost) nollställs inför nytt år
+- ✅ Varje konto är unikt per räkenskapsår med egen `fiscal_year_id`
+- ✅ Konteringsmallar fungerar över räkenskapsår genom kontonummer-mappning
+- ✅ Default accounts översätts automatiskt till rätt räkenskapsår
+- ✅ Frontend automatiserar kopiering av kontoplan vid skapande av nytt räkenskapsår
+- ✅ Förbättrad dokumentation för räkenskapsår-hantering
 
 ### v1.1.0 (2025-11-30)
 - ✅ Konteringsmallar med formelbaserade beräkningar

@@ -37,35 +37,68 @@ class PostingTemplate(Base):
     def __repr__(self):
         return f"<PostingTemplate {self.name} - {self.description}>"
 
-    def evaluate_template(self, amount: float) -> list:
+    def evaluate_template(self, db, amount: float, fiscal_year_id: int) -> list:
         """
-        Evaluate the template with a given amount and return posting lines
-        Returns list of dicts with account_id, debit, credit, description, etc.
+        Evaluate the template with a given amount and return posting lines for a specific fiscal year.
+
+        Args:
+            db: Database session
+            amount: The amount to use in formula calculations
+            fiscal_year_id: The target fiscal year to find accounts in
+
+        Returns:
+            List of dicts with account_id, debit, credit, description, etc.
+
+        The method translates account references from the template's original fiscal year
+        to equivalent accounts (same account_number) in the target fiscal year.
         """
+        from app.models.account import Account
+
         posting_lines = []
-        
+
         for line in self.template_lines:
+            # Get the template's account to find its account_number
+            template_account = line.account
+
+            # Find the equivalent account in the target fiscal year
+            target_account = db.query(Account).filter(
+                Account.company_id == self.company_id,
+                Account.fiscal_year_id == fiscal_year_id,
+                Account.account_number == template_account.account_number
+            ).first()
+
+            if not target_account:
+                raise ValueError(
+                    f"Account {template_account.account_number} ({template_account.name}) "
+                    f"not found in fiscal year {fiscal_year_id}. "
+                    f"Please ensure the account exists in the target fiscal year."
+                )
+
             evaluated_amount = line.evaluate_formula(amount)
-            
+
             # Positive amounts become debits, negative become credits
             debit = max(0, evaluated_amount)
             credit = abs(min(0, evaluated_amount))
-            
+
             posting_line = {
-                "account_id": line.account_id,
+                "account_id": target_account.id,
                 "debit": debit,
                 "credit": credit,
                 "description": line.description
             }
             posting_lines.append(posting_line)
-        
+
         return posting_lines
 
 
 class PostingTemplateLine(Base):
     """
     Individual posting line in a posting template
-    Contains account, optional dimensions, and a formula for amount calculation
+    Contains account reference and a formula for amount calculation.
+
+    The account_id references a specific account in a specific fiscal year.
+    When using templates across fiscal years, the system will find the equivalent
+    account (same account_number) in the target fiscal year.
     """
     __tablename__ = "posting_template_lines"
 
@@ -75,7 +108,7 @@ class PostingTemplateLine(Base):
 
     # Formula for amount calculation
     formula = Column(String(500), nullable=False)  # e.g., "{total} * 0.25", "-{total}"
-    
+
     # Optional line description (overrides template description)
     description = Column(String(255), nullable=True)
 

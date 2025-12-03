@@ -53,6 +53,7 @@ export interface FiscalYear {
 export interface Account {
   id: number
   company_id: number
+  fiscal_year_id: number
   account_number: number
   name: string
   description?: string
@@ -135,6 +136,7 @@ export interface PostingTemplateListItem {
 
 export interface TemplateExecutionRequest {
   amount: number
+  fiscal_year_id: number
   transaction_date?: string
   description_override?: string
 }

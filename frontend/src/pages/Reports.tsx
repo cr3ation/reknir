@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react'
 import { reportApi } from '@/services/api'
 import type { BalanceSheet, IncomeStatement, VATReport, VATPeriod } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 type ReportTab = 'balance' | 'income' | 'vat'
 
 export default function Reports() {
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [activeTab, setActiveTab] = useState<ReportTab>('income')
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
@@ -20,22 +23,22 @@ export default function Reports() {
 
   useEffect(() => {
     loadData()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   useEffect(() => {
-    if (selectedCompany) {
+    if (selectedCompany && selectedFiscalYear) {
       loadVatPeriods()
     }
-  }, [selectedCompany, vatYear])
+  }, [selectedCompany, selectedFiscalYear, vatYear])
 
   useEffect(() => {
-    if (selectedCompany && selectedPeriod) {
+    if (selectedCompany && selectedFiscalYear && selectedPeriod) {
       loadVatReport()
     }
-  }, [selectedCompany, selectedPeriod, excludeVatSettlements])
+  }, [selectedCompany, selectedFiscalYear, selectedPeriod, excludeVatSettlements])
 
   const loadData = async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
       return
     }
@@ -44,8 +47,8 @@ export default function Reports() {
       setLoading(true)
       // Load reports
       const [balanceRes, incomeRes] = await Promise.all([
-        reportApi.balanceSheet(selectedCompany.id),
-        reportApi.incomeStatement(selectedCompany.id),
+        reportApi.balanceSheet(selectedCompany.id, selectedFiscalYear.id),
+        reportApi.incomeStatement(selectedCompany.id, selectedFiscalYear.id),
       ])
 
       setBalanceSheet(balanceRes.data)
@@ -58,10 +61,10 @@ export default function Reports() {
   }
 
   const loadVatPeriods = async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const periodsRes = await reportApi.vatPeriods(selectedCompany.id, vatYear)
+      const periodsRes = await reportApi.vatPeriods(selectedCompany.id, selectedFiscalYear.id, vatYear)
       setVatPeriods(periodsRes.data.periods)
 
       // Auto-select the most recent period
@@ -74,12 +77,13 @@ export default function Reports() {
   }
 
   const loadVatReport = async () => {
-    if (!selectedCompany || !selectedPeriod) return
+    if (!selectedCompany || !selectedFiscalYear || !selectedPeriod) return
 
     try {
       setLoading(true)
       const vatRes = await reportApi.vatReport(
         selectedCompany.id,
+        selectedFiscalYear.id,
         selectedPeriod.start_date,
         selectedPeriod.end_date,
         excludeVatSettlements
@@ -119,7 +123,10 @@ export default function Reports() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6">Rapporter</h1>
+      <div className="mb-6 flex items-start justify-between">
+        <h1 className="text-3xl font-bold">Rapporter</h1>
+        <FiscalYearSelector />
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
@@ -684,9 +691,10 @@ export default function Reports() {
               <div className="mt-4">
                 <button
                   onClick={() => {
-                    if (!selectedCompany || !selectedPeriod) return
+                    if (!selectedCompany || !selectedFiscalYear || !selectedPeriod) return
                     const url = new URL('/api/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000')
                     url.searchParams.append('company_id', selectedCompany.id.toString())
+                    url.searchParams.append('fiscal_year_id', selectedFiscalYear.id.toString())
                     url.searchParams.append('start_date', selectedPeriod.start_date)
                     url.searchParams.append('end_date', selectedPeriod.end_date)
                     url.searchParams.append('exclude_vat_settlements', excludeVatSettlements.toString())

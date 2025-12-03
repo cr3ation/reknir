@@ -17,27 +17,22 @@ export default function Dashboard() {
   }, [selectedCompany, selectedFiscalYear])
 
   const loadData = async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
       return
     }
 
     try {
       setLoading(true)
-      // Load accounts
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      // Load accounts for selected fiscal year
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
       setAccounts(accountsRes.data)
 
-      // Load monthly statistics if fiscal year is selected
-      if (selectedFiscalYear) {
-        console.log('Loading monthly statistics for year:', selectedFiscalYear.year)
-        const statsRes = await reportApi.monthlyStatistics(selectedCompany.id, selectedFiscalYear.year)
-        console.log('Monthly statistics loaded:', statsRes.data)
-        setMonthlyStats(statsRes.data)
-      } else {
-        console.log('No fiscal year selected, skipping monthly statistics')
-        setMonthlyStats(null)
-      }
+      // Load monthly statistics
+      console.log('Loading monthly statistics for year:', selectedFiscalYear.year)
+      const statsRes = await reportApi.monthlyStatistics(selectedCompany.id, selectedFiscalYear.id, selectedFiscalYear.year)
+      console.log('Monthly statistics loaded:', statsRes.data)
+      setMonthlyStats(statsRes.data)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
