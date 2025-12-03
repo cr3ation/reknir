@@ -108,10 +108,13 @@ def get_income_statement(
     expenses = []
 
     for account in accounts:
+        balance = float(account.current_balance)
+
         item = {
             "account_number": account.account_number,
             "name": account.name,
-            "balance": float(account.current_balance)
+            # Revenue stored as negative (credit), show as positive
+            "balance": abs(balance) if account.account_type == AccountType.REVENUE else balance
         }
 
         if account.account_type == AccountType.REVENUE:
