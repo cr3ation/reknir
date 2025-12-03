@@ -92,6 +92,7 @@ def create_verification(verification: VerificationCreate, db: Session = Depends(
 @router.get("/", response_model=List[VerificationListItem])
 def list_verifications(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: Optional[int] = Query(None, description="Fiscal Year ID"),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     series: Optional[str] = None,
@@ -102,6 +103,8 @@ def list_verifications(
     """List verifications with filtering"""
     query = db.query(Verification).filter(Verification.company_id == company_id)
 
+    if fiscal_year_id:
+        query = query.filter(Verification.fiscal_year_id == fiscal_year_id)
     if start_date:
         query = query.filter(Verification.transaction_date >= start_date)
     if end_date:

@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
+  const [accountCountsByFiscalYear, setAccountCountsByFiscalYear] = useState<Record<number, number>>({})
   const [templates, setTemplates] = useState<PostingTemplate[]>([])
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PostingTemplate | null>(null)
@@ -102,6 +103,20 @@ export default function SettingsPage() {
       setLoading(true)
       const fiscalYearsRes = await fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] }))
       setFiscalYears(fiscalYearsRes.data)
+
+      // Load account counts for each fiscal year (for the fiscal year tab)
+      const accountCounts: Record<number, number> = {}
+      await Promise.all(
+        fiscalYearsRes.data.map(async (fy: FiscalYear) => {
+          try {
+            const accountsRes = await accountApi.list(selectedCompany.id, fy.id)
+            accountCounts[fy.id] = accountsRes.data.length
+          } catch {
+            accountCounts[fy.id] = 0
+          }
+        })
+      )
+      setAccountCountsByFiscalYear(accountCounts)
 
       // If we have a selected fiscal year, load accounts and defaults
       if (selectedFiscalYear) {
@@ -435,7 +450,16 @@ export default function SettingsPage() {
   }
 
   const handleDeleteFiscalYear = async (fiscalYearId: number, label: string) => {
-    if (!confirm(`Är du säker på att du vill radera räkenskapsåret "${label}"? Verifikationer kommer att kopplas loss.`)) {
+    const accountCount = accountCountsByFiscalYear[fiscalYearId] || 0
+    let confirmMessage = `Är du säker på att du vill radera räkenskapsåret "${label}"?`
+
+    if (accountCount > 0) {
+      confirmMessage = `VARNING: Räkenskapsåret "${label}" har ${accountCount} konton som kommer att raderas permanent.\n\nÄr du säker på att du vill fortsätta?`
+    } else {
+      confirmMessage += ' Verifikationer kommer att kopplas loss.'
+    }
+
+    if (!confirm(confirmMessage)) {
       return
     }
 
@@ -1868,6 +1892,9 @@ export default function SettingsPage() {
                         Stängt
                       </span>
                     )}
+                    <span className="px-2 py-0.5 text-xs font-medium bg-gray-50 text-gray-600 rounded">
+                      {accountCountsByFiscalYear[fy.id] || 0} konton
+                    </span>
                   </div>
                   <div className="text-sm text-gray-600 mt-1">
                     {fy.start_date} till {fy.end_date}
