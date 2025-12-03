@@ -710,7 +710,14 @@ export default function SettingsPage() {
   }
 
   const handleShowAddAccount = async () => {
-    await loadBasAccounts()
+    // Reload both BAS accounts AND current accounts to ensure filtering works
+    await Promise.all([
+      loadBasAccounts(),
+      selectedFiscalYear && selectedCompany
+        ? accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+            .then(res => setAllAccounts(res.data))
+        : Promise.resolve()
+    ])
     setShowAddAccount(true)
   }
 
@@ -733,9 +740,10 @@ export default function SettingsPage() {
         opening_balance: 0,
         is_bas_account: true,
       })
+
       showMessage('Konto tillagt!', 'success')
-      setShowAddAccount(false)
       setSelectedBasAccount('')
+      setShowAddAccount(false)
       await loadData()
     } catch (error: any) {
       console.error('Failed to add account:', error)
@@ -1546,7 +1554,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleShowAddAccount}
                 disabled={loading}
-                className="btn btn-primary"
+                className="btn btn-primary inline-flex items-center"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Lägg till konto
@@ -1562,9 +1570,6 @@ export default function SettingsPage() {
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Välj konto
-                  </label>
                   <select
                     value={selectedBasAccount}
                     onChange={(e) => setSelectedBasAccount(e.target.value)}
