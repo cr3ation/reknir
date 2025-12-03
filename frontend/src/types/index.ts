@@ -173,6 +173,7 @@ export interface BalanceSheet {
     accounts: Array<{ account_number: number; name: string; balance: number }>
     total: number
   }
+  current_year_result: number
   total_liabilities_and_equity: number
   balanced: boolean
 }

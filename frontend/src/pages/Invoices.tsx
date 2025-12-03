@@ -5,10 +5,12 @@ import { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } 
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function Invoices() {
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoiceListItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -20,10 +22,10 @@ export default function Invoices() {
 
   useEffect(() => {
     loadInvoices()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadInvoices = async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
       return
     }
@@ -35,7 +37,7 @@ export default function Invoices() {
         supplierInvoiceApi.list(selectedCompany.id),
         customerApi.list(selectedCompany.id),
         supplierApi.list(selectedCompany.id),
-        accountApi.list(selectedCompany.id),
+        accountApi.list(selectedCompany.id, selectedFiscalYear.id),
       ])
       setInvoices(outgoingRes.data)
       setSupplierInvoices(incomingRes.data)
