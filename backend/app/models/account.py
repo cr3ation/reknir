@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Enum as SQLEnum, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, Enum as SQLEnum, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -21,6 +21,10 @@ class Account(Base):
     Each account belongs to a specific fiscal year.
     """
     __tablename__ = "accounts"
+    __table_args__ = (
+        UniqueConstraint('company_id', 'fiscal_year_id', 'account_number',
+                         name='uq_account_company_fiscal_year_number'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)

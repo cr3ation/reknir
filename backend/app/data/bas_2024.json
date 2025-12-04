@@ -2,50 +2,275 @@
   "version": "BAS 2024",
   "description": "Swedish BAS kontoplan 2024 - Core accounts",
   "accounts": [
-    {"account_number": "1510", "name": "Kundfordringar", "account_type": "asset", "description": "Accounts receivable from customers"},
-    {"account_number": "1630", "name": "Skattekonto", "account_type": "asset", "description": "Tax account"},
-    {"account_number": "1790", "name": "Övriga förutbetalda kostnader och upplupna intäkter", "account_type": "asset", "description": "Other prepaid expenses and accrued income"},
-    {"account_number": "1910", "name": "Kassa", "account_type": "asset", "description": "Cash register"},
-    {"account_number": "1920", "name": "Plusgiro", "account_type": "asset", "description": "Plusgiro account"},
-    {"account_number": "1930", "name": "Företagskonto/checkkonto", "account_type": "asset", "description": "Business account / checking account"},
-    {"account_number": "2013", "name": "Överkursfond", "account_type": "equity_liability", "description": "Share premium reserve"},
-    {"account_number": "2050", "name": "Aktiekapital", "account_type": "equity_liability", "description": "Share capital"},
-    {"account_number": "2091", "name": "Balanserad vinst eller förlust", "account_type": "equity_liability", "description": "Retained earnings or losses"},
-    {"account_number": "2099", "name": "Årets resultat", "account_type": "equity_liability", "description": "Net income for the year"},
-    {"account_number": "2330", "name": "Checkkredit", "account_type": "equity_liability", "description": "Overdraft facility"},
-    {"account_number": "2440", "name": "Leverantörsskulder", "account_type": "equity_liability", "description": "Accounts payable to suppliers"},
-    {"account_number": "2611", "name": "Utgående moms, försäljning 25%", "account_type": "equity_liability", "description": "Output VAT, sales 25%"},
-    {"account_number": "2621", "name": "Utgående moms, försäljning 12%", "account_type": "equity_liability", "description": "Output VAT, sales 12%"},
-    {"account_number": "2631", "name": "Utgående moms, försäljning 6%", "account_type": "equity_liability", "description": "Output VAT, sales 6%"},
-    {"account_number": "2640", "name": "Ingående moms", "account_type": "equity_liability", "description": "Input VAT"},
-    {"account_number": "2710", "name": "Personalskatt", "account_type": "equity_liability", "description": "Employer tax"},
-    {"account_number": "2730", "name": "Avräkning för mervärdesskatt", "account_type": "equity_liability", "description": "VAT settlement account"},
-    {"account_number": "2920", "name": "Upplupna semesterlöner", "account_type": "equity_liability", "description": "Accrued holiday pay"},
-    {"account_number": "2940", "name": "Upplupna sociala avgifter", "account_type": "equity_liability", "description": "Accrued social security contributions"},
-    {"account_number": "3001", "name": "Försäljning varor och tjänster inom Sverige, 25% moms", "account_type": "revenue", "description": "Sales of goods and services in Sweden, 25% VAT"},
-    {"account_number": "3002", "name": "Försäljning varor och tjänster inom Sverige, 12% moms", "account_type": "revenue", "description": "Sales of goods and services in Sweden, 12% VAT"},
-    {"account_number": "3003", "name": "Försäljning varor och tjänster inom Sverige, 6% moms", "account_type": "revenue", "description": "Sales of goods and services in Sweden, 6% VAT"},
-    {"account_number": "3044", "name": "Försäljning tjänster inom Sverige, 0% moms", "account_type": "revenue", "description": "Sales of services in Sweden, 0% VAT"},
-    {"account_number": "3105", "name": "Försäljning tjänster utanför Sverige, omsättning inom EU", "account_type": "revenue", "description": "Sale of services outside Sweden, turnover within EU"},
-    {"account_number": "3106", "name": "Försäljning tjänster utanför Sverige, omsättning utanför EU", "account_type": "revenue", "description": "Sale of services outside Sweden, turnover outside EU"},
-    {"account_number": "4000", "name": "Inköp varor och material", "account_type": "cost_goods", "description": "Purchase of goods and materials"},
-    {"account_number": "5010", "name": "Lokalhyra", "account_type": "cost_local", "description": "Rent for premises"},
-    {"account_number": "5410", "name": "Förbrukningsinventarier", "account_type": "cost_local", "description": "Consumable equipment"},
-    {"account_number": "5460", "name": "Förbrukningsmaterial", "account_type": "cost_local", "description": "Consumable materials"},
-    {"account_number": "5800", "name": "Resekostnader, biljetter", "account_type": "cost_local", "description": "Travel expenses, tickets"},
-    {"account_number": "5910", "name": "Annonsering", "account_type": "cost_local", "description": "Advertising"},
-    {"account_number": "6071", "name": "Traktamente, utan skattefri del", "account_type": "cost_other", "description": "Per diem, without tax-free part"},
-    {"account_number": "6072", "name": "Traktamente, skattefri del", "account_type": "cost_other", "description": "Per diem, tax-free part"},
-    {"account_number": "6110", "name": "Kontorsmaterial", "account_type": "cost_other", "description": "Office supplies"},
-    {"account_number": "6211", "name": "Datakommunikation", "account_type": "cost_other", "description": "Data communication"},
-    {"account_number": "6230", "name": "Mobiltelefon", "account_type": "cost_other", "description": "Mobile phone"},
-    {"account_number": "6540", "name": "IT-tjänster", "account_type": "cost_other", "description": "IT services"},
-    {"account_number": "6570", "name": "Bankkostnader", "account_type": "cost_other", "description": "Bank fees"},
-    {"account_number": "7010", "name": "Löner till kollektivanställda", "account_type": "cost_personnel", "description": "Salaries to collective employees"},
-    {"account_number": "7210", "name": "Löner till tjänstemän", "account_type": "cost_personnel", "description": "Salaries to salaried employees"},
-    {"account_number": "7510", "name": "Arbetsgivaravgifter", "account_type": "cost_personnel", "description": "Employer contributions"},
-    {"account_number": "7533", "name": "Särskild löneskatt", "account_type": "cost_personnel", "description": "Special payroll tax"},
-    {"account_number": "8300", "name": "Ränteintäkter, bankkonton", "account_type": "revenue", "description": "Interest income, bank accounts"},
-    {"account_number": "8400", "name": "Räntekostnader, checkkredit", "account_type": "cost_misc", "description": "Interest expenses, overdraft"}
+    {
+      "account_number": 1510,
+      "name": "Kundfordringar",
+      "account_type": "asset",
+      "description": "Accounts receivable from customers"
+    },
+    {
+      "account_number": 1630,
+      "name": "Skattekonto",
+      "account_type": "asset",
+      "description": "Tax account"
+    },
+    {
+      "account_number": 1790,
+      "name": "Övriga förutbetalda kostnader och upplupna intäkter",
+      "account_type": "asset",
+      "description": "Other prepaid expenses and accrued income"
+    },
+    {
+      "account_number": 1910,
+      "name": "Kassa",
+      "account_type": "asset",
+      "description": "Cash register"
+    },
+    {
+      "account_number": 1920,
+      "name": "Plusgiro",
+      "account_type": "asset",
+      "description": "Plusgiro account"
+    },
+    {
+      "account_number": 1930,
+      "name": "Företagskonto/checkkonto",
+      "account_type": "asset",
+      "description": "Business account / checking account"
+    },
+    {
+      "account_number": 2013,
+      "name": "Överkursfond",
+      "account_type": "equity_liability",
+      "description": "Share premium reserve"
+    },
+    {
+      "account_number": 2050,
+      "name": "Aktiekapital",
+      "account_type": "equity_liability",
+      "description": "Share capital"
+    },
+    {
+      "account_number": 2091,
+      "name": "Balanserad vinst eller förlust",
+      "account_type": "equity_liability",
+      "description": "Retained earnings or losses"
+    },
+    {
+      "account_number": 2099,
+      "name": "Årets resultat",
+      "account_type": "equity_liability",
+      "description": "Net income for the year"
+    },
+    {
+      "account_number": 2330,
+      "name": "Checkkredit",
+      "account_type": "equity_liability",
+      "description": "Overdraft facility"
+    },
+    {
+      "account_number": 2440,
+      "name": "Leverantörsskulder",
+      "account_type": "equity_liability",
+      "description": "Accounts payable to suppliers"
+    },
+    {
+      "account_number": 2611,
+      "name": "Utgående moms, försäljning 25%",
+      "account_type": "equity_liability",
+      "description": "Output VAT, sales 25%"
+    },
+    {
+      "account_number": 2621,
+      "name": "Utgående moms, försäljning 12%",
+      "account_type": "equity_liability",
+      "description": "Output VAT, sales 12%"
+    },
+    {
+      "account_number": 2631,
+      "name": "Utgående moms, försäljning 6%",
+      "account_type": "equity_liability",
+      "description": "Output VAT, sales 6%"
+    },
+    {
+      "account_number": 2640,
+      "name": "Ingående moms",
+      "account_type": "equity_liability",
+      "description": "Input VAT"
+    },
+    {
+      "account_number": 2710,
+      "name": "Personalskatt",
+      "account_type": "equity_liability",
+      "description": "Employer tax"
+    },
+    {
+      "account_number": 2730,
+      "name": "Avräkning för mervärdesskatt",
+      "account_type": "equity_liability",
+      "description": "VAT settlement account"
+    },
+    {
+      "account_number": 2920,
+      "name": "Upplupna semesterlöner",
+      "account_type": "equity_liability",
+      "description": "Accrued holiday pay"
+    },
+    {
+      "account_number": 2940,
+      "name": "Upplupna sociala avgifter",
+      "account_type": "equity_liability",
+      "description": "Accrued social security contributions"
+    },
+    {
+      "account_number": 3001,
+      "name": "Försäljning varor och tjänster inom Sverige, 25% moms",
+      "account_type": "revenue",
+      "description": "Sales of goods and services in Sweden, 25% VAT"
+    },
+    {
+      "account_number": 3002,
+      "name": "Försäljning varor och tjänster inom Sverige, 12% moms",
+      "account_type": "revenue",
+      "description": "Sales of goods and services in Sweden, 12% VAT"
+    },
+    {
+      "account_number": 3003,
+      "name": "Försäljning varor och tjänster inom Sverige, 6% moms",
+      "account_type": "revenue",
+      "description": "Sales of goods and services in Sweden, 6% VAT"
+    },
+    {
+      "account_number": 3044,
+      "name": "Försäljning tjänster inom Sverige, 0% moms",
+      "account_type": "revenue",
+      "description": "Sales of services in Sweden, 0% VAT"
+    },
+    {
+      "account_number": 3105,
+      "name": "Försäljning tjänster utanför Sverige, omsättning inom EU",
+      "account_type": "revenue",
+      "description": "Sale of services outside Sweden, turnover within EU"
+    },
+    {
+      "account_number": 3106,
+      "name": "Försäljning tjänster utanför Sverige, omsättning utanför EU",
+      "account_type": "revenue",
+      "description": "Sale of services outside Sweden, turnover outside EU"
+    },
+    {
+      "account_number": 4000,
+      "name": "Inköp varor och material",
+      "account_type": "cost_goods",
+      "description": "Purchase of goods and materials"
+    },
+    {
+      "account_number": 5010,
+      "name": "Lokalhyra",
+      "account_type": "cost_local",
+      "description": "Rent for premises"
+    },
+    {
+      "account_number": 5410,
+      "name": "Förbrukningsinventarier",
+      "account_type": "cost_local",
+      "description": "Consumable equipment"
+    },
+    {
+      "account_number": 5460,
+      "name": "Förbrukningsmaterial",
+      "account_type": "cost_local",
+      "description": "Consumable materials"
+    },
+    {
+      "account_number": 5800,
+      "name": "Resekostnader, biljetter",
+      "account_type": "cost_local",
+      "description": "Travel expenses, tickets"
+    },
+    {
+      "account_number": 5910,
+      "name": "Annonsering",
+      "account_type": "cost_local",
+      "description": "Advertising"
+    },
+    {
+      "account_number": 6071,
+      "name": "Traktamente, utan skattefri del",
+      "account_type": "cost_other",
+      "description": "Per diem, without tax-free part"
+    },
+    {
+      "account_number": 6072,
+      "name": "Traktamente, skattefri del",
+      "account_type": "cost_other",
+      "description": "Per diem, tax-free part"
+    },
+    {
+      "account_number": 6110,
+      "name": "Kontorsmaterial",
+      "account_type": "cost_other",
+      "description": "Office supplies"
+    },
+    {
+      "account_number": 6211,
+      "name": "Datakommunikation",
+      "account_type": "cost_other",
+      "description": "Data communication"
+    },
+    {
+      "account_number": 6230,
+      "name": "Mobiltelefon",
+      "account_type": "cost_other",
+      "description": "Mobile phone"
+    },
+    {
+      "account_number": 6540,
+      "name": "IT-tjänster",
+      "account_type": "cost_other",
+      "description": "IT services"
+    },
+    {
+      "account_number": 6570,
+      "name": "Bankkostnader",
+      "account_type": "cost_other",
+      "description": "Bank fees"
+    },
+    {
+      "account_number": 7010,
+      "name": "Löner till kollektivanställda",
+      "account_type": "cost_personnel",
+      "description": "Salaries to collective employees"
+    },
+    {
+      "account_number": 7210,
+      "name": "Löner till tjänstemän",
+      "account_type": "cost_personnel",
+      "description": "Salaries to salaried employees"
+    },
+    {
+      "account_number": 7510,
+      "name": "Arbetsgivaravgifter",
+      "account_type": "cost_personnel",
+      "description": "Employer contributions"
+    },
+    {
+      "account_number": 7533,
+      "name": "Särskild löneskatt",
+      "account_type": "cost_personnel",
+      "description": "Special payroll tax"
+    },
+    {
+      "account_number": 8300,
+      "name": "Ränteintäkter, bankkonton",
+      "account_type": "revenue",
+      "description": "Interest income, bank accounts"
+    },
+    {
+      "account_number": 8400,
+      "name": "Räntekostnader, checkkredit",
+      "account_type": "cost_misc",
+      "description": "Interest expenses, overdraft"
+    }
   ]
 }

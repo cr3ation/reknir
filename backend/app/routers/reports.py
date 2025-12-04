@@ -21,7 +21,7 @@ def get_balance_sheet(
 ):
     """
     Generate Balance Sheet (Balansräkning) for a specific fiscal year
-    Assets = Liabilities + Equity
+    Assets = Liabilities + Equity + Current Year Result
     """
 
     # Get all accounts with balances for this fiscal year
@@ -35,24 +35,41 @@ def get_balance_sheet(
     assets = []
     liabilities = []
     equity = []
+    revenue_accounts = []
+    cost_accounts = []
 
     for account in accounts:
+        balance = float(account.current_balance)
+
         item = {
             "account_number": account.account_number,
             "name": account.name,
-            "balance": float(account.current_balance)
+            "balance": balance
         }
 
         if account.account_type == AccountType.ASSET:
             assets.append(item)
         elif account.account_type == AccountType.EQUITY_LIABILITY:
-            # Determine if equity or liability based on account number
-            # 2000-2999: Equity (Eget kapital)
-            # 2100-2999: Liabilities (Skulder)
+            # 2000-2099: Equity, 2100-2999: Liabilities
             if 2000 <= account.account_number < 2100:
                 equity.append(item)
             else:
                 liabilities.append(item)
+        elif account.account_type == AccountType.REVENUE:
+            revenue_accounts.append(account)
+        elif account.account_type in [
+            AccountType.COST_GOODS,
+            AccountType.COST_LOCAL,
+            AccountType.COST_OTHER,
+            AccountType.COST_PERSONNEL,
+            AccountType.COST_MISC
+        ]:
+            cost_accounts.append(account)
+
+    # Calculate current year result
+    total_revenue = sum(abs(float(acc.current_balance)) for acc in revenue_accounts)
+    total_costs = sum(float(acc.current_balance) for acc in cost_accounts)
+    current_year_result = total_revenue - total_costs
 
     total_assets = sum(a["balance"] for a in assets)
     total_liabilities = sum(l["balance"] for l in liabilities)
@@ -73,8 +90,9 @@ def get_balance_sheet(
             "accounts": equity,
             "total": total_equity
         },
-        "total_liabilities_and_equity": total_liabilities + total_equity,
-        "balanced": abs(total_assets - (total_liabilities + total_equity)) < 0.01
+        "current_year_result": current_year_result,
+        "total_liabilities_and_equity": total_liabilities + total_equity + current_year_result,
+        "balanced": abs(total_assets - (total_liabilities + total_equity + current_year_result)) < 0.01
     }
 
 
@@ -108,10 +126,13 @@ def get_income_statement(
     expenses = []
 
     for account in accounts:
+        balance = float(account.current_balance)
+
         item = {
             "account_number": account.account_number,
             "name": account.name,
-            "balance": float(account.current_balance)
+            # Revenue stored as negative (credit), show as positive
+            "balance": abs(balance) if account.account_type == AccountType.REVENUE else balance
         }
 
         if account.account_type == AccountType.REVENUE:

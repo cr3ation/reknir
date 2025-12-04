@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
+  const [accountCountsByFiscalYear, setAccountCountsByFiscalYear] = useState<Record<number, number>>({})
   const [templates, setTemplates] = useState<PostingTemplate[]>([])
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PostingTemplate | null>(null)
@@ -72,6 +73,13 @@ export default function SettingsPage() {
     vat_reporting_period: 'quarterly' as VATReportingPeriod,
   })
 
+  // Default account modal state
+  const [editingDefaultAccountType, setEditingDefaultAccountType] = useState<string | null>(null)
+  const [selectedAccountIdForDefault, setSelectedAccountIdForDefault] = useState<number | null>(null)
+  const [savingDefaultAccount, setSavingDefaultAccount] = useState(false)
+  const [deletingDefaultAccountType, setDeletingDefaultAccountType] = useState<string | null>(null)
+  const [removingDefaultAccount, setRemovingDefaultAccount] = useState(false)
+
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
     const nextYear = fiscalYears.length > 0
@@ -102,6 +110,20 @@ export default function SettingsPage() {
       setLoading(true)
       const fiscalYearsRes = await fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] }))
       setFiscalYears(fiscalYearsRes.data)
+
+      // Load account counts for each fiscal year (for the fiscal year tab)
+      const accountCounts: Record<number, number> = {}
+      await Promise.all(
+        fiscalYearsRes.data.map(async (fy: FiscalYear) => {
+          try {
+            const accountsRes = await accountApi.list(selectedCompany.id, fy.id)
+            accountCounts[fy.id] = accountsRes.data.length
+          } catch {
+            accountCounts[fy.id] = 0
+          }
+        })
+      )
+      setAccountCountsByFiscalYear(accountCounts)
 
       // If we have a selected fiscal year, load accounts and defaults
       if (selectedFiscalYear) {
@@ -435,7 +457,16 @@ export default function SettingsPage() {
   }
 
   const handleDeleteFiscalYear = async (fiscalYearId: number, label: string) => {
-    if (!confirm(`Är du säker på att du vill radera räkenskapsåret "${label}"? Verifikationer kommer att kopplas loss.`)) {
+    const accountCount = accountCountsByFiscalYear[fiscalYearId] || 0
+    let confirmMessage = `Är du säker på att du vill radera räkenskapsåret "${label}"?`
+
+    if (accountCount > 0) {
+      confirmMessage = `VARNING: Räkenskapsåret "${label}" har ${accountCount} konton som kommer att raderas permanent.\n\nÄr du säker på att du vill fortsätta?`
+    } else {
+      confirmMessage += ' Verifikationer kommer att kopplas loss.'
+    }
+
+    if (!confirm(confirmMessage)) {
       return
     }
 
@@ -494,6 +525,74 @@ export default function SettingsPage() {
   const getAccountDisplay = (accountId: number): string => {
     const account = allAccounts.find((a) => a.id === accountId)
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
+  }
+
+  // Default account handlers
+  const handleEditDefaultAccount = (accountType: string) => {
+    const existingDefault = getAccountForType(accountType)
+    setEditingDefaultAccountType(accountType)
+    setSelectedAccountIdForDefault(existingDefault?.account_id || null)
+  }
+
+  const handleSaveDefaultAccount = async () => {
+    if (!selectedCompany || !editingDefaultAccountType || !selectedAccountIdForDefault) return
+
+    setSavingDefaultAccount(true)
+    try {
+      const existingDefault = getAccountForType(editingDefaultAccountType)
+
+      if (existingDefault) {
+        // Update existing
+        await defaultAccountApi.update(existingDefault.id, { account_id: selectedAccountIdForDefault })
+        showMessage('Standardkonto uppdaterat', 'success')
+      } else {
+        // Create new
+        await defaultAccountApi.create({
+          company_id: selectedCompany.id,
+          account_type: editingDefaultAccountType,
+          account_id: selectedAccountIdForDefault,
+        })
+        showMessage('Standardkonto sparat', 'success')
+      }
+
+      // Reload default accounts
+      const defaultsRes = await defaultAccountApi.list(selectedCompany.id)
+      setDefaultAccounts(defaultsRes.data)
+      setEditingDefaultAccountType(null)
+      setSelectedAccountIdForDefault(null)
+    } catch (error: any) {
+      console.error('Failed to save default account:', error)
+      showMessage(error.response?.data?.detail || 'Kunde inte spara standardkonto', 'error')
+    } finally {
+      setSavingDefaultAccount(false)
+    }
+  }
+
+  const handleRemoveDefaultAccount = (accountType: string) => {
+    setDeletingDefaultAccountType(accountType)
+  }
+
+  const confirmRemoveDefaultAccount = async () => {
+    if (!selectedCompany || !deletingDefaultAccountType) return
+
+    const existingDefault = getAccountForType(deletingDefaultAccountType)
+    if (!existingDefault) return
+
+    setRemovingDefaultAccount(true)
+    try {
+      await defaultAccountApi.delete(existingDefault.id)
+      showMessage('Standardkonto borttaget', 'success')
+
+      // Reload default accounts
+      const defaultsRes = await defaultAccountApi.list(selectedCompany.id)
+      setDefaultAccounts(defaultsRes.data)
+      setDeletingDefaultAccountType(null)
+    } catch (error: any) {
+      console.error('Failed to remove default account:', error)
+      showMessage(error.response?.data?.detail || 'Kunde inte ta bort standardkonto', 'error')
+    } finally {
+      setRemovingDefaultAccount(false)
+    }
   }
 
   const handleCreateTemplate = () => {
@@ -710,7 +809,14 @@ export default function SettingsPage() {
   }
 
   const handleShowAddAccount = async () => {
-    await loadBasAccounts()
+    // Reload both BAS accounts AND current accounts to ensure filtering works
+    await Promise.all([
+      loadBasAccounts(),
+      selectedFiscalYear && selectedCompany
+        ? accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+            .then(res => setAllAccounts(res.data))
+        : Promise.resolve()
+    ])
     setShowAddAccount(true)
   }
 
@@ -733,9 +839,10 @@ export default function SettingsPage() {
         opening_balance: 0,
         is_bas_account: true,
       })
+
       showMessage('Konto tillagt!', 'success')
-      setShowAddAccount(false)
       setSelectedBasAccount('')
+      setShowAddAccount(false)
       await loadData()
     } catch (error: any) {
       console.error('Failed to add account:', error)
@@ -1466,13 +1573,6 @@ export default function SettingsPage() {
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
-        ) : defaultAccounts.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p className="mb-4">Inga standardkonton konfigurerade.</p>
-            <p className="text-sm">
-              Klicka på "Initiera automatiskt" för att automatiskt konfigurera standardkonton baserat på din kontoplan.
-            </p>
-          </div>
         ) : (
           <div className="space-y-4">
             {/* Revenue Accounts */}
@@ -1483,10 +1583,30 @@ export default function SettingsPage() {
                   const defaultAcc = getAccountForType(type)
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <span className="text-sm font-mono">
-                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
-                      </span>
+                      <span className="text-sm text-gray-700 flex-shrink-0">{DEFAULT_ACCOUNT_LABELS[type]}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-600">
+                          {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : <span className="text-gray-400">-</span>}
+                        </span>
+                        <button
+                          onClick={() => handleEditDefaultAccount(type)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                          title="Ändra konto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {defaultAcc && (
+                          <button
+                            onClick={() => handleRemoveDefaultAccount(type)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded"
+                            title="Ta bort standardkonto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -1508,10 +1628,30 @@ export default function SettingsPage() {
                   const defaultAcc = getAccountForType(type)
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <span className="text-sm font-mono">
-                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
-                      </span>
+                      <span className="text-sm text-gray-700 flex-shrink-0">{DEFAULT_ACCOUNT_LABELS[type]}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-600">
+                          {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : <span className="text-gray-400">-</span>}
+                        </span>
+                        <button
+                          onClick={() => handleEditDefaultAccount(type)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                          title="Ändra konto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {defaultAcc && (
+                          <button
+                            onClick={() => handleRemoveDefaultAccount(type)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded"
+                            title="Ta bort standardkonto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -1526,10 +1666,30 @@ export default function SettingsPage() {
                   const defaultAcc = getAccountForType(type)
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <span className="text-sm font-mono">
-                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
-                      </span>
+                      <span className="text-sm text-gray-700 flex-shrink-0">{DEFAULT_ACCOUNT_LABELS[type]}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-600">
+                          {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : <span className="text-gray-400">-</span>}
+                        </span>
+                        <button
+                          onClick={() => handleEditDefaultAccount(type)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                          title="Ändra konto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {defaultAcc && (
+                          <button
+                            onClick={() => handleRemoveDefaultAccount(type)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded"
+                            title="Ta bort standardkonto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -1546,7 +1706,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleShowAddAccount}
                 disabled={loading}
-                className="btn btn-primary"
+                className="btn btn-primary inline-flex items-center"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Lägg till konto
@@ -1562,9 +1722,6 @@ export default function SettingsPage() {
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Välj konto
-                  </label>
                   <select
                     value={selectedBasAccount}
                     onChange={(e) => setSelectedBasAccount(e.target.value)}
@@ -1863,6 +2020,9 @@ export default function SettingsPage() {
                         Stängt
                       </span>
                     )}
+                    <span className="px-2 py-0.5 text-xs font-medium bg-gray-50 text-gray-600 rounded">
+                      {accountCountsByFiscalYear[fy.id] || 0} konton
+                    </span>
                   </div>
                   <div className="text-sm text-gray-600 mt-1">
                     {fy.start_date} till {fy.end_date}
@@ -2394,6 +2554,153 @@ export default function SettingsPage() {
                   )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Default Account Selection Modal */}
+      {editingDefaultAccountType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Välj konto för "{DEFAULT_ACCOUNT_LABELS[editingDefaultAccountType]}"
+                </h3>
+                <button
+                  onClick={() => {
+                    setEditingDefaultAccountType(null)
+                    setSelectedAccountIdForDefault(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Konto
+                </label>
+                <select
+                  value={selectedAccountIdForDefault || ''}
+                  onChange={(e) => setSelectedAccountIdForDefault(e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">-- Välj konto --</option>
+                  {allAccounts
+                    .filter(account => account.active)
+                    .sort((a, b) => a.account_number - b.account_number)
+                    .map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_number} - {account.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  Endast aktiva konton från aktuellt räkenskapsår visas.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingDefaultAccountType(null)
+                    setSelectedAccountIdForDefault(null)
+                  }}
+                  disabled={savingDefaultAccount}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={handleSaveDefaultAccount}
+                  disabled={savingDefaultAccount || !selectedAccountIdForDefault}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {savingDefaultAccount ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Sparar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Spara</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Default Account Delete Confirmation Modal */}
+      {deletingDefaultAccountType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-red-50 px-6 py-4 border-b border-red-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Ta bort standardkonto
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {DEFAULT_ACCOUNT_LABELS[deletingDefaultAccountType]}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700">
+                Är du säker på att du vill ta bort detta standardkonto?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Funktioner som använder detta standardkonto kommer inte längre ha ett förvalt konto.
+                Du kan alltid lägga till ett nytt standardkonto senare.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setDeletingDefaultAccountType(null)}
+                disabled={removingDefaultAccount}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={confirmRemoveDefaultAccount}
+                disabled={removingDefaultAccount}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {removingDefaultAccount ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Tar bort...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Ta bort</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

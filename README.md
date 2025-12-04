@@ -2,15 +2,41 @@
 
 Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kontoplan support.
 
-## Features (MVP)
+## Features
 
-- ✅ Swedish BAS 2024 kontoplan
-- ✅ Double-entry bookkeeping (verifikationer)
-- ✅ Transaction management with audit trail
-- ✅ Posting Templates (konteringsmallar) with drag-and-drop reordering
+### Core Accounting
+- ✅ Double-entry bookkeeping (verifikationer) with automatic numbering
+- ✅ Swedish BAS 2024 kontoplan (45 accounts)
+- ✅ Multiple fiscal years with account chart per year
+- ✅ Automatic chart of accounts copying between years
 - ✅ Balance sheet and income statement
-- ✅ SIE4 export for årsredovisning
-- ✅ PostgreSQL with automatic backups
+- ✅ Monthly statistics and reports
+- ✅ Transaction locking and audit trail
+
+### Invoicing & Expenses
+- ✅ Customer invoices with PDF generation
+- ✅ Supplier invoices with attachments
+- ✅ Employee expenses with receipt upload and approval workflow
+- ✅ Automatic verification generation for invoices and expenses
+- ✅ Payment tracking and automated posting
+
+### VAT & Reporting
+- ✅ VAT reporting with automatic period calculation (monthly/quarterly/yearly)
+- ✅ XML export for Swedish Tax Agency (Skatteverket INK2R format)
+- ✅ SIE4 import/export for integration with other accounting software
+
+### Business Management
+- ✅ Customer and supplier registry
+- ✅ Posting templates with formula support (konteringsmallar)
+- ✅ Company settings with logo upload
+- ✅ Automatic VAT number calculation
+- ✅ Default accounts system
+
+### Tech
+- ✅ PostgreSQL with automatic backups (7-year retention)
+- ✅ Docker Compose deployment
+- ✅ REST API with OpenAPI documentation
+- ✅ Onboarding wizard for new companies
 
 ## Tech Stack
 
@@ -38,12 +64,15 @@ docker compose up -d
 # Run database migrations to create tables
 docker compose exec backend alembic upgrade head
 
-# Access the application and create your first company
+# Access the application
 # Frontend: http://localhost:5173
 # API docs: http://localhost:8000/docs
 
-# That's it! BAS kontoplan is imported automatically when you create a company.
-# Create posting templates (konteringsmallar) in Settings to speed up data entry.
+# Follow the onboarding wizard to:
+# 1. Create your company
+# 2. Set up your fiscal year
+# 3. Import BAS kontoplan (optional but recommended)
+# 4. Get started with your bookkeeping!
 ```
 
 ### Development Setup

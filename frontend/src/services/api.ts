@@ -237,6 +237,8 @@ export const defaultAccountApi = {
     api.post<DefaultAccount>('/api/default-accounts/', data),
   update: (defaultAccountId: number, data: { account_id: number }) =>
     api.patch<DefaultAccount>(`/api/default-accounts/${defaultAccountId}`, data),
+  delete: (defaultAccountId: number) =>
+    api.delete(`/api/default-accounts/${defaultAccountId}`),
 }
 
 // Expenses

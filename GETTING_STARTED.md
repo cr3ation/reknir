@@ -47,44 +47,41 @@ docker-compose logs backend
 
 Open your browser and go to http://localhost:5173
 
-Currently the UI is basic, so we'll use the API directly:
+You'll be greeted by the **Onboarding Wizard**:
 
-```bash
-# Create a company using the API
-curl -X POST http://localhost:8000/api/companies/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Mitt Företag AB",
-    "org_number": "556677-8899",
-    "fiscal_year_start": "2024-01-01",
-    "fiscal_year_end": "2024-12-31",
-    "accounting_basis": "accrual"
-  }'
-```
+#### Step 1: Company Information
+- Enter company name
+- Enter organization number (Swedish org.nr format: XXXXXX-XXXX)
+- Select accounting basis (accrual or cash)
+- Select VAT reporting period (monthly, quarterly, yearly)
+- Add contact details (optional)
 
-Save the `id` from the response (e.g., `"id": 1`).
+#### Step 2: Fiscal Year
+- Enter start and end date for your fiscal year
+- The system suggests current calendar year by default
+- Must be approximately 12 months
 
-### 4. Import BAS Kontoplan
+#### Step 3: Chart of Accounts
+Choose one option:
+- **"Yes, create chart of accounts"** (Recommended)
+  - Imports BAS 2024 kontoplan (45 accounts)
+  - Initializes default accounts
+  - Creates standard posting templates
+- **"No, skip"**
+  - Start with empty chart
+  - Import BAS later via Settings
 
-Import the BAS 2024 kontoplan using the CLI:
+#### Step 4: Confirmation
+- Review your setup
+- System will redirect to dashboard when complete
 
-```bash
-# Seed BAS accounts for company ID 1 (default)
-docker-compose exec backend python -m app.cli seed-bas
+### 4. Verify Setup
 
-# Or for a specific company
-docker-compose exec backend python -m app.cli seed-bas 2
-```
-
-The CLI will:
-- Check if the company exists
-- Skip accounts that already exist
-- Import all 43 BAS core accounts
-- Show progress with ✓ for each account
-
-### 5. Verify Setup
-
-Visit http://localhost:5173 - you should now see your company and accounts in the dashboard!
+You should now see:
+- Your company information in the dashboard
+- Fiscal year selector in the sidebar
+- Chart of accounts (if you imported BAS)
+- Empty transaction lists (ready for your first entries!)
 
 You can also check the API documentation at http://localhost:8000/docs
 

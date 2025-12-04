@@ -617,7 +617,7 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 ---
 
 **Version:** 1.2.0
-**Senast uppdaterad:** 2025-12-02
+**Senast uppdaterad:** 2025-12-03
 
 ## Ändringslogg
 

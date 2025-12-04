@@ -157,3 +157,21 @@ def update_default_account(
         account_number=account.account_number,
         account_name=account.name
     )
+
+
+@router.delete("/{default_account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_default_account(
+    default_account_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a default account mapping"""
+    default = db.query(DefaultAccount).filter(DefaultAccount.id == default_account_id).first()
+    if not default:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Default account {default_account_id} not found"
+        )
+
+    db.delete(default)
+    db.commit()
+    return None
