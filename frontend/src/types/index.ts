@@ -26,6 +26,11 @@ export interface Company {
   id: number
   name: string
   org_number: string
+  address?: string
+  postal_code?: string
+  city?: string
+  phone?: string
+  email?: string
   fiscal_year_start: string
   fiscal_year_end: string
   accounting_basis: AccountingBasis
@@ -432,4 +437,25 @@ export interface Expense {
   verification_id?: number
   created_at: string
   updated_at: string
+}
+
+// Monthly Statistics
+
+export interface MonthlyData {
+  month: number
+  month_name: string
+  revenue: number
+  expenses: number
+  profit: number
+}
+
+export interface YTDTotals {
+  revenue: number
+  expenses: number
+  profit: number
+}
+
+export interface MonthlyStatistics {
+  monthly_data: MonthlyData[]
+  ytd_totals: YTDTotals
 }

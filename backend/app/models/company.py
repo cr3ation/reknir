@@ -25,6 +25,13 @@ class Company(Base):
     name = Column(String, nullable=False)
     org_number = Column(String(15), unique=True, nullable=False, index=True)  # Organisationsnummer (XXXXXX-XXXX)
 
+    # Contact information (for invoices)
+    address = Column(String, nullable=True)
+    postal_code = Column(String(10), nullable=True)
+    city = Column(String, nullable=True)
+    phone = Column(String(20), nullable=True)
+    email = Column(String, nullable=True)
+
     # Fiscal year
     fiscal_year_start = Column(Date, nullable=False)  # Räkenskapsår start
     fiscal_year_end = Column(Date, nullable=False)    # Räkenskapsår slut

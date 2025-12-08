@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
-import { supplierInvoiceApi, accountApi, companyApi, supplierApi } from '@/services/api'
+import { supplierInvoiceApi, accountApi, supplierApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function SupplierInvoiceDetail() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
   const navigate = useNavigate()
+  const { selectedCompany } = useCompany()
   const [invoice, setInvoice] = useState<SupplierInvoice | null>(null)
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -17,7 +19,7 @@ export default function SupplierInvoiceDetail() {
   useEffect(() => {
     loadInvoice()
     loadAccounts()
-  }, [invoiceId])
+  }, [invoiceId, selectedCompany])
 
   const loadInvoice = async () => {
     try {
@@ -39,11 +41,10 @@ export default function SupplierInvoiceDetail() {
   }
 
   const loadAccounts = async () => {
+    if (!selectedCompany) return
+
     try {
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) return
-      const company = companiesRes.data[0]
-      const accountsRes = await accountApi.list(company.id)
+      const accountsRes = await accountApi.list(selectedCompany.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)

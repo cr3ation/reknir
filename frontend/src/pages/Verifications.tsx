@@ -1,44 +1,42 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
-import { verificationApi, accountApi, companyApi } from '@/services/api'
+import { verificationApi, accountApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import { useCompany } from '@/contexts/CompanyContext'
 
 export default function Verifications() {
+  const { selectedCompany } = useCompany()
   const [allVerifications, setAllVerifications] = useState<VerificationListItem[]>([])
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
-  const [companyId, setCompanyId] = useState<number | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
   const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedCompany])
 
   useEffect(() => {
     filterVerificationsByFiscalYear()
   }, [selectedFiscalYear, allVerifications])
 
   const loadData = async () => {
-    try {
-      // Get the first company (single-company mode)
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        setLoading(false)
-        return
-      }
-      const company = companiesRes.data[0]
-      setCompanyId(company.id)
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
 
+    try {
+      setLoading(true)
       // Load fiscal years for this company
-      await loadFiscalYears(company.id)
+      await loadFiscalYears(selectedCompany.id)
 
       const [verificationsRes, accountsRes] = await Promise.all([
-        verificationApi.list(company.id),
-        accountApi.list(company.id),
+        verificationApi.list(selectedCompany.id),
+        accountApi.list(selectedCompany.id),
       ])
       setAllVerifications(verificationsRes.data)
       setAccounts(accountsRes.data)
@@ -203,9 +201,9 @@ export default function Verifications() {
       )}
 
       {/* Create/Edit Modal */}
-      {showCreateModal && companyId && (
+      {showCreateModal && selectedCompany && (
         <CreateVerificationModal
-          companyId={companyId}
+          companyId={selectedCompany.id}
           accounts={accounts}
           verification={editingVerification}
           onClose={() => {

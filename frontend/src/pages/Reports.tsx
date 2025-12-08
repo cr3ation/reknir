@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { companyApi, reportApi } from '@/services/api'
+import { reportApi } from '@/services/api'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
-import type { Company, BalanceSheet, IncomeStatement, GeneralLedger, VATReport, VATPeriod } from '@/types'
+import { useCompany } from '@/contexts/CompanyContext'
+import type { BalanceSheet, IncomeStatement, GeneralLedger, VATReport, VATPeriod } from '@/types'
 
 type ReportTab = 'balance' | 'income' | 'general-ledger' | 'vat'
 
 export default function Reports() {
-  const [company, setCompany] = useState<Company | null>(null)
+  const { selectedCompany } = useCompany()
   const [activeTab, setActiveTab] = useState<ReportTab>('income')
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
@@ -23,44 +24,40 @@ export default function Reports() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [selectedCompany])
 
   useEffect(() => {
-    if (company) {
-      loadFiscalYears(company.id)
+    if (selectedCompany) {
+      loadFiscalYears(selectedCompany.id)
       loadVatPeriods()
     }
-  }, [company, vatYear])
+  }, [selectedCompany, vatYear])
 
   useEffect(() => {
-    if (company && selectedPeriod) {
+    if (selectedCompany && selectedPeriod) {
       loadVatReport()
     }
-  }, [selectedPeriod, excludeVatSettlements])
+  }, [selectedCompany, selectedPeriod, excludeVatSettlements])
 
   useEffect(() => {
-    if (company && selectedFiscalYear && activeTab === 'general-ledger') {
+    if (selectedCompany && selectedFiscalYear && activeTab === 'general-ledger') {
       loadGeneralLedger()
     }
-  }, [company, selectedFiscalYear, activeTab])
+  }, [selectedCompany, selectedFiscalYear, activeTab])
 
   const loadData = async () => {
+    if (!selectedCompany) {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
 
-      // Get first company
-      const companiesRes = await companyApi.list()
-      if (companiesRes.data.length === 0) {
-        return
-      }
-
-      const comp = companiesRes.data[0]
-      setCompany(comp)
-
       // Load reports
       const [balanceRes, incomeRes] = await Promise.all([
-        reportApi.balanceSheet(comp.id),
-        reportApi.incomeStatement(comp.id),
+        reportApi.balanceSheet(selectedCompany.id),
+        reportApi.incomeStatement(selectedCompany.id),
       ])
 
       setBalanceSheet(balanceRes.data)
@@ -73,10 +70,10 @@ export default function Reports() {
   }
 
   const loadVatPeriods = async () => {
-    if (!company) return
+    if (!selectedCompany) return
 
     try {
-      const periodsRes = await reportApi.vatPeriods(company.id, vatYear)
+      const periodsRes = await reportApi.vatPeriods(selectedCompany.id, vatYear)
       setVatPeriods(periodsRes.data.periods)
 
       // Auto-select the most recent period
@@ -89,12 +86,12 @@ export default function Reports() {
   }
 
   const loadVatReport = async () => {
-    if (!company || !selectedPeriod) return
+    if (!selectedCompany || !selectedPeriod) return
 
     try {
       setLoading(true)
       const vatRes = await reportApi.vatReport(
-        company.id,
+        selectedCompany.id,
         selectedPeriod.start_date,
         selectedPeriod.end_date,
         excludeVatSettlements
@@ -108,11 +105,11 @@ export default function Reports() {
   }
 
   const loadGeneralLedger = async () => {
-    if (!company || !selectedFiscalYear) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
       setLoading(true)
-      const ledgerRes = await reportApi.generalLedger(company.id, selectedFiscalYear.id)
+      const ledgerRes = await reportApi.generalLedger(selectedCompany.id, selectedFiscalYear.id)
       setGeneralLedger(ledgerRes.data)
     } catch (error) {
       console.error('Failed to load general ledger:', error)
@@ -121,7 +118,7 @@ export default function Reports() {
     }
   }
 
-  if (!company) {
+  if (!selectedCompany) {
     return (
       <div className="card">
         <p className="text-gray-600">Inget företag hittat.</p>
