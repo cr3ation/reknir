@@ -91,8 +91,8 @@ def get_balance_sheet(
             "total": total_equity
         },
         "current_year_result": current_year_result,
-        "total_liabilities_and_equity": total_liabilities + total_equity + current_year_result,
-        "balanced": abs(total_assets - (total_liabilities + total_equity + current_year_result)) < 0.01
+        "total_liabilities_and_equity": abs(total_liabilities) + abs(total_equity) + current_year_result,
+        "balanced": abs(total_assets + total_liabilities + total_equity - current_year_result) < 0.01
     }
 
 

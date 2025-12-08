@@ -284,26 +284,32 @@ export default function Reports() {
               </h3>
 
               {/* Equity */}
-              {balanceSheet.equity.accounts.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Eget kapital</h4>
-                  <table className="min-w-full">
-                    <tbody className="divide-y divide-gray-200">
-                      {balanceSheet.equity.accounts.map((account) => (
-                        <tr key={account.account_number}>
-                          <td className="py-2 text-sm font-mono text-gray-500">
-                            {account.account_number}
-                          </td>
-                          <td className="py-2 text-sm text-gray-900">{account.name}</td>
-                          <td className="py-2 text-sm text-right font-mono">
-                            {formatCurrency(Math.abs(account.balance))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Eget kapital</h4>
+                <table className="min-w-full">
+                  <tbody className="divide-y divide-gray-200">
+                    {balanceSheet.equity.accounts.map((account) => (
+                      <tr key={account.account_number}>
+                        <td className="py-2 text-sm font-mono text-gray-500">
+                          {account.account_number}
+                        </td>
+                        <td className="py-2 text-sm text-gray-900">{account.name}</td>
+                        <td className="py-2 text-sm text-right font-mono">
+                          {formatCurrency(Math.abs(account.balance))}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Årets resultat - always show */}
+                    <tr className="border-t border-gray-300">
+                      <td className="py-2 text-sm font-mono text-gray-500"></td>
+                      <td className="py-2 text-sm text-gray-900 font-medium">Årets resultat</td>
+                      <td className="py-2 text-sm text-right font-mono">
+                        {formatCurrency(balanceSheet.current_year_result)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               {/* Liabilities */}
               {balanceSheet.liabilities.accounts.length > 0 && (
@@ -331,9 +337,7 @@ export default function Reports() {
                 <div className="flex justify-between py-2">
                   <span className="text-sm font-semibold">Summa eget kapital och skulder</span>
                   <span className="text-sm font-mono font-semibold">
-                    {formatCurrency(
-                      Math.abs(balanceSheet.equity.total + balanceSheet.liabilities.total)
-                    )}
+                    {formatCurrency(balanceSheet.total_liabilities_and_equity)}
                   </span>
                 </div>
               </div>
