@@ -1,17 +1,21 @@
-from sqlalchemy import Column, Integer, String, Date, Numeric, Boolean, ForeignKey, Enum as SQLEnum, DateTime, Text
+import enum
+
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.database import Base
-import enum
 
 
 class InvoiceStatus(str, enum.Enum):
     """Invoice payment status"""
-    DRAFT = "draft"          # Not sent yet
-    SENT = "sent"            # Sent to customer
-    PAID = "paid"            # Fully paid
-    PARTIAL = "partial"      # Partially paid
-    OVERDUE = "overdue"      # Past due date
+
+    DRAFT = "draft"  # Not sent yet
+    SENT = "sent"  # Sent to customer
+    PAID = "paid"  # Fully paid
+    PARTIAL = "partial"  # Partially paid
+    OVERDUE = "overdue"  # Past due date
     CANCELLED = "cancelled"  # Cancelled/credited
 
 
@@ -20,6 +24,7 @@ class Invoice(Base):
     Outgoing invoice (Kundfaktura)
     Creates automatic verification on creation and payment
     """
+
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -45,7 +50,12 @@ class Invoice(Base):
     net_amount = Column(Numeric(15, 2), nullable=False)  # Excluding VAT
 
     # Payment
-    status = Column(SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]), default=InvoiceStatus.DRAFT, nullable=False, index=True)
+    status = Column(
+        SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]),
+        default=InvoiceStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
     paid_amount = Column(Numeric(15, 2), default=0, nullable=False)
 
     # Notes
@@ -79,6 +89,7 @@ class InvoiceLine(Base):
     """
     Invoice line item (Fakturarad)
     """
+
     __tablename__ = "invoice_lines"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -114,6 +125,7 @@ class SupplierInvoice(Base):
     Incoming supplier invoice (Leverantörsfaktura)
     Creates automatic verification on registration and payment
     """
+
     __tablename__ = "supplier_invoices"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -135,7 +147,12 @@ class SupplierInvoice(Base):
     net_amount = Column(Numeric(15, 2), nullable=False)
 
     # Payment
-    status = Column(SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]), default=InvoiceStatus.DRAFT, nullable=False, index=True)
+    status = Column(
+        SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]),
+        default=InvoiceStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
     paid_amount = Column(Numeric(15, 2), default=0, nullable=False)
 
     # OCR/Reference
@@ -159,7 +176,9 @@ class SupplierInvoice(Base):
     # Relationships
     company = relationship("Company")
     supplier = relationship("Supplier", back_populates="supplier_invoices")
-    supplier_invoice_lines = relationship("SupplierInvoiceLine", back_populates="supplier_invoice", cascade="all, delete-orphan")
+    supplier_invoice_lines = relationship(
+        "SupplierInvoiceLine", back_populates="supplier_invoice", cascade="all, delete-orphan"
+    )
     invoice_verification = relationship("Verification", foreign_keys=[invoice_verification_id])
     payment_verification = relationship("Verification", foreign_keys=[payment_verification_id])
 
@@ -171,6 +190,7 @@ class SupplierInvoiceLine(Base):
     """
     Supplier invoice line item (Leverantörsfakturarad)
     """
+
     __tablename__ = "supplier_invoice_lines"
 
     id = Column(Integer, primary_key=True, index=True)

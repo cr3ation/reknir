@@ -1,44 +1,39 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import Response
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import List, Optional
 from datetime import date, datetime
 from decimal import Decimal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
 from app.database import get_db
-from app.models.invoice import Invoice, InvoiceLine, InvoiceStatus
-from app.models.customer import Customer
-from app.models.company import Company
-from app.models.user import User
-from app.schemas.invoice import (
-    InvoiceCreate,
-    InvoiceResponse,
-    InvoiceUpdate,
-    InvoiceListItem,
-    MarkPaidRequest
-)
-from app.services.invoice_service import create_invoice_verification, create_invoice_payment_verification
-from app.services.pdf_service import generate_invoice_pdf
 from app.dependencies import get_current_active_user, verify_company_access
+from app.models.company import Company
+from app.models.customer import Customer
+from app.models.invoice import Invoice, InvoiceLine, InvoiceStatus
+from app.models.user import User
+from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse, InvoiceUpdate, MarkPaidRequest
+from app.services.invoice_service import create_invoice_payment_verification, create_invoice_verification
+from app.services.pdf_service import generate_invoice_pdf
 
 router = APIRouter()
 
 
 @router.post("/", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
-    invoice_data: InvoiceCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    invoice_data: InvoiceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Create a new outgoing invoice"""
     # Verify user has access to this company
     await verify_company_access(invoice_data.company_id, current_user, db)
 
     # Get next invoice number
-    last_invoice = db.query(Invoice).filter(
-        Invoice.company_id == invoice_data.company_id,
-        Invoice.invoice_series == invoice_data.invoice_series
-    ).order_by(desc(Invoice.invoice_number)).first()
+    last_invoice = (
+        db.query(Invoice)
+        .filter(Invoice.company_id == invoice_data.company_id, Invoice.invoice_series == invoice_data.invoice_series)
+        .order_by(desc(Invoice.invoice_number))
+        .first()
+    )
 
     next_number = (last_invoice.invoice_number + 1) if last_invoice else 1
 
@@ -55,12 +50,9 @@ async def create_invoice(
         total_net += net_amount
         total_vat += vat_amount
 
-        invoice_lines_data.append({
-            **line_data.model_dump(),
-            "net_amount": net_amount,
-            "vat_amount": vat_amount,
-            "total_amount": total_amount
-        })
+        invoice_lines_data.append(
+            {**line_data.model_dump(), "net_amount": net_amount, "vat_amount": vat_amount, "total_amount": total_amount}
+        )
 
     # Create invoice
     invoice = Invoice(
@@ -77,17 +69,14 @@ async def create_invoice(
         total_amount=total_net + total_vat,
         vat_amount=total_vat,
         net_amount=total_net,
-        status=InvoiceStatus.DRAFT
+        status=InvoiceStatus.DRAFT,
     )
     db.add(invoice)
     db.flush()
 
     # Create invoice lines
     for line_data in invoice_lines_data:
-        invoice_line = InvoiceLine(
-            invoice_id=invoice.id,
-            **line_data
-        )
+        invoice_line = InvoiceLine(invoice_id=invoice.id, **line_data)
         db.add(invoice_line)
 
     db.commit()
@@ -96,25 +85,27 @@ async def create_invoice(
     return invoice
 
 
-@router.get("/", response_model=List[InvoiceListItem])
+@router.get("/", response_model=list[InvoiceListItem])
 async def list_invoices(
     company_id: int = Query(..., description="Company ID"),
-    customer_id: Optional[int] = None,
-    status: Optional[InvoiceStatus] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    customer_id: int | None = None,
+    status: InvoiceStatus | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     limit: int = Query(100, le=1000),
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """List invoices with filtering"""
     # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
 
-    query = db.query(Invoice, Customer.name.label("customer_name")).join(
-        Customer, Invoice.customer_id == Customer.id
-    ).filter(Invoice.company_id == company_id)
+    query = (
+        db.query(Invoice, Customer.name.label("customer_name"))
+        .join(Customer, Invoice.customer_id == Customer.id)
+        .filter(Invoice.company_id == company_id)
+    )
 
     if customer_id:
         query = query.filter(Invoice.customer_id == customer_id)
@@ -125,10 +116,7 @@ async def list_invoices(
     if end_date:
         query = query.filter(Invoice.invoice_date <= end_date)
 
-    results = query.order_by(
-        desc(Invoice.invoice_date),
-        desc(Invoice.invoice_number)
-    ).limit(limit).offset(offset).all()
+    results = query.order_by(desc(Invoice.invoice_date), desc(Invoice.invoice_number)).limit(limit).offset(offset).all()
 
     return [
         InvoiceListItem(
@@ -141,7 +129,7 @@ async def list_invoices(
             customer_name=customer_name,
             total_amount=inv.total_amount,
             status=inv.status,
-            paid_amount=inv.paid_amount
+            paid_amount=inv.paid_amount,
         )
         for inv, customer_name in results
     ]
@@ -149,17 +137,12 @@ async def list_invoices(
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
 async def get_invoice(
-    invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Get a specific invoice"""
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invoice {invoice_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
@@ -172,24 +155,18 @@ async def update_invoice(
     invoice_id: int,
     invoice_update: InvoiceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """Update an invoice"""
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invoice {invoice_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status == InvoiceStatus.PAID:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot modify paid invoice"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify paid invoice")
 
     update_data = invoice_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -202,9 +179,7 @@ async def update_invoice(
 
 @router.post("/{invoice_id}/send", response_model=InvoiceResponse)
 async def send_invoice(
-    invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Mark invoice as sent and create automatic verification
@@ -216,19 +191,13 @@ async def send_invoice(
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invoice {invoice_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status != InvoiceStatus.DRAFT:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invoice is not in draft status"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not in draft status")
 
     # Create verification
     verification = create_invoice_verification(db, invoice)
@@ -249,7 +218,7 @@ async def mark_invoice_paid(
     invoice_id: int,
     payment: MarkPaidRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Mark invoice as paid and create payment verification
@@ -260,19 +229,13 @@ async def mark_invoice_paid(
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invoice {invoice_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status == InvoiceStatus.PAID:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invoice is already paid"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is already paid")
 
     # If invoice was draft, send it first
     if invoice.status == InvoiceStatus.DRAFT:
@@ -305,9 +268,7 @@ async def mark_invoice_paid(
 
 @router.get("/{invoice_id}/pdf")
 async def download_invoice_pdf(
-    invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Download invoice as PDF
@@ -316,10 +277,7 @@ async def download_invoice_pdf(
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invoice {invoice_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
@@ -329,10 +287,7 @@ async def download_invoice_pdf(
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
 
     if not customer or not company:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load invoice data"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load invoice data")
 
     # Generate PDF
     try:
@@ -343,39 +298,28 @@ async def download_invoice_pdf(
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate PDF: {str(e)}"
-        )
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate PDF: {str(e)}"
+        ) from e
 
 
 @router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_invoice(
-    invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Delete an invoice (only if not sent/paid)"""
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invoice {invoice_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status not in [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Can only delete draft or cancelled invoices"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Can only delete draft or cancelled invoices")
 
     db.delete(invoice)
     db.commit()

@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
@@ -9,6 +11,7 @@ class User(Base):
     User model for authentication and authorization
     Swedish: Användare
     """
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -25,7 +28,9 @@ class User(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    company_access = relationship("CompanyUser", back_populates="user", foreign_keys="CompanyUser.user_id", cascade="all, delete-orphan")
+    company_access = relationship(
+        "CompanyUser", back_populates="user", foreign_keys="CompanyUser.user_id", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<User {self.email} (admin={self.is_admin})>"
@@ -37,6 +42,7 @@ class CompanyUser(Base):
     Tracks which users have access to which companies
     Swedish: Företagsanvändare
     """
+
     __tablename__ = "company_users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -56,9 +62,7 @@ class CompanyUser(Base):
     creator = relationship("User", foreign_keys=[created_by])
 
     # Constraints
-    __table_args__ = (
-        UniqueConstraint('company_id', 'user_id', name='uq_company_user'),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "user_id", name="uq_company_user"),)
 
     def __repr__(self):
         return f"<CompanyUser company_id={self.company_id} user_id={self.user_id} role={self.role}>"

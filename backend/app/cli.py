@@ -2,9 +2,11 @@
 CLI commands for Reknir
 Run with: python -m app.cli <command>
 """
-import sys
+
 import json
+import sys
 from pathlib import Path
+
 from app.database import SessionLocal
 from app.models import Account, Company
 from app.models.account import AccountType
@@ -32,7 +34,7 @@ def seed_bas_accounts(company_id: int):
         if existing_count > 0:
             print(f"Warning: Company {company_id} already has {existing_count} accounts")
             response = input("Do you want to continue and add more accounts? (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 print("Aborted")
                 return False
 
@@ -43,7 +45,7 @@ def seed_bas_accounts(company_id: int):
             print(f"Error: BAS accounts file not found at {json_path}")
             return False
 
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, encoding="utf-8") as f:
             accounts_data = json.load(f)
 
         # Import accounts
@@ -52,10 +54,11 @@ def seed_bas_accounts(company_id: int):
 
         for acc_data in accounts_data:
             # Check if account already exists
-            existing = db.query(Account).filter(
-                Account.company_id == company_id,
-                Account.account_number == acc_data['account_number']
-            ).first()
+            existing = (
+                db.query(Account)
+                .filter(Account.company_id == company_id, Account.account_number == acc_data["account_number"])
+                .first()
+            )
 
             if existing:
                 print(f"  Skipping {acc_data['account_number']} - {acc_data['name']} (already exists)")
@@ -65,14 +68,14 @@ def seed_bas_accounts(company_id: int):
             # Create account
             account = Account(
                 company_id=company_id,
-                account_number=acc_data['account_number'],
-                name=acc_data['name'],
-                description=acc_data.get('description'),
-                account_type=AccountType(acc_data['account_type']),
+                account_number=acc_data["account_number"],
+                name=acc_data["name"],
+                description=acc_data.get("description"),
+                account_type=AccountType(acc_data["account_type"]),
                 opening_balance=0,
                 current_balance=0,
                 is_bas_account=True,
-                active=True
+                active=True,
             )
             db.add(account)
             imported += 1
@@ -90,6 +93,7 @@ def seed_bas_accounts(company_id: int):
         db.rollback()
         print(f"Error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:

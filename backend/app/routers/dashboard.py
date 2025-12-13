@@ -1,23 +1,22 @@
 """
 Dashboard router - provides overview data and KPIs
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from datetime import datetime, date, timedelta
+
+from datetime import date, timedelta
 from decimal import Decimal
-from typing import List, Dict, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.user import User
-from app.models.company import Company
-from app.models.invoice import Invoice, InvoiceStatus
-from app.models.expense import Expense, ExpenseStatus
-from app.models.verification import Verification, TransactionLine
-from app.models.account import Account, AccountType
-from app.models.fiscal_year import FiscalYear
 from app.dependencies import get_current_active_user, verify_company_access
-
+from app.models.account import Account
+from app.models.expense import Expense, ExpenseStatus
+from app.models.fiscal_year import FiscalYear
+from app.models.invoice import Invoice, InvoiceStatus
+from app.models.user import User
+from app.models.verification import TransactionLine, Verification
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -28,7 +27,7 @@ async def get_month_verifications(
     fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     month: str = Query(..., description="Month in format YYYY-MM"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get verifications for a specific month, categorized by revenue and expenses
@@ -38,36 +37,43 @@ async def get_month_verifications(
 
     # Parse month
     try:
-        year, month_num = month.split('-')
+        year, month_num = month.split("-")
         month_start = date(int(year), int(month_num), 1)
         if int(month_num) == 12:
             month_end = date(int(year) + 1, 1, 1) - timedelta(days=1)
         else:
             month_end = date(int(year), int(month_num) + 1, 1) - timedelta(days=1)
-    except (ValueError, IndexError):
-        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+    except (ValueError, IndexError) as e:
+        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM") from e
 
     # Get revenue accounts (3xxx)
-    revenue_account_ids = [acc[0] for acc in db.query(Account.id).filter(
-        Account.company_id == company_id,
-        Account.account_number >= 3000,
-        Account.account_number < 4000
-    ).all()]
+    revenue_account_ids = [
+        acc[0]
+        for acc in db.query(Account.id)
+        .filter(Account.company_id == company_id, Account.account_number >= 3000, Account.account_number < 4000)
+        .all()
+    ]
 
     # Get expense accounts (4xxx-7xxx)
-    expense_account_ids = [acc[0] for acc in db.query(Account.id).filter(
-        Account.company_id == company_id,
-        Account.account_number >= 4000,
-        Account.account_number < 8000
-    ).all()]
+    expense_account_ids = [
+        acc[0]
+        for acc in db.query(Account.id)
+        .filter(Account.company_id == company_id, Account.account_number >= 4000, Account.account_number < 8000)
+        .all()
+    ]
 
     # Get all verifications for the month
-    verifications = db.query(Verification).filter(
-        Verification.company_id == company_id,
-        Verification.fiscal_year_id == fiscal_year_id,
-        Verification.transaction_date >= month_start,
-        Verification.transaction_date <= month_end
-    ).order_by(Verification.transaction_date.desc()).all()
+    verifications = (
+        db.query(Verification)
+        .filter(
+            Verification.company_id == company_id,
+            Verification.fiscal_year_id == fiscal_year_id,
+            Verification.transaction_date >= month_start,
+            Verification.transaction_date <= month_end,
+        )
+        .order_by(Verification.transaction_date.desc())
+        .all()
+    )
 
     # Process each verification
     result = []
@@ -92,15 +98,17 @@ async def get_month_verifications(
                 verification_type = "expense"
                 amount = float(expense_amount)
 
-            result.append({
-                "id": verification.id,
-                "verification_number": verification.verification_number,
-                "series": verification.series,
-                "transaction_date": verification.transaction_date.isoformat(),
-                "description": verification.description,
-                "amount": amount,
-                "type": verification_type
-            })
+            result.append(
+                {
+                    "id": verification.id,
+                    "verification_number": verification.verification_number,
+                    "series": verification.series,
+                    "transaction_date": verification.transaction_date.isoformat(),
+                    "description": verification.description,
+                    "amount": amount,
+                    "type": verification_type,
+                }
+            )
 
     return result
 
@@ -108,9 +116,9 @@ async def get_month_verifications(
 @router.get("/overview")
 async def get_dashboard_overview(
     company_id: int = Query(..., description="Company ID"),
-    fiscal_year_id: Optional[int] = Query(None, description="Fiscal Year ID (defaults to current fiscal year)"),
+    fiscal_year_id: int | None = Query(None, description="Fiscal Year ID (defaults to current fiscal year)"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get dashboard overview with KPIs and recent activity
@@ -128,21 +136,26 @@ async def get_dashboard_overview(
 
     # Get fiscal year
     if fiscal_year_id:
-        fiscal_year = db.query(FiscalYear).filter(
-            FiscalYear.id == fiscal_year_id,
-            FiscalYear.company_id == company_id
-        ).first()
+        fiscal_year = (
+            db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
+        )
         if not fiscal_year:
             raise HTTPException(status_code=404, detail="Fiscal year not found")
     else:
         # Get current active fiscal year
-        fiscal_year = db.query(FiscalYear).filter(
-            FiscalYear.company_id == company_id,
-            FiscalYear.start_date <= date.today(),
-            FiscalYear.end_date >= date.today()
-        ).first()
+        fiscal_year = (
+            db.query(FiscalYear)
+            .filter(
+                FiscalYear.company_id == company_id,
+                FiscalYear.start_date <= date.today(),
+                FiscalYear.end_date >= date.today(),
+            )
+            .first()
+        )
         if not fiscal_year:
-            raise HTTPException(status_code=404, detail="No active fiscal year found. Please create a fiscal year first.")
+            raise HTTPException(
+                status_code=404, detail="No active fiscal year found. Please create a fiscal year first."
+            )
 
     # Current month date range (within fiscal year)
     today = date.today()
@@ -167,59 +180,51 @@ async def get_dashboard_overview(
     # === CURRENT MONTH KPIs ===
 
     # Get revenue accounts (3xxx)
-    revenue_accounts = db.query(Account.id).filter(
-        Account.company_id == company_id,
-        Account.account_number >= 3000,
-        Account.account_number < 4000
-    ).all()
+    revenue_accounts = (
+        db.query(Account.id)
+        .filter(Account.company_id == company_id, Account.account_number >= 3000, Account.account_number < 4000)
+        .all()
+    )
     revenue_account_ids = [acc[0] for acc in revenue_accounts]
 
     # Get expense accounts (4xxx-7xxx - operating expenses only)
-    expense_accounts = db.query(Account.id).filter(
-        Account.company_id == company_id,
-        Account.account_number >= 4000,
-        Account.account_number < 8000
-    ).all()
+    expense_accounts = (
+        db.query(Account.id)
+        .filter(Account.company_id == company_id, Account.account_number >= 4000, Account.account_number < 8000)
+        .all()
+    )
     expense_account_ids = [acc[0] for acc in expense_accounts]
 
     # Calculate revenue this month (credit - debit on revenue accounts)
-    revenue_credits = db.query(
-        func.sum(TransactionLine.credit)
-    ).join(Verification).filter(
+    revenue_credits = db.query(func.sum(TransactionLine.credit)).join(Verification).filter(
         Verification.company_id == company_id,
         Verification.transaction_date >= month_start,
         Verification.transaction_date <= month_end,
-        TransactionLine.account_id.in_(revenue_account_ids)
+        TransactionLine.account_id.in_(revenue_account_ids),
     ).scalar() or Decimal(0)
 
-    revenue_debits = db.query(
-        func.sum(TransactionLine.debit)
-    ).join(Verification).filter(
+    revenue_debits = db.query(func.sum(TransactionLine.debit)).join(Verification).filter(
         Verification.company_id == company_id,
         Verification.transaction_date >= month_start,
         Verification.transaction_date <= month_end,
-        TransactionLine.account_id.in_(revenue_account_ids)
+        TransactionLine.account_id.in_(revenue_account_ids),
     ).scalar() or Decimal(0)
 
     revenue_this_month = revenue_credits - revenue_debits
 
     # Calculate expenses this month (debit - credit on expense accounts)
-    expenses_debits = db.query(
-        func.sum(TransactionLine.debit)
-    ).join(Verification).filter(
+    expenses_debits = db.query(func.sum(TransactionLine.debit)).join(Verification).filter(
         Verification.company_id == company_id,
         Verification.transaction_date >= month_start,
         Verification.transaction_date <= month_end,
-        TransactionLine.account_id.in_(expense_account_ids)
+        TransactionLine.account_id.in_(expense_account_ids),
     ).scalar() or Decimal(0)
 
-    expenses_credits = db.query(
-        func.sum(TransactionLine.credit)
-    ).join(Verification).filter(
+    expenses_credits = db.query(func.sum(TransactionLine.credit)).join(Verification).filter(
         Verification.company_id == company_id,
         Verification.transaction_date >= month_start,
         Verification.transaction_date <= month_end,
-        TransactionLine.account_id.in_(expense_account_ids)
+        TransactionLine.account_id.in_(expense_account_ids),
     ).scalar() or Decimal(0)
 
     expenses_this_month = expenses_debits - expenses_credits
@@ -230,49 +235,57 @@ async def get_dashboard_overview(
     # === LIQUIDITY ===
 
     # Get bank account (1930)
-    bank_account = db.query(Account).filter(
-        Account.company_id == company_id,
-        Account.account_number == 1930
-    ).first()
+    bank_account = db.query(Account).filter(Account.company_id == company_id, Account.account_number == 1930).first()
 
     liquidity = float(bank_account.balance) if bank_account else 0.0
 
     # === OVERDUE INVOICES ===
 
-    overdue_invoices = db.query(Invoice).filter(
-        Invoice.company_id == company_id,
-        Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL]),
-        Invoice.due_date < today
-    ).all()
+    overdue_invoices = (
+        db.query(Invoice)
+        .filter(
+            Invoice.company_id == company_id,
+            Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL]),
+            Invoice.due_date < today,
+        )
+        .all()
+    )
 
     overdue_count = len(overdue_invoices)
     overdue_amount = sum(float(inv.total_amount) for inv in overdue_invoices)
 
     # === PENDING EXPENSES ===
 
-    pending_expenses = db.query(Expense).filter(
-        Expense.company_id == company_id,
-        Expense.status.in_([ExpenseStatus.SUBMITTED, ExpenseStatus.APPROVED])
-    ).all()
+    pending_expenses = (
+        db.query(Expense)
+        .filter(Expense.company_id == company_id, Expense.status.in_([ExpenseStatus.SUBMITTED, ExpenseStatus.APPROVED]))
+        .all()
+    )
 
     pending_expenses_count = len(pending_expenses)
     pending_expenses_amount = sum(float(exp.total_amount) for exp in pending_expenses)
 
     # === RECENT VERIFICATIONS ===
 
-    recent_verifications = db.query(Verification).filter(
-        Verification.company_id == company_id,
-        Verification.fiscal_year_id == fiscal_year.id
-    ).order_by(Verification.transaction_date.desc()).limit(5).all()
+    recent_verifications = (
+        db.query(Verification)
+        .filter(Verification.company_id == company_id, Verification.fiscal_year_id == fiscal_year.id)
+        .order_by(Verification.transaction_date.desc())
+        .limit(5)
+        .all()
+    )
 
-    recent_verifications_data = [{
-        "id": v.id,
-        "verification_number": v.verification_number,
-        "series": v.series,
-        "transaction_date": v.transaction_date.isoformat(),
-        "description": v.description,
-        "locked": v.locked
-    } for v in recent_verifications]
+    recent_verifications_data = [
+        {
+            "id": v.id,
+            "verification_number": v.verification_number,
+            "series": v.series,
+            "transaction_date": v.transaction_date.isoformat(),
+            "description": v.description,
+            "locked": v.locked,
+        }
+        for v in recent_verifications
+    ]
 
     # === MONTHLY TREND (All months in fiscal year) ===
 
@@ -293,57 +306,51 @@ async def get_dashboard_overview(
             month_end_trend = fiscal_year_end
 
         # Revenue for this month (credit - debit)
-        revenue_credits_month = db.query(
-            func.sum(TransactionLine.credit)
-        ).join(Verification).filter(
+        revenue_credits_month = db.query(func.sum(TransactionLine.credit)).join(Verification).filter(
             Verification.company_id == company_id,
             Verification.fiscal_year_id == fiscal_year.id,
             Verification.transaction_date >= current_month_start,
             Verification.transaction_date <= month_end_trend,
-            TransactionLine.account_id.in_(revenue_account_ids)
+            TransactionLine.account_id.in_(revenue_account_ids),
         ).scalar() or Decimal(0)
 
-        revenue_debits_month = db.query(
-            func.sum(TransactionLine.debit)
-        ).join(Verification).filter(
+        revenue_debits_month = db.query(func.sum(TransactionLine.debit)).join(Verification).filter(
             Verification.company_id == company_id,
             Verification.fiscal_year_id == fiscal_year.id,
             Verification.transaction_date >= current_month_start,
             Verification.transaction_date <= month_end_trend,
-            TransactionLine.account_id.in_(revenue_account_ids)
+            TransactionLine.account_id.in_(revenue_account_ids),
         ).scalar() or Decimal(0)
 
         revenue_month = revenue_credits_month - revenue_debits_month
 
         # Expenses for this month (debit - credit)
-        expenses_debits_month = db.query(
-            func.sum(TransactionLine.debit)
-        ).join(Verification).filter(
+        expenses_debits_month = db.query(func.sum(TransactionLine.debit)).join(Verification).filter(
             Verification.company_id == company_id,
             Verification.fiscal_year_id == fiscal_year.id,
             Verification.transaction_date >= current_month_start,
             Verification.transaction_date <= month_end_trend,
-            TransactionLine.account_id.in_(expense_account_ids)
+            TransactionLine.account_id.in_(expense_account_ids),
         ).scalar() or Decimal(0)
 
-        expenses_credits_month = db.query(
-            func.sum(TransactionLine.credit)
-        ).join(Verification).filter(
+        expenses_credits_month = db.query(func.sum(TransactionLine.credit)).join(Verification).filter(
             Verification.company_id == company_id,
             Verification.fiscal_year_id == fiscal_year.id,
             Verification.transaction_date >= current_month_start,
             Verification.transaction_date <= month_end_trend,
-            TransactionLine.account_id.in_(expense_account_ids)
+            TransactionLine.account_id.in_(expense_account_ids),
         ).scalar() or Decimal(0)
 
         expenses_month = expenses_debits_month - expenses_credits_month
 
-        trend_data.append({
-            "month": current_month_start.strftime("%Y-%m"),
-            "revenue": float(revenue_month),
-            "expenses": float(expenses_month),
-            "profit": float(revenue_month - expenses_month)
-        })
+        trend_data.append(
+            {
+                "month": current_month_start.strftime("%Y-%m"),
+                "revenue": float(revenue_month),
+                "expenses": float(expenses_month),
+                "profit": float(revenue_month - expenses_month),
+            }
+        )
 
         # Move to next month
         if current_month_start.month == 12:
@@ -357,23 +364,17 @@ async def get_dashboard_overview(
             "label": fiscal_year.label,
             "start_date": fiscal_year.start_date.isoformat(),
             "end_date": fiscal_year.end_date.isoformat(),
-            "is_closed": fiscal_year.is_closed
+            "is_closed": fiscal_year.is_closed,
         },
         "current_month": {
             "revenue": float(revenue_this_month),
             "expenses": float(expenses_this_month),
             "profit": float(profit_this_month),
-            "month_label": month_start.strftime("%B %Y")
+            "month_label": month_start.strftime("%B %Y"),
         },
         "liquidity": liquidity,
-        "overdue_invoices": {
-            "count": overdue_count,
-            "amount": overdue_amount
-        },
-        "pending_expenses": {
-            "count": pending_expenses_count,
-            "amount": pending_expenses_amount
-        },
+        "overdue_invoices": {"count": overdue_count, "amount": overdue_amount},
+        "pending_expenses": {"count": pending_expenses_count, "amount": pending_expenses_amount},
         "recent_verifications": recent_verifications_data,
-        "monthly_trend": trend_data
+        "monthly_trend": trend_data,
     }

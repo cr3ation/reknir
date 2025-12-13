@@ -1,21 +1,17 @@
 """
 API endpoints for company invitations
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-from datetime import datetime
 
 from app.database import get_db
-from app.models.user import User, CompanyUser
+from app.dependencies import get_current_active_user, verify_company_access
 from app.models.company import Company
 from app.models.invitation import Invitation
-from app.schemas.invitation import (
-    InvitationCreate, InvitationResponse, InvitationAccept, InvitationValidateResponse
-)
+from app.models.user import CompanyUser, User
+from app.schemas.invitation import InvitationAccept, InvitationCreate, InvitationResponse, InvitationValidateResponse
 from app.services.auth_service import create_user
-from app.dependencies import get_current_active_user, verify_company_access
-
 
 router = APIRouter(prefix="/api/invitations", tags=["invitations"])
 
@@ -24,7 +20,7 @@ router = APIRouter(prefix="/api/invitations", tags=["invitations"])
 async def create_invitation(
     invitation_data: InvitationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Create a new company invitation
@@ -51,8 +47,7 @@ async def create_invitation(
     company = db.query(Company).filter(Company.id == invitation_data.company_id).first()
     if not company:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Company {invitation_data.company_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Company {invitation_data.company_id} not found"
         )
 
     # Create invitation
@@ -60,7 +55,7 @@ async def create_invitation(
         company_id=invitation_data.company_id,
         created_by_user_id=current_user.id,
         role=invitation_data.role,
-        days_valid=invitation_data.days_valid
+        days_valid=invitation_data.days_valid,
     )
 
     db.add(invitation)
@@ -70,11 +65,9 @@ async def create_invitation(
     return invitation
 
 
-@router.get("/company/{company_id}", response_model=List[InvitationResponse])
+@router.get("/company/{company_id}", response_model=list[InvitationResponse])
 async def list_company_invitations(
-    company_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    company_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     List all invitations for a company
@@ -96,18 +89,16 @@ async def list_company_invitations(
     await verify_company_access(company_id, current_user, db)
 
     # Get invitations (most recent first)
-    invitations = db.query(Invitation).filter(
-        Invitation.company_id == company_id
-    ).order_by(Invitation.created_at.desc()).all()
+    invitations = (
+        db.query(Invitation).filter(Invitation.company_id == company_id).order_by(Invitation.created_at.desc()).all()
+    )
 
     return invitations
 
 
 @router.delete("/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_invitation(
-    invitation_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    invitation_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Delete/revoke an invitation
@@ -125,10 +116,7 @@ async def delete_invitation(
     """
     invitation = db.query(Invitation).filter(Invitation.id == invitation_id).first()
     if not invitation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Invitation {invitation_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invitation {invitation_id} not found")
 
     # Verify user has access to this company
     await verify_company_access(invitation.company_id, current_user, db)
@@ -138,6 +126,7 @@ async def delete_invitation(
 
 
 # ==================== Public Endpoints (No Auth Required) ====================
+
 
 @router.get("/validate/{token}", response_model=InvitationValidateResponse)
 def validate_invitation_token(token: str, db: Session = Depends(get_db)):
@@ -157,10 +146,7 @@ def validate_invitation_token(token: str, db: Session = Depends(get_db)):
     invitation = db.query(Invitation).filter(Invitation.token == token).first()
 
     if not invitation:
-        return InvitationValidateResponse(
-            valid=False,
-            message="Invalid invitation link"
-        )
+        return InvitationValidateResponse(valid=False, message="Invalid invitation link")
 
     if not invitation.is_valid():
         if invitation.used:
@@ -168,27 +154,18 @@ def validate_invitation_token(token: str, db: Session = Depends(get_db)):
         else:
             message = "This invitation has expired"
 
-        return InvitationValidateResponse(
-            valid=False,
-            message=message
-        )
+        return InvitationValidateResponse(valid=False, message=message)
 
     # Get company name
     company = db.query(Company).filter(Company.id == invitation.company_id).first()
 
     return InvitationValidateResponse(
-        valid=True,
-        company_name=company.name if company else "Unknown",
-        role=invitation.role
+        valid=True, company_name=company.name if company else "Unknown", role=invitation.role
     )
 
 
 @router.post("/accept/{token}", response_model=dict, status_code=status.HTTP_201_CREATED)
-def accept_invitation(
-    token: str,
-    user_data: InvitationAccept,
-    db: Session = Depends(get_db)
-):
+def accept_invitation(token: str, user_data: InvitationAccept, db: Session = Depends(get_db)):
     """
     Accept an invitation and create a new user (PUBLIC endpoint)
 
@@ -209,39 +186,23 @@ def accept_invitation(
     # Find invitation
     invitation = db.query(Invitation).filter(Invitation.token == token).first()
     if not invitation:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid invitation link"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid invitation link")
 
     # Check if valid
     if not invitation.is_valid():
         if invitation.used:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This invitation has already been used"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation has already been used")
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This invitation has expired"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation has expired")
 
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="An account with this email already exists")
 
     # Create user
     new_user = create_user(
-        db=db,
-        email=user_data.email,
-        password=user_data.password,
-        full_name=user_data.full_name,
-        is_admin=False
+        db=db, email=user_data.email, password=user_data.password, full_name=user_data.full_name, is_admin=False
     )
 
     # Assign user to company
@@ -249,7 +210,7 @@ def accept_invitation(
         company_id=invitation.company_id,
         user_id=new_user.id,
         role=invitation.role,
-        created_by=invitation.created_by_user_id
+        created_by=invitation.created_by_user_id,
     )
     db.add(company_user)
 
@@ -261,5 +222,5 @@ def accept_invitation(
     return {
         "message": "Account created successfully! You can now log in.",
         "user_id": new_user.id,
-        "email": new_user.email
+        "email": new_user.email,
     }

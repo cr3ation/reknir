@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
 class Customer(Base):
     """Customer register (Kundregister)"""
+
     __tablename__ = "customers"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -39,6 +41,7 @@ class Customer(Base):
 
 class Supplier(Base):
     """Supplier register (Leverantörsregister)"""
+
     __tablename__ = "suppliers"
 
     id = Column(Integer, primary_key=True, index=True)

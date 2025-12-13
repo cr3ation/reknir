@@ -1,10 +1,12 @@
 """
 Invitation model for inviting users to companies
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
-from sqlalchemy.orm import relationship
-from datetime import datetime, timedelta
+
 import secrets
+from datetime import datetime, timedelta
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 
 from app.database import Base
 
@@ -17,6 +19,7 @@ class Invitation(Base):
     they create an invitation with a unique token. The invitee can then use
     this token to register and automatically get access to the company.
     """
+
     __tablename__ = "invitations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -65,7 +68,7 @@ class Invitation(Base):
             role=role,
             token=Invitation.generate_token(),
             expires_at=datetime.utcnow() + timedelta(days=days_valid),
-            created_by_user_id=created_by_user_id
+            created_by_user_id=created_by_user_id,
         )
 
     def is_valid(self) -> bool:
