@@ -11,6 +11,7 @@ import uuid
 from app.database import get_db
 from app.models.invoice import SupplierInvoice, SupplierInvoiceLine, InvoiceStatus
 from app.models.customer import Supplier
+from app.models.user import User
 from app.schemas.invoice import (
     SupplierInvoiceCreate,
     SupplierInvoiceResponse,
@@ -19,6 +20,7 @@ from app.schemas.invoice import (
     MarkPaidRequest
 )
 from app.services.invoice_service import create_supplier_invoice_verification, create_supplier_invoice_payment_verification
+from app.dependencies import get_current_active_user, verify_company_access
 
 router = APIRouter()
 
@@ -28,8 +30,14 @@ INVOICES_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/", response_model=SupplierInvoiceResponse, status_code=status.HTTP_201_CREATED)
-def create_supplier_invoice(invoice_data: SupplierInvoiceCreate, db: Session = Depends(get_db)):
+async def create_supplier_invoice(
+    invoice_data: SupplierInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Create a new supplier invoice (register incoming invoice)"""
+    # Verify user has access to this company
+    await verify_company_access(invoice_data.company_id, current_user, db)
 
     # Get next internal tracking number
     last_invoice = db.query(SupplierInvoice).filter(
@@ -92,7 +100,7 @@ def create_supplier_invoice(invoice_data: SupplierInvoiceCreate, db: Session = D
 
 
 @router.get("/", response_model=List[SupplierInvoiceListItem])
-def list_supplier_invoices(
+async def list_supplier_invoices(
     company_id: int = Query(..., description="Company ID"),
     supplier_id: Optional[int] = None,
     status: Optional[InvoiceStatus] = None,
@@ -100,9 +108,13 @@ def list_supplier_invoices(
     end_date: Optional[date] = None,
     limit: int = Query(100, le=1000),
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """List supplier invoices with filtering"""
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
     query = db.query(SupplierInvoice, Supplier.name.label("supplier_name")).join(
         Supplier, SupplierInvoice.supplier_id == Supplier.id
     ).filter(SupplierInvoice.company_id == company_id)
@@ -139,7 +151,11 @@ def list_supplier_invoices(
 
 
 @router.get("/{invoice_id}", response_model=SupplierInvoiceResponse)
-def get_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
+async def get_supplier_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Get a specific supplier invoice"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
@@ -147,11 +163,20 @@ def get_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
+
     return invoice
 
 
 @router.patch("/{invoice_id}", response_model=SupplierInvoiceResponse)
-def update_supplier_invoice(invoice_id: int, invoice_update: SupplierInvoiceUpdate, db: Session = Depends(get_db)):
+async def update_supplier_invoice(
+    invoice_id: int,
+    invoice_update: SupplierInvoiceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Update a supplier invoice"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
@@ -159,6 +184,9 @@ def update_supplier_invoice(invoice_id: int, invoice_update: SupplierInvoiceUpda
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status == InvoiceStatus.PAID:
         raise HTTPException(
@@ -176,7 +204,11 @@ def update_supplier_invoice(invoice_id: int, invoice_update: SupplierInvoiceUpda
 
 
 @router.post("/{invoice_id}/register", response_model=SupplierInvoiceResponse)
-def register_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
+async def register_supplier_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """
     Register/post supplier invoice and create automatic verification
 
@@ -191,6 +223,9 @@ def register_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status != InvoiceStatus.DRAFT:
         raise HTTPException(
@@ -212,7 +247,12 @@ def register_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{invoice_id}/mark-paid", response_model=SupplierInvoiceResponse)
-def mark_supplier_invoice_paid(invoice_id: int, payment: MarkPaidRequest, db: Session = Depends(get_db)):
+async def mark_supplier_invoice_paid(
+    invoice_id: int,
+    payment: MarkPaidRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """
     Mark supplier invoice as paid and create payment verification
 
@@ -226,6 +266,9 @@ def mark_supplier_invoice_paid(invoice_id: int, payment: MarkPaidRequest, db: Se
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status == InvoiceStatus.PAID:
         raise HTTPException(
@@ -263,7 +306,11 @@ def mark_supplier_invoice_paid(invoice_id: int, payment: MarkPaidRequest, db: Se
 
 
 @router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
+async def delete_supplier_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Delete a supplier invoice (only if not registered/paid)"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
@@ -271,6 +318,9 @@ def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     if invoice.status not in [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED]:
         raise HTTPException(
@@ -287,7 +337,8 @@ def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)):
 async def upload_attachment(
     invoice_id: int,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """Upload an attachment file for a supplier invoice"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
@@ -296,6 +347,9 @@ async def upload_attachment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     # Validate file type (images and PDFs)
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.gif'}
@@ -329,7 +383,11 @@ async def upload_attachment(
 
 
 @router.get("/{invoice_id}/attachment")
-async def download_attachment(invoice_id: int, db: Session = Depends(get_db)):
+async def download_attachment(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Download the attachment file for a supplier invoice"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
@@ -337,6 +395,9 @@ async def download_attachment(invoice_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     if not invoice.attachment_path:
         raise HTTPException(
@@ -359,7 +420,11 @@ async def download_attachment(invoice_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{invoice_id}/attachment", response_model=SupplierInvoiceResponse)
-async def delete_attachment(invoice_id: int, db: Session = Depends(get_db)):
+async def delete_attachment(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Delete the attachment file for a supplier invoice"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
@@ -367,6 +432,9 @@ async def delete_attachment(invoice_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Supplier invoice {invoice_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
 
     if not invoice.attachment_path:
         raise HTTPException(

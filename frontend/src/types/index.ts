@@ -131,6 +131,25 @@ export interface IncomeStatement {
   profit_loss: number
 }
 
+export interface GeneralLedgerAccountSummary {
+  account_number: number
+  account_name: string
+  opening_balance: number
+  period_debit: number
+  period_credit: number
+  closing_balance: number
+  transaction_count: number
+}
+
+export interface GeneralLedger {
+  company_id: number
+  report_type: string
+  start_date: string
+  end_date: string
+  accounts: GeneralLedgerAccountSummary[]
+  account_count: number
+}
+
 // Invoice management types
 
 export enum InvoiceStatus {
@@ -302,6 +321,8 @@ export interface SIE4ImportResponse {
   accounts_updated: number
   verifications_created: number
   default_accounts_configured: number
+  errors?: string[]
+  warnings?: string[]
 }
 
 export interface VATReport {
@@ -407,8 +428,8 @@ export interface Expense {
   description: string
   amount: number
   vat_amount: number
-  expense_account_id?: number
-  vat_account_id?: number
+  expense_account_id?: number | null
+  vat_account_id?: number | null
   receipt_filename?: string
   status: ExpenseStatus
   approved_date?: string

@@ -8,8 +8,10 @@ import shutil
 import uuid
 from app.database import get_db
 from app.models.expense import Expense, ExpenseStatus
+from app.models.user import User
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
 from app.services.expense_service import create_expense_verification, create_expense_payment_verification
+from app.dependencies import get_current_active_user, verify_company_access
 
 router = APIRouter()
 
@@ -19,8 +21,15 @@ RECEIPTS_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
-def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
+async def create_expense(
+    expense: ExpenseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Create a new expense"""
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
+
     db_expense = Expense(**expense.model_dump())
     db.add(db_expense)
     db.commit()
@@ -29,15 +38,19 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[ExpenseResponse])
-def list_expenses(
+async def list_expenses(
     company_id: int = Query(..., description="Company ID"),
     status_filter: Optional[str] = Query(None, description="Filter by status"),
     employee_name: Optional[str] = Query(None, description="Filter by employee name"),
     start_date: Optional[date] = Query(None, description="Filter expenses from this date"),
     end_date: Optional[date] = Query(None, description="Filter expenses until this date"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """List all expenses for a company with optional filters"""
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
     query = db.query(Expense).filter(Expense.company_id == company_id)
 
     if status_filter:
@@ -57,7 +70,11 @@ def list_expenses(
 
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)
-def get_expense(expense_id: int, db: Session = Depends(get_db)):
+async def get_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Get a specific expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -65,11 +82,20 @@ def get_expense(expense_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
+
     return expense
 
 
 @router.patch("/{expense_id}", response_model=ExpenseResponse)
-def update_expense(expense_id: int, expense_update: ExpenseUpdate, db: Session = Depends(get_db)):
+async def update_expense(
+    expense_id: int,
+    expense_update: ExpenseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Update an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -77,6 +103,9 @@ def update_expense(expense_id: int, expense_update: ExpenseUpdate, db: Session =
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     update_data = expense_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -88,7 +117,11 @@ def update_expense(expense_id: int, expense_update: ExpenseUpdate, db: Session =
 
 
 @router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense(expense_id: int, db: Session = Depends(get_db)):
+async def delete_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Delete an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -97,13 +130,20 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db)):
             detail=f"Expense {expense_id} not found"
         )
 
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
+
     db.delete(expense)
     db.commit()
     return None
 
 
 @router.post("/{expense_id}/approve", response_model=ExpenseResponse)
-def approve_expense(expense_id: int, db: Session = Depends(get_db)):
+async def approve_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Approve an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -111,6 +151,9 @@ def approve_expense(expense_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if expense.status not in [ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED]:
         raise HTTPException(
@@ -127,7 +170,11 @@ def approve_expense(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{expense_id}/reject", response_model=ExpenseResponse)
-def reject_expense(expense_id: int, db: Session = Depends(get_db)):
+async def reject_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Reject an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -135,6 +182,9 @@ def reject_expense(expense_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if expense.status not in [ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED]:
         raise HTTPException(
@@ -150,11 +200,12 @@ def reject_expense(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{expense_id}/mark-paid", response_model=ExpenseResponse)
-def mark_expense_paid(
+async def mark_expense_paid(
     expense_id: int,
     paid_date: date = Query(...),
     bank_account_id: int = Query(..., description="Account ID for bank account (e.g., 1930)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Mark an expense as paid and create payment verification
@@ -171,6 +222,9 @@ def mark_expense_paid(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if expense.status != ExpenseStatus.APPROVED:
         raise HTTPException(
@@ -205,7 +259,11 @@ def mark_expense_paid(
 
 
 @router.post("/{expense_id}/submit", response_model=ExpenseResponse)
-def submit_expense(expense_id: int, db: Session = Depends(get_db)):
+async def submit_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Submit an expense for approval"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -213,6 +271,9 @@ def submit_expense(expense_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if expense.status != ExpenseStatus.DRAFT:
         raise HTTPException(
@@ -228,10 +289,11 @@ def submit_expense(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{expense_id}/book", response_model=ExpenseResponse)
-def book_expense(
+async def book_expense(
     expense_id: int,
     employee_payable_account_id: int = Query(..., description="Account ID for employee payable (e.g., 2890)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Book an approved expense and create verification
@@ -249,6 +311,9 @@ def book_expense(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if expense.status != ExpenseStatus.APPROVED:
         raise HTTPException(
@@ -292,7 +357,8 @@ def book_expense(
 async def upload_receipt(
     expense_id: int,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """Upload a receipt file for an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
@@ -301,6 +367,9 @@ async def upload_receipt(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     # Validate file type (images and PDFs)
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.gif'}
@@ -334,7 +403,11 @@ async def upload_receipt(
 
 
 @router.get("/{expense_id}/receipt")
-async def download_receipt(expense_id: int, db: Session = Depends(get_db)):
+async def download_receipt(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Download the receipt file for an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -342,6 +415,9 @@ async def download_receipt(expense_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if not expense.receipt_filename:
         raise HTTPException(
@@ -364,7 +440,11 @@ async def download_receipt(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{expense_id}/receipt", response_model=ExpenseResponse)
-async def delete_receipt(expense_id: int, db: Session = Depends(get_db)):
+async def delete_receipt(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Delete the receipt file for an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -372,6 +452,9 @@ async def delete_receipt(expense_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Expense {expense_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(expense.company_id, current_user, db)
 
     if not expense.receipt_filename:
         raise HTTPException(

@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.verification import Verification, TransactionLine
 from app.models.account import Account
 from app.models.invoice import Invoice, SupplierInvoice
+from app.models.user import User
 from app.schemas.verification import (
     VerificationCreate,
     VerificationResponse,
@@ -16,6 +17,7 @@ from app.schemas.verification import (
     TransactionLineResponse
 )
 from app.config import settings
+from app.dependencies import get_current_active_user, verify_company_access
 
 router = APIRouter()
 
@@ -31,8 +33,14 @@ def get_next_verification_number(db: Session, company_id: int, series: str) -> i
 
 
 @router.post("/", response_model=VerificationResponse, status_code=status.HTTP_201_CREATED)
-def create_verification(verification: VerificationCreate, db: Session = Depends(get_db)):
+async def create_verification(
+    verification: VerificationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Create a new verification (verifikation)"""
+    # Verify user has access to this company
+    await verify_company_access(verification.company_id, current_user, db)
 
     # Get next verification number for this series
     next_number = get_next_verification_number(db, verification.company_id, verification.series)
@@ -89,16 +97,20 @@ def create_verification(verification: VerificationCreate, db: Session = Depends(
 
 
 @router.get("/", response_model=List[VerificationListItem])
-def list_verifications(
+async def list_verifications(
     company_id: int = Query(..., description="Company ID"),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     series: Optional[str] = None,
     limit: int = Query(100, le=1000),
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """List verifications with filtering"""
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
     query = db.query(Verification).filter(Verification.company_id == company_id)
 
     if start_date:
@@ -128,7 +140,11 @@ def list_verifications(
 
 
 @router.get("/{verification_id}", response_model=VerificationResponse)
-def get_verification(verification_id: int, db: Session = Depends(get_db)):
+async def get_verification(
+    verification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """Get a specific verification"""
     verification = db.query(Verification).filter(Verification.id == verification_id).first()
     if not verification:
@@ -136,6 +152,9 @@ def get_verification(verification_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Verification {verification_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(verification.company_id, current_user, db)
 
     # Populate transaction lines with account info
     response = VerificationResponse.model_validate(verification)
@@ -148,10 +167,11 @@ def get_verification(verification_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{verification_id}", response_model=VerificationResponse)
-def update_verification(
+async def update_verification(
     verification_id: int,
     verification_update: VerificationUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """Update a verification (only if not locked)"""
     verification = db.query(Verification).filter(Verification.id == verification_id).first()
@@ -160,6 +180,9 @@ def update_verification(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Verification {verification_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(verification.company_id, current_user, db)
 
     if verification.locked:
         raise HTTPException(
@@ -186,7 +209,11 @@ def update_verification(
 
 
 @router.delete("/{verification_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_verification(verification_id: int, db: Session = Depends(get_db)):
+async def delete_verification(
+    verification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
     """
     Delete a verification (only allowed in development mode)
 
@@ -207,6 +234,9 @@ def delete_verification(verification_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Verification {verification_id} not found"
         )
+
+    # Verify user has access to this company
+    await verify_company_access(verification.company_id, current_user, db)
 
     if verification.locked:
         raise HTTPException(

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Response, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import Dict, List, Optional
 from decimal import Decimal
 from datetime import date, datetime, timedelta
@@ -9,19 +9,138 @@ from app.database import get_db
 from app.models.account import Account, AccountType
 from app.models.verification import Verification, TransactionLine
 from app.models.company import Company, VATReportingPeriod
+from app.models.fiscal_year import FiscalYear
+from app.models.user import User
+from app.dependencies import get_current_active_user, verify_company_access
 
 router = APIRouter()
 
 
-@router.get("/balance-sheet")
-def get_balance_sheet(
+@router.get("/general-ledger")
+async def get_general_ledger(
     company_id: int = Query(..., description="Company ID"),
-    db: Session = Depends(get_db)
+    fiscal_year_id: Optional[int] = Query(None, description="Fiscal Year ID"),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    account_numbers: Optional[str] = Query(None, description="Comma-separated account numbers to filter"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Generate General Ledger (Huvudbok) - summary per account with opening/closing balances
+    Shows each account with IB (opening balance), transactions, and UB (closing balance)
+    """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
+    # Determine date range
+    if fiscal_year_id:
+        fiscal_year = db.query(FiscalYear).filter(
+            FiscalYear.id == fiscal_year_id,
+            FiscalYear.company_id == company_id
+        ).first()
+        if not fiscal_year:
+            raise HTTPException(status_code=404, detail="Fiscal year not found")
+        date_start = fiscal_year.start_date
+        date_end = fiscal_year.end_date
+    elif start_date and end_date:
+        date_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        date_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    else:
+        # Get current fiscal year
+        fiscal_year = db.query(FiscalYear).filter(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= date.today(),
+            FiscalYear.end_date >= date.today()
+        ).first()
+        if fiscal_year:
+            date_start = fiscal_year.start_date
+            date_end = fiscal_year.end_date
+        else:
+            # Default to current year
+            date_start = date(date.today().year, 1, 1)
+            date_end = date(date.today().year, 12, 31)
+
+    # Get all accounts or filtered accounts
+    account_query = db.query(Account).filter(Account.company_id == company_id)
+
+    if account_numbers:
+        account_nums = [int(num.strip()) for num in account_numbers.split(',')]
+        account_query = account_query.filter(Account.account_number.in_(account_nums))
+
+    accounts = account_query.order_by(Account.account_number).all()
+
+    # For each account, calculate opening balance, transactions, and closing balance
+    account_summaries = []
+
+    for account in accounts:
+        # Get all transactions for this account in the period
+        transactions = db.query(
+            TransactionLine,
+            Verification
+        ).join(
+            Verification, TransactionLine.verification_id == Verification.id
+        ).filter(
+            TransactionLine.account_id == account.id,
+            Verification.company_id == company_id,
+            Verification.transaction_date >= date_start,
+            Verification.transaction_date <= date_end
+        ).order_by(Verification.transaction_date).all()
+
+        # Skip accounts with no transactions
+        if not transactions:
+            continue
+
+        # Calculate opening balance (transactions before start date)
+        opening_balance_query = db.query(
+            func.sum(TransactionLine.debit - TransactionLine.credit)
+        ).join(Verification).filter(
+            TransactionLine.account_id == account.id,
+            Verification.company_id == company_id,
+            Verification.transaction_date < date_start
+        ).scalar()
+
+        opening_balance = float(opening_balance_query or Decimal(0))
+
+        # Calculate period totals
+        period_debit = sum(float(t[0].debit or Decimal(0)) for t in transactions)
+        period_credit = sum(float(t[0].credit or Decimal(0)) for t in transactions)
+
+        # Closing balance = opening balance + period debit - period credit
+        closing_balance = opening_balance + period_debit - period_credit
+
+        account_summaries.append({
+            "account_number": account.account_number,
+            "account_name": account.name,
+            "opening_balance": opening_balance,
+            "period_debit": period_debit,
+            "period_credit": period_credit,
+            "closing_balance": closing_balance,
+            "transaction_count": len(transactions)
+        })
+
+    return {
+        "company_id": company_id,
+        "report_type": "general_ledger",
+        "start_date": date_start.isoformat(),
+        "end_date": date_end.isoformat(),
+        "accounts": account_summaries,
+        "account_count": len(account_summaries)
+    }
+
+
+@router.get("/balance-sheet")
+async def get_balance_sheet(
+    company_id: int = Query(..., description="Company ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate Balance Sheet (Balansräkning)
     Assets = Liabilities + Equity
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get all accounts with balances
     accounts = db.query(Account).filter(
@@ -35,6 +154,10 @@ def get_balance_sheet(
     equity = []
 
     for account in accounts:
+        # Skip accounts with zero balance
+        if account.current_balance == 0:
+            continue
+
         item = {
             "account_number": account.account_number,
             "name": account.name,
@@ -77,14 +200,17 @@ def get_balance_sheet(
 
 
 @router.get("/income-statement")
-def get_income_statement(
+async def get_income_statement(
     company_id: int = Query(..., description="Company ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate Income Statement (Resultaträkning)
     Revenue - Expenses = Profit/Loss
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get all revenue and expense accounts
     accounts = db.query(Account).filter(
@@ -104,6 +230,10 @@ def get_income_statement(
     expenses = []
 
     for account in accounts:
+        # Skip accounts with zero balance
+        if account.current_balance == 0:
+            continue
+
         item = {
             "account_number": account.account_number,
             "name": account.name,
@@ -115,7 +245,9 @@ def get_income_statement(
         else:
             expenses.append(item)
 
-    total_revenue = sum(r["balance"] for r in revenue)
+    # Revenue accounts have negative balance (credits), so negate to get positive revenue
+    total_revenue = -sum(r["balance"] for r in revenue)
+    # Expense accounts have positive balance (debits)
     total_expenses = sum(e["balance"] for e in expenses)
     profit_loss = total_revenue - total_expenses
 
@@ -135,10 +267,13 @@ def get_income_statement(
 
 
 @router.get("/trial-balance")
-def get_trial_balance(
+async def get_trial_balance(
     company_id: int = Query(..., description="Company ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
     """
     Generate Trial Balance (Råbalans/RAR)
     Shows all accounts with opening balance, changes, and closing balance
@@ -184,12 +319,13 @@ def get_trial_balance(
 
 
 @router.get("/vat-report")
-def get_vat_report(
+async def get_vat_report(
     company_id: int = Query(..., description="Company ID"),
     start_date: Optional[date] = Query(None, description="Start date for VAT period (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date for VAT period (YYYY-MM-DD)"),
     exclude_vat_settlements: bool = Query(False, description="Exclude VAT settlement/declaration entries"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Generate VAT Report (Momsrapport) for a specific period
@@ -199,6 +335,8 @@ def get_vat_report(
     If exclude_vat_settlements is True, filters out verifications that appear to be VAT settlements
     (e.g., entries that zero out VAT accounts when filing declarations).
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get all VAT accounts according to Swedish BAS account plan:
     # - Outgoing VAT (from sales): 2610-2619
@@ -520,15 +658,18 @@ def get_vat_report(
 
 
 @router.get("/vat-periods")
-def get_vat_periods(
+async def get_vat_periods(
     company_id: int = Query(..., description="Company ID"),
     year: int = Query(..., description="Year to generate periods for (e.g., 2024)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Get all VAT reporting periods for a company in a specific year.
     Returns periods based on company's vat_reporting_period setting (monthly/quarterly/yearly).
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         return {"error": "Company not found", "periods": []}
@@ -595,15 +736,19 @@ def get_vat_periods(
 
 
 @router.get("/vat-debug")
-def get_vat_debug(
+async def get_vat_debug(
     company_id: int = Query(..., description="Company ID"),
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Debug endpoint to see what VAT accounts and transactions exist
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
     # Get all VAT accounts (including inactive ones)
     vat_accounts = db.query(Account).filter(
         Account.company_id == company_id,
@@ -676,17 +821,20 @@ def get_vat_debug(
 
 
 @router.get("/vat-report-xml")
-def export_vat_report_xml(
+async def export_vat_report_xml(
     company_id: int = Query(..., description="Company ID"),
     start_date: date = Query(..., description="Start date for VAT period (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End date for VAT period (YYYY-MM-DD)"),
     exclude_vat_settlements: bool = Query(True, description="Exclude VAT settlement/declaration entries"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Export VAT report as XML file for upload to Skatteverket (eSKDUpload format version 6.0)
     Returns an XML file that can be uploaded directly to Swedish Tax Agency.
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
 
     # Get company info for org number
     company = db.query(Company).filter(Company.id == company_id).first()

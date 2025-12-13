@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.default_account import DefaultAccount
 from app.models.account import Account
+from app.models.user import User
+from app.dependencies import get_current_active_user, get_user_company_ids
 from pydantic import BaseModel
 from typing import List
 
@@ -25,8 +27,20 @@ class DefaultAccountResponse(BaseModel):
 
 
 @router.get("/", response_model=List[DefaultAccountResponse])
-def list_default_accounts(company_id: int, db: Session = Depends(get_db)):
+def list_default_accounts(
+    company_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
     """List all default account mappings for a company"""
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this company"
+        )
+
     defaults = db.query(DefaultAccount).filter(
         DefaultAccount.company_id == company_id
     ).all()

@@ -48,7 +48,7 @@ export default function Accounts() {
 
   const saveBalance = async (accountId: number) => {
     try {
-      await api.patch(`/api/accounts/${accountId}`, {
+      await api.patch(`/accounts/${accountId}`, {
         opening_balance: parseFloat(editValue) || 0,
       })
       await loadAccounts()

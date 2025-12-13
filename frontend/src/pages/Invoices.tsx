@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Download, Plus, X, Eye, DollarSign } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
+import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
@@ -49,10 +49,27 @@ export default function Invoices() {
     }
   }
 
-  const downloadInvoicePdf = (invoiceId: number, invoiceNumber: string, series: string) => {
-    // Open PDF download in new tab
-    const url = `http://localhost:8000/api/invoices/${invoiceId}/pdf`
-    window.open(url, '_blank')
+  const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string, series: string) => {
+    try {
+      // Use axios to download with authentication
+      const response = await api.get(`/invoices/${invoiceId}/pdf`, {
+        responseType: 'blob'
+      })
+
+      // Create blob URL and download
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `faktura_${series}${invoiceNumber}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download PDF:', error)
+      alert('Kunde inte ladda ner PDF')
+    }
   }
 
   const sendInvoice = async (invoiceId: number) => {
@@ -791,7 +808,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   const [ocrNumber, setOcrNumber] = useState('')
   const [reference, setReference] = useState('')
   const [lines, setLines] = useState<InvoiceLine[]>([
-    { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }
+    { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -809,7 +826,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   }, [supplierId, invoiceDate, suppliers])
 
   const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unit_price: 0, vat_rate: 25 }])
+    setLines([...lines, { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }])
   }
 
   const removeLine = (index: number) => {

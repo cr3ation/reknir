@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
+import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen, Download, Upload } from 'lucide-react'
 import { expenseApi, accountApi } from '@/services/api'
 import type { Expense, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'

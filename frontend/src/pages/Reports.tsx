@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { reportApi } from '@/services/api'
-import type { BalanceSheet, IncomeStatement, VATReport, VATPeriod } from '@/types'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
+import type { BalanceSheet, IncomeStatement, GeneralLedger, VATReport, VATPeriod } from '@/types'
 
-type ReportTab = 'balance' | 'income' | 'vat'
+type ReportTab = 'balance' | 'income' | 'general-ledger' | 'vat'
 
 export default function Reports() {
   const { selectedCompany } = useCompany()
   const [activeTab, setActiveTab] = useState<ReportTab>('income')
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
+  const [generalLedger, setGeneralLedger] = useState<GeneralLedger | null>(null)
   const [vatReport, setVATReport] = useState<VATReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [vatPeriods, setVatPeriods] = useState<VATPeriod[]>([])
@@ -17,6 +20,7 @@ export default function Reports() {
   const [vatYear, setVatYear] = useState(new Date().getFullYear())
   const [excludeVatSettlements, setExcludeVatSettlements] = useState(true)
   const [showVerificationsModal, setShowVerificationsModal] = useState(false)
+  const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
   useEffect(() => {
     loadData()
@@ -24,6 +28,7 @@ export default function Reports() {
 
   useEffect(() => {
     if (selectedCompany) {
+      loadFiscalYears(selectedCompany.id)
       loadVatPeriods()
     }
   }, [selectedCompany, vatYear])
@@ -34,6 +39,12 @@ export default function Reports() {
     }
   }, [selectedCompany, selectedPeriod, excludeVatSettlements])
 
+  useEffect(() => {
+    if (selectedCompany && selectedFiscalYear && activeTab === 'general-ledger') {
+      loadGeneralLedger()
+    }
+  }, [selectedCompany, selectedFiscalYear, activeTab])
+
   const loadData = async () => {
     if (!selectedCompany) {
       setLoading(false)
@@ -42,6 +53,7 @@ export default function Reports() {
 
     try {
       setLoading(true)
+
       // Load reports
       const [balanceRes, incomeRes] = await Promise.all([
         reportApi.balanceSheet(selectedCompany.id),
@@ -87,6 +99,20 @@ export default function Reports() {
       setVATReport(vatRes.data)
     } catch (error) {
       console.error('Failed to load VAT report:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadGeneralLedger = async () => {
+    if (!selectedCompany || !selectedFiscalYear) return
+
+    try {
+      setLoading(true)
+      const ledgerRes = await reportApi.generalLedger(selectedCompany.id, selectedFiscalYear.id)
+      setGeneralLedger(ledgerRes.data)
+    } catch (error) {
+      console.error('Failed to load general ledger:', error)
     } finally {
       setLoading(false)
     }
@@ -143,6 +169,16 @@ export default function Reports() {
             }`}
           >
             Balansräkning
+          </button>
+          <button
+            onClick={() => setActiveTab('general-ledger')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'general-ledger'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Huvudbok
           </button>
           <button
             onClick={() => setActiveTab('vat')}
@@ -346,6 +382,75 @@ export default function Reports() {
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* General Ledger */}
+      {activeTab === 'general-ledger' && generalLedger && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Huvudbok</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Period: {new Date(generalLedger.start_date).toLocaleDateString('sv-SE')} - {new Date(generalLedger.end_date).toLocaleDateString('sv-SE')}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Antal konton: {generalLedger.account_count}</p>
+            </div>
+          </div>
+
+          {generalLedger.accounts.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">Inga transaktioner för vald period</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Konto</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontonamn</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">IB</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debet</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Kredit</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">UB</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Trans</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {generalLedger.accounts.map((account, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-mono text-gray-900 whitespace-nowrap">
+                        <Link
+                          to={`/accounts/${account.account_number}/ledger`}
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {account.account_number}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {account.account_name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap text-gray-600">
+                        {formatCurrency(account.opening_balance)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
+                        {account.period_debit > 0 ? formatCurrency(account.period_debit) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
+                        {account.period_credit > 0 ? formatCurrency(account.period_credit) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap font-semibold">
+                        {formatCurrency(account.closing_balance)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-center text-gray-500">
+                        {account.transaction_count}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -684,9 +789,9 @@ export default function Reports() {
               <div className="mt-4">
                 <button
                   onClick={() => {
-                    if (!selectedCompany || !selectedPeriod) return
-                    const url = new URL('/api/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000')
-                    url.searchParams.append('company_id', selectedCompany.id.toString())
+                    if (!company || !selectedPeriod) return
+                    const url = new URL('/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
+                    url.searchParams.append('company_id', company.id.toString())
                     url.searchParams.append('start_date', selectedPeriod.start_date)
                     url.searchParams.append('end_date', selectedPeriod.end_date)
                     url.searchParams.append('exclude_vat_settlements', excludeVatSettlements.toString())

@@ -1,6 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User, UserCog, Mail } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
 import VerificationDetail from './pages/VerificationDetail'
@@ -14,99 +13,41 @@ import Reports from './pages/Reports'
 import Expenses from './pages/Expenses'
 import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
+import UsersPage from './pages/Users'
+import InvitationsPage from './pages/Invitations'
+import InviteAccept from './pages/InviteAccept'
 import Setup from './pages/Setup'
-import api from './services/api'
-import { CompanyProvider } from './contexts/CompanyContext'
+import Login from './pages/Login'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
 import CompanySelector from './components/CompanySelector'
 import FiscalYearSelector from './components/FiscalYearSelector'
+import { CompanyProvider, useCompany } from './contexts/CompanyContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
-  const [setupComplete, setSetupComplete] = useState<boolean | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [backendOffline, setBackendOffline] = useState(false)
-
-  useEffect(() => {
-    checkSetupStatus()
-  }, [])
-
-  const checkSetupStatus = async () => {
-    try {
-      const response = await api.get('/api/companies/')
-      setSetupComplete(response.data.length > 0)
-      setBackendOffline(false)
-    } catch (error: any) {
-      console.error('Error checking setup status:', error)
-
-      // Check if it's a network error (backend offline)
-      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || !error.response) {
-        setBackendOffline(true)
-      } else {
-        setSetupComplete(false)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    )
-  }
-
-  if (backendOffline) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
-          <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-red-100 p-3">
-              <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Backend är offline</h2>
-          <p className="text-gray-600 mb-6">
-            Kan inte ansluta till backend-servern. Kontrollera att backend körs med <code className="bg-gray-100 px-2 py-1 rounded text-sm">docker compose up</code>
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          >
-            Försök igen
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!setupComplete) {
-    return (
-      <Router>
-        <Routes>
-          <Route path="/setup" element={<Setup />} />
-          <Route path="*" element={<Navigate to="/setup" replace />} />
-        </Routes>
-      </Router>
-    )
-  }
-
   return (
     <Router>
-      <CompanyProvider>
-        <FiscalYearProvider>
-          <AppContent />
-        </FiscalYearProvider>
-      </CompanyProvider>
+      <AuthProvider>
+        <CompanyProvider>
+          <FiscalYearProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/invite/:token" element={<InviteAccept />} />
+              <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
+              <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+            </Routes>
+          </FiscalYearProvider>
+        </CompanyProvider>
+      </AuthProvider>
     </Router>
   )
 }
 
 function AppContent() {
   const location = useLocation()
+  const { user, logout } = useAuth()
+  const { selectedCompany, setSelectedCompany } = useCompany()
 
   const menuItems = [
     { path: '/', icon: Home, label: 'Översikt' },
@@ -118,6 +59,12 @@ function AppContent() {
     { path: '/reports', icon: PieChart, label: 'Rapporter' },
     { path: '/settings', icon: Settings, label: 'Inställningar' },
   ]
+
+  const handleLogout = () => {
+    if (window.confirm('Är du säker på att du vill logga ut?')) {
+      logout()
+    }
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -152,12 +99,78 @@ function AppContent() {
               </Link>
             )
           })}
+
+          {/* Admin-only menu items */}
+          {user?.is_admin && (
+            <>
+              <div className="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">
+                Administration
+              </div>
+              <Link
+                to="/users"
+                className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname.startsWith('/users')
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <UserCog className={`w-5 h-5 mr-3 ${location.pathname.startsWith('/users') ? 'text-primary-600' : 'text-gray-500'}`} />
+                Användare
+              </Link>
+              <Link
+                to="/invitations"
+                className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname.startsWith('/invitations')
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Mail className={`w-5 h-5 mr-3 ${location.pathname.startsWith('/invitations') ? 'text-primary-600' : 'text-gray-500'}`} />
+                Inbjudningar
+              </Link>
+            </>
+          )}
         </nav>
 
-        {/* Company and Fiscal Year Selectors at bottom */}
-        <div className="p-4 border-t border-gray-200 space-y-3">
-          <CompanySelector />
-          <FiscalYearSelector />
+        {/* User info and logout at bottom */}
+        <div className="border-t border-gray-200">
+          {/* Company Selector */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
+              Företag
+            </div>
+            <CompanySelector
+              selectedCompanyId={selectedCompany?.id || null}
+              onCompanyChange={setSelectedCompany}
+            />
+          </div>
+
+          {/* Fiscal Year Selector */}
+          <div className="p-4">
+            <FiscalYearSelector />
+          </div>
+
+          {/* User info and logout button */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex items-center mb-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <User className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+              <div className="ml-3 flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{user?.full_name}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logga ut
+            </button>
+          </div>
         </div>
       </div>
 
@@ -179,6 +192,8 @@ function AppContent() {
               <Route path="/accounts/:accountId/ledger" element={<AccountLedger />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/invitations" element={<InvitationsPage />} />
             </Routes>
           </div>
         </main>
