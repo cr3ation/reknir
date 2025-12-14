@@ -1,16 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Building2, ChevronDown } from 'lucide-react'
 import api from '../services/api'
-
-interface Company {
-  id: number
-  name: string
-  org_number: string
-}
+import type { Company } from '@/types'
 
 interface CompanySelectorProps {
   selectedCompanyId: number | null
-  onCompanyChange: (company: Company) => void
+  onCompanyChange: (company: Company | null) => void
 }
 
 export default function CompanySelector({ selectedCompanyId, onCompanyChange }: CompanySelectorProps) {

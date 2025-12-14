@@ -4,7 +4,7 @@ interface PydanticValidationError {
   type?: string
 }
 
-interface ApiErrorResponse {
+export interface ApiErrorResponse {
   response?: {
     data?: {
       detail?: string | PydanticValidationError[]
@@ -16,8 +16,9 @@ interface ApiErrorResponse {
  * Extracts error message from API error response
  * Handles both Pydantic validation errors (array of objects) and simple string errors
  */
-export function getErrorMessage(err: ApiErrorResponse, fallback: string = 'Ett fel uppstod'): string {
-  const detail = err.response?.data?.detail
+export function getErrorMessage(err: unknown, fallback: string = 'Ett fel uppstod'): string {
+  const error = err as ApiErrorResponse
+  const detail = error.response?.data?.detail
 
   if (Array.isArray(detail)) {
     // Pydantic validation errors

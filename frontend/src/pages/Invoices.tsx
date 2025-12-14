@@ -892,6 +892,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
         supplier_invoice_lines: lines.map(line => ({
           description: line.description,
           quantity: line.quantity,
+          unit: line.unit,
           unit_price: line.unit_price,
           vat_rate: line.vat_rate,
           account_id: line.account_id,

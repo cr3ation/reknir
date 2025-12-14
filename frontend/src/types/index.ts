@@ -218,6 +218,7 @@ export interface InvoiceCreateData {
   our_reference?: string
   notes?: string
   message?: string
+  invoice_series?: string
   invoice_lines: Omit<InvoiceLine, 'id' | 'invoice_id' | 'net_amount' | 'vat_amount' | 'total_amount'>[]
 }
 
