@@ -1,7 +1,7 @@
 """add invitations
 
 Revision ID: 009
-Revises: 008
+Revises: 008b
 Create Date: 2025-01-13 14:00:00.000000
 
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "009"
-down_revision = "008"
+down_revision = "008b"
 branch_labels = None
 depends_on = None
 
