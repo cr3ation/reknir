@@ -209,6 +209,41 @@ export interface InvoiceLine {
   total_amount?: number
 }
 
+export interface InvoiceCreateData {
+  company_id: number
+  customer_id: number
+  invoice_date: string
+  due_date: string
+  reference?: string
+  our_reference?: string
+  notes?: string
+  message?: string
+  invoice_lines: Omit<InvoiceLine, 'id' | 'invoice_id' | 'net_amount' | 'vat_amount' | 'total_amount'>[]
+}
+
+export interface SupplierInvoiceCreateData {
+  company_id: number
+  supplier_id: number
+  supplier_invoice_number: string
+  invoice_date: string
+  due_date: string
+  ocr_number?: string
+  reference?: string
+  notes?: string
+  supplier_invoice_lines: Omit<InvoiceLine, 'id' | 'invoice_id' | 'net_amount' | 'vat_amount' | 'total_amount'>[]
+}
+
+export interface ExpenseCreateData {
+  company_id: number
+  employee_name: string
+  expense_date: string
+  description: string
+  amount: number
+  vat_amount: number
+  expense_account_id?: number | null
+  vat_account_id?: number | null
+}
+
 export interface Invoice {
   id: number
   company_id: number

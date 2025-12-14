@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { UserPlus, Copy, Trash2, Check, Clock } from 'lucide-react'
 import api from '../services/api'
 import { useCompany } from '../contexts/CompanyContext'
+import { getErrorMessage } from '../utils/errors'
 
 interface Invitation {
   id: number
@@ -25,13 +26,7 @@ export default function InvitationManager() {
   })
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (selectedCompany) {
-      loadInvitations()
-    }
-  }, [selectedCompany])
-
-  const loadInvitations = async () => {
+  const loadInvitations = useCallback(async () => {
     if (!selectedCompany) return
 
     try {
@@ -43,7 +38,13 @@ export default function InvitationManager() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompany])
+
+  useEffect(() => {
+    if (selectedCompany) {
+      loadInvitations()
+    }
+  }, [selectedCompany, loadInvitations])
 
   const handleCreateInvitation = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,8 +58,8 @@ export default function InvitationManager() {
       setInvitations([response.data, ...invitations])
       setShowCreateModal(false)
       setNewInvitation({ role: 'user', days_valid: 7 })
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to create invitation')
+    } catch (error) {
+      alert(getErrorMessage(error, 'Failed to create invitation'))
     }
   }
 
@@ -68,8 +69,8 @@ export default function InvitationManager() {
     try {
       await api.delete(`/invitations/${invitationId}`)
       setInvitations(invitations.filter(inv => inv.id !== invitationId))
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to delete invitation')
+    } catch (error) {
+      alert(getErrorMessage(error, 'Failed to delete invitation'))
     }
   }
 

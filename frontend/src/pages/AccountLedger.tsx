@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { accountApi } from '@/services/api'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -40,18 +40,12 @@ export default function AccountLedger() {
     }
   }, [selectedFiscalYear])
 
-  useEffect(() => {
-    if (accountId) {
-      loadLedger()
-    }
-  }, [accountId, startDate, endDate])
-
-  const loadLedger = async () => {
+  const loadLedger = useCallback(async () => {
     if (!accountId) return
 
     try {
       setLoading(true)
-      const params: any = {}
+      const params: { start_date?: string; end_date?: string } = {}
       if (startDate) params.start_date = startDate
       if (endDate) params.end_date = endDate
 
@@ -62,7 +56,13 @@ export default function AccountLedger() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [accountId, startDate, endDate])
+
+  useEffect(() => {
+    if (accountId) {
+      loadLedger()
+    }
+  }, [accountId, loadLedger])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {

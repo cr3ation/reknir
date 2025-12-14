@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Building2, ChevronDown } from 'lucide-react'
 import api from '../services/api'
 
@@ -18,11 +18,7 @@ export default function CompanySelector({ selectedCompanyId, onCompanyChange }: 
   const [loading, setLoading] = useState(true)
   const [isOpen, setIsOpen] = useState(false)
 
-  useEffect(() => {
-    loadCompanies()
-  }, [])
-
-  const loadCompanies = async () => {
+  const loadCompanies = useCallback(async () => {
     try {
       const response = await api.get('/auth/me/companies')
       setCompanies(response.data)
@@ -36,7 +32,11 @@ export default function CompanySelector({ selectedCompanyId, onCompanyChange }: 
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompanyId, onCompanyChange])
+
+  useEffect(() => {
+    loadCompanies()
+  }, [loadCompanies])
 
   const selectedCompany = companies.find(c => c.id === selectedCompanyId)
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company } from '@/types'
+import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear } from '@/types'
 import { Plus, Trash2, Calendar, Building2, Edit2, Save, X } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 

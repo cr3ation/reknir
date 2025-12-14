@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
 import { supplierInvoiceApi, accountApi, supplierApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { getErrorMessage } from '@/utils/errors'
 
 export default function SupplierInvoiceDetail() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
@@ -16,12 +17,7 @@ export default function SupplierInvoiceDetail() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
 
-  useEffect(() => {
-    loadInvoice()
-    loadAccounts()
-  }, [invoiceId, selectedCompany])
-
-  const loadInvoice = async () => {
+  const loadInvoice = useCallback(async () => {
     try {
       const response = await supplierInvoiceApi.get(parseInt(invoiceId!))
       setInvoice(response.data)
@@ -38,9 +34,9 @@ export default function SupplierInvoiceDetail() {
       alert('Kunde inte ladda fakturan')
       navigate('/invoices')
     }
-  }
+  }, [invoiceId, navigate])
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     if (!selectedCompany) return
 
     try {
@@ -49,7 +45,12 @@ export default function SupplierInvoiceDetail() {
     } catch (error) {
       console.error('Failed to load accounts:', error)
     }
-  }
+  }, [selectedCompany])
+
+  useEffect(() => {
+    loadInvoice()
+    loadAccounts()
+  }, [loadInvoice, loadAccounts])
 
   const handleRegister = async () => {
     if (!confirm('Bokför denna leverantörsfaktura? En verifikation kommer att skapas.')) return
@@ -58,9 +59,9 @@ export default function SupplierInvoiceDetail() {
       await supplierInvoiceApi.register(parseInt(invoiceId!))
       await loadInvoice()
       alert('Leverantörsfakturan har bokförts och en verifikation har skapats')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to register:', error)
-      alert(`Kunde inte bokföra: ${error.response?.data?.detail || error.message}`)
+      alert(`Kunde inte bokföra: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -84,9 +85,9 @@ export default function SupplierInvoiceDetail() {
       })
       await loadInvoice()
       alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to mark paid:', error)
-      alert(`Kunde inte markera som betald: ${error.response?.data?.detail || error.message}`)
+      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 

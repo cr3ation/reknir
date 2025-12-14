@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../services/api';
+import { getErrorMessage } from '../utils/errors';
 
 const Setup: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -49,8 +50,8 @@ const Setup: React.FC = () => {
         window.location.href = '/';
       }, 2000);
 
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ett fel uppstod vid skapande av företaget');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Ett fel uppstod vid skapande av företaget'));
       setLoading(false);
     }
   };

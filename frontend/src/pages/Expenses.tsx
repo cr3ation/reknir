@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye, BookOpen } from 'lucide-react'
 import { expenseApi, accountApi } from '@/services/api'
 import type { Expense, ExpenseStatus, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { getErrorMessage } from '@/utils/errors'
 
 export default function Expenses() {
   const navigate = useNavigate()
@@ -28,12 +29,7 @@ export default function Expenses() {
     vat_account_id: '',
   })
 
-  useEffect(() => {
-    loadExpenses()
-    loadAccounts()
-  }, [selectedCompany, statusFilter, employeeFilter])
-
-  const loadExpenses = async () => {
+  const loadExpenses = useCallback(async () => {
     if (!selectedCompany) {
       setLoading(false)
       return
@@ -41,7 +37,7 @@ export default function Expenses() {
 
     try {
       setLoading(true)
-      const params: any = {}
+      const params: { status_filter?: string; employee_name?: string } = {}
       if (statusFilter !== 'all') {
         params.status_filter = statusFilter
       }
@@ -56,9 +52,9 @@ export default function Expenses() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompany, statusFilter, employeeFilter])
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     if (!selectedCompany) return
 
     try {
@@ -67,7 +63,12 @@ export default function Expenses() {
     } catch (error) {
       console.error('Failed to load accounts:', error)
     }
-  }
+  }, [selectedCompany])
+
+  useEffect(() => {
+    loadExpenses()
+    loadAccounts()
+  }, [loadExpenses, loadAccounts])
 
   const handleCreate = () => {
     setEditingExpense(null)
@@ -196,9 +197,9 @@ export default function Expenses() {
       await expenseApi.markPaid(id, paidDate, bankAccount.id)
       await loadExpenses()
       alert('Utlägget har markerats som utbetalt och en verifikation har skapats')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to mark expense as paid:', error)
-      alert(`Kunde inte markera utlägget som utbetalat: ${error.response?.data?.detail || error.message}`)
+      alert(`Kunde inte markera utlägget som utbetalat: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -235,9 +236,9 @@ export default function Expenses() {
       await expenseApi.book(id, employeePayableAccountId)
       await loadExpenses()
       alert('Utlägget har bokförts och en verifikation har skapats')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to book expense:', error)
-      alert(`Kunde inte bokföra utlägget: ${error.response?.data?.detail || error.message}`)
+      alert(`Kunde inte bokföra utlägget: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 

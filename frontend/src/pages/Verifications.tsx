@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
 import { verificationApi, accountApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
+import { getErrorMessage } from '@/utils/errors'
 
 export default function Verifications() {
   const { selectedCompany } = useCompany()
@@ -15,15 +16,7 @@ export default function Verifications() {
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
   const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
-  useEffect(() => {
-    loadData()
-  }, [selectedCompany])
-
-  useEffect(() => {
-    filterVerificationsByFiscalYear()
-  }, [selectedFiscalYear, allVerifications])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!selectedCompany) {
       setLoading(false)
       return
@@ -45,9 +38,9 @@ export default function Verifications() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompany, loadFiscalYears])
 
-  const filterVerificationsByFiscalYear = () => {
+  const filterVerificationsByFiscalYear = useCallback(() => {
     if (!selectedFiscalYear) {
       setVerifications(allVerifications)
       return
@@ -62,7 +55,15 @@ export default function Verifications() {
     })
 
     setVerifications(filtered)
-  }
+  }, [selectedFiscalYear, allVerifications])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    filterVerificationsByFiscalYear()
+  }, [filterVerificationsByFiscalYear])
 
   const handleDelete = async (id: number) => {
     if (!confirm(
@@ -74,10 +75,9 @@ export default function Verifications() {
     try {
       await verificationApi.delete(id)
       await loadData()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete verification:', error)
-      const errorMsg = error.response?.data?.detail || 'Kunde inte radera verifikationen'
-      alert(errorMsg)
+      alert(getErrorMessage(error, 'Kunde inte radera verifikationen'))
     }
   }
 
@@ -375,7 +375,7 @@ function CreateVerificationModal({
     setLines(lines.filter((_, i) => i !== index))
   }
 
-  const updateLine = (index: number, field: string, value: any) => {
+  const updateLine = (index: number, field: string, value: string | number) => {
     const newLines = [...lines]
     newLines[index] = { ...newLines[index], [field]: value }
     setLines(newLines)
@@ -418,8 +418,8 @@ function CreateVerificationModal({
       }
 
       onSuccess()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ett fel uppstod')
+    } catch (err) {
+      setError(getErrorMessage(err, 'Ett fel uppstod'))
       setLoading(false)
     }
   }
