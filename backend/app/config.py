@@ -1,6 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import List
-from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -26,10 +24,10 @@ class Settings(BaseSettings):
         case_sensitive = False
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         """Parse CORS origins as list"""
         if isinstance(self.cors_origins, str):
-            return [origin.strip() for origin in self.cors_origins.split(',')]
+            return [origin.strip() for origin in self.cors_origins.split(",")]
         return self.cors_origins
 
 

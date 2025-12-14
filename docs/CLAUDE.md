@@ -425,7 +425,7 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 - SQLAlchemy: https://docs.sqlalchemy.org/
 
 ## Licens
-[Ange licens här]
+BSD 3-Clause License - Se LICENSE-filen i projektets rot.
 
 ## Kontakt
 [Ange kontaktinformation här]

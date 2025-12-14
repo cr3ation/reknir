@@ -1,17 +1,15 @@
-from sqlalchemy.orm import Session
+from datetime import date
 from decimal import Decimal
-from datetime import date, datetime
-from app.models.expense import Expense
-from app.models.verification import Verification, TransactionLine
+
+from sqlalchemy.orm import Session
+
 from app.models.account import Account
-from typing import Optional
+from app.models.expense import Expense
+from app.models.verification import TransactionLine, Verification
 
 
 def create_expense_verification(
-    db: Session,
-    expense: Expense,
-    employee_payable_account_id: int,
-    description: Optional[str] = None
+    db: Session, expense: Expense, employee_payable_account_id: int, description: str | None = None
 ) -> Verification:
     """
     Create automatic verification when expense is approved/booked
@@ -25,6 +23,7 @@ def create_expense_verification(
 
     # Get next verification number
     from app.routers.verifications import get_next_verification_number
+
     ver_number = get_next_verification_number(db, expense.company_id, "A")
 
     # Create verification
@@ -34,7 +33,7 @@ def create_expense_verification(
         series="A",
         transaction_date=expense.expense_date,
         description=description or f"Utlägg - {expense.employee_name}: {expense.description}",
-        registration_date=date.today()
+        registration_date=date.today(),
     )
     db.add(verification)
     db.flush()
@@ -54,7 +53,7 @@ def create_expense_verification(
         account_id=expense_account.id,
         debit=net_amount,
         credit=Decimal("0"),
-        description=expense.description
+        description=expense.description,
     )
     db.add(debit_expense_line)
     expense_account.current_balance += net_amount
@@ -73,7 +72,7 @@ def create_expense_verification(
             account_id=vat_account.id,
             debit=expense.vat_amount,
             credit=Decimal("0"),
-            description=f"Moms {expense.description}"
+            description=f"Moms {expense.description}",
         )
         db.add(debit_vat_line)
         vat_account.current_balance += expense.vat_amount
@@ -88,7 +87,7 @@ def create_expense_verification(
         account_id=payable_account.id,
         debit=Decimal("0"),
         credit=expense.amount,
-        description=f"Skuld till {expense.employee_name}"
+        description=f"Skuld till {expense.employee_name}",
     )
     db.add(credit_line)
     payable_account.current_balance -= expense.amount
@@ -100,11 +99,7 @@ def create_expense_verification(
 
 
 def create_expense_payment_verification(
-    db: Session,
-    expense: Expense,
-    paid_date: date,
-    bank_account_id: int,
-    description: Optional[str] = None
+    db: Session, expense: Expense, paid_date: date, bank_account_id: int, description: str | None = None
 ) -> Verification:
     """
     Create payment verification when expense is paid
@@ -117,6 +112,7 @@ def create_expense_payment_verification(
 
     # Get next verification number
     from app.routers.verifications import get_next_verification_number
+
     ver_number = get_next_verification_number(db, expense.company_id, "A")
 
     # Create verification
@@ -126,7 +122,7 @@ def create_expense_payment_verification(
         series="A",
         transaction_date=paid_date,
         description=description or f"Betalning utlägg - {expense.employee_name}: {expense.description}",
-        registration_date=date.today()
+        registration_date=date.today(),
     )
     db.add(verification)
     db.flush()
@@ -162,7 +158,7 @@ def create_expense_payment_verification(
         account_id=payable_account.id,
         debit=expense.amount,
         credit=Decimal("0"),
-        description=f"Betald till {expense.employee_name}"
+        description=f"Betald till {expense.employee_name}",
     )
     db.add(debit_line)
     payable_account.current_balance += expense.amount  # Reduce liability
@@ -177,7 +173,7 @@ def create_expense_payment_verification(
         account_id=bank_account.id,
         debit=Decimal("0"),
         credit=expense.amount,
-        description=f"Betalning till {expense.employee_name}"
+        description=f"Betalning till {expense.employee_name}",
     )
     db.add(credit_line)
     bank_account.current_balance -= expense.amount

@@ -1,44 +1,44 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from typing import List, Optional
 from datetime import date
-from app.database import get_db
-from app.models.account import Account, AccountType
-from app.models.verification import Verification, TransactionLine
-from app.models.user import User
-from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate, AccountBalance
-from app.dependencies import get_current_active_user, verify_company_access
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.dependencies import get_current_active_user, verify_company_access
+from app.models.account import Account, AccountType
+from app.models.user import User
+from app.models.verification import TransactionLine, Verification
+from app.schemas.account import AccountBalance, AccountCreate, AccountResponse, AccountUpdate
 
 router = APIRouter()
 
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(
-    account: AccountCreate,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    account: AccountCreate, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
     """Create a new account"""
     # Verify user has access to this company
     from app.dependencies import get_user_company_ids
+
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"You don't have access to company {account.company_id}"
+            status_code=status.HTTP_403_FORBIDDEN, detail=f"You don't have access to company {account.company_id}"
         )
 
     # Check if account number already exists for this company
-    existing = db.query(Account).filter(
-        Account.company_id == account.company_id,
-        Account.account_number == account.account_number
-    ).first()
+    existing = (
+        db.query(Account)
+        .filter(Account.company_id == account.company_id, Account.account_number == account.account_number)
+        .first()
+    )
 
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Account {account.account_number} already exists for this company"
+            detail=f"Account {account.account_number} already exists for this company",
         )
 
     # Create account
@@ -51,14 +51,14 @@ def create_account(
     return db_account
 
 
-@router.get("/", response_model=List[AccountResponse])
+@router.get("/", response_model=list[AccountResponse])
 def list_accounts(
     company_id: int = Query(..., description="Company ID"),
-    account_type: Optional[AccountType] = None,
+    account_type: AccountType | None = None,
     active_only: bool = True,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-    _: None = Depends(verify_company_access)
+    _: None = Depends(verify_company_access),
 ):
     """List all accounts for a company"""
     query = db.query(Account).filter(Account.company_id == company_id)
@@ -67,25 +67,22 @@ def list_accounts(
         query = query.filter(Account.account_type == account_type)
 
     if active_only:
-        query = query.filter(Account.active == True)
+        query = query.filter(Account.active.is_(True))
 
     accounts = query.order_by(Account.account_number).all()
     return accounts
 
 
-@router.get("/balances", response_model=List[AccountBalance])
+@router.get("/balances", response_model=list[AccountBalance])
 def get_account_balances(
     company_id: int = Query(..., description="Company ID"),
-    account_type: Optional[AccountType] = None,
+    account_type: AccountType | None = None,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-    _: None = Depends(verify_company_access)
+    _: None = Depends(verify_company_access),
 ):
     """Get account balances"""
-    query = db.query(Account).filter(
-        Account.company_id == company_id,
-        Account.active == True
-    )
+    query = db.query(Account).filter(Account.company_id == company_id, Account.active.is_(True))
 
     if account_type:
         query = query.filter(Account.account_type == account_type)
@@ -99,34 +96,25 @@ def get_account_balances(
             account_type=acc.account_type,
             opening_balance=acc.opening_balance,
             current_balance=acc.current_balance,
-            change=acc.current_balance - acc.opening_balance
+            change=acc.current_balance - acc.opening_balance,
         )
         for acc in accounts
     ]
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
-def get_account(
-    account_id: int,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
+def get_account(account_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
     """Get a specific account"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
 
     # Verify user has access to this account's company
     from app.dependencies import get_user_company_ids
+
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this account"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this account")
 
     return account
 
@@ -136,24 +124,19 @@ def update_account(
     account_id: int,
     account_update: AccountUpdate,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update an account"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
 
     # Verify user has access to this account's company
     from app.dependencies import get_user_company_ids
+
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this account"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this account")
 
     # Update fields
     update_data = account_update.model_dump(exclude_unset=True)
@@ -168,6 +151,7 @@ def update_account(
 # Account Ledger models
 class AccountLedgerEntry(BaseModel):
     """Single entry in account ledger"""
+
     verification_id: int
     verification_number: int
     series: str
@@ -180,21 +164,22 @@ class AccountLedgerEntry(BaseModel):
 
 class AccountLedgerResponse(BaseModel):
     """Account ledger response"""
+
     account_id: int
     account_number: int
     account_name: str
     opening_balance: float
     closing_balance: float
-    entries: List[AccountLedgerEntry]
+    entries: list[AccountLedgerEntry]
 
 
 @router.get("/{account_id}/ledger", response_model=AccountLedgerResponse)
 def get_account_ledger(
     account_id: int,
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    start_date: date | None = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="End date (YYYY-MM-DD)"),
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get account ledger showing all transactions for a specific account.
@@ -203,26 +188,20 @@ def get_account_ledger(
     # Get account
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Account {account_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
 
     # Verify user has access to this account's company
     from app.dependencies import get_user_company_ids
+
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this account"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this account")
 
     # Get all transaction lines for this account
-    query = db.query(TransactionLine, Verification).join(
-        Verification, TransactionLine.verification_id == Verification.id
-    ).filter(
-        TransactionLine.account_id == account_id,
-        Verification.company_id == account.company_id
+    query = (
+        db.query(TransactionLine, Verification)
+        .join(Verification, TransactionLine.verification_id == Verification.id)
+        .filter(TransactionLine.account_id == account_id, Verification.company_id == account.company_id)
     )
 
     # Apply date filters
@@ -233,9 +212,7 @@ def get_account_ledger(
 
     # Order by date and verification number
     query = query.order_by(
-        Verification.transaction_date.asc(),
-        Verification.series.asc(),
-        Verification.verification_number.asc()
+        Verification.transaction_date.asc(), Verification.series.asc(), Verification.verification_number.asc()
     )
 
     transactions = query.all()
@@ -249,16 +226,18 @@ def get_account_ledger(
         # For liability/revenue accounts, it's opposite, but we show it the same way
         running_balance += trans_line.debit - trans_line.credit
 
-        entries.append(AccountLedgerEntry(
-            verification_id=verification.id,
-            verification_number=verification.verification_number,
-            series=verification.series,
-            transaction_date=verification.transaction_date.isoformat(),
-            description=trans_line.description or verification.description or "",
-            debit=float(trans_line.debit),
-            credit=float(trans_line.credit),
-            balance=float(running_balance)
-        ))
+        entries.append(
+            AccountLedgerEntry(
+                verification_id=verification.id,
+                verification_number=verification.verification_number,
+                series=verification.series,
+                transaction_date=verification.transaction_date.isoformat(),
+                description=trans_line.description or verification.description or "",
+                debit=float(trans_line.debit),
+                credit=float(trans_line.credit),
+                balance=float(running_balance),
+            )
+        )
 
     return AccountLedgerResponse(
         account_id=account.id,
@@ -266,5 +245,5 @@ def get_account_ledger(
         account_name=account.name,
         opening_balance=float(account.opening_balance),
         closing_balance=float(running_balance),
-        entries=entries
+        entries=entries,
     )

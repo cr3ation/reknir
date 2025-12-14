@@ -1,19 +1,21 @@
 """SIE4 Import/Export Router"""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
 from app.database import get_db
+from app.dependencies import get_current_active_user, get_user_company_ids
 from app.models.user import User
 from app.services import sie4_service
-from app.dependencies import get_current_active_user, get_user_company_ids
-from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/sie4", tags=["SIE4"])
 
 
 class SIE4ImportResponse(BaseModel):
     """Response model for SIE4 import"""
+
     success: bool
     message: str
     accounts_created: int
@@ -26,6 +28,7 @@ class SIE4ImportResponse(BaseModel):
 
 class SIE4ExportRequest(BaseModel):
     """Request model for SIE4 export"""
+
     company_id: int
     include_verifications: bool = True
 
@@ -35,7 +38,7 @@ async def import_sie4_file(
     company_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Import SIE4 file for a company.
@@ -49,10 +52,7 @@ async def import_sie4_file(
     # Verify access
     company_ids = get_user_company_ids(current_user, db)
     if company_id not in company_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this company"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this company")
 
     try:
         # Read file content
@@ -60,7 +60,7 @@ async def import_sie4_file(
 
         # Try different encodings (SIE files can use various encodings)
         file_content = None
-        for encoding in ['cp437', 'iso-8859-1', 'windows-1252', 'utf-8']:
+        for encoding in ["cp437", "iso-8859-1", "windows-1252", "utf-8"]:
             try:
                 file_content = content.decode(encoding)
                 break
@@ -74,15 +74,13 @@ async def import_sie4_file(
         stats = sie4_service.import_sie4(db, company_id, file_content)
 
         return SIE4ImportResponse(
-            success=True,
-            message=f"Successfully imported SIE4 file for company {company_id}",
-            **stats
+            success=True, message=f"Successfully imported SIE4 file for company {company_id}", **stats
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Import failed: {str(e)}") from e
 
 
 @router.get("/export/{company_id}", response_class=PlainTextResponse)
@@ -90,7 +88,7 @@ def export_sie4_file(
     company_id: int,
     include_verifications: bool = True,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Export company data to SIE4 format.
@@ -100,10 +98,7 @@ def export_sie4_file(
     # Verify access
     company_ids = get_user_company_ids(current_user, db)
     if company_id not in company_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have access to this company"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this company")
 
     try:
         sie4_content = sie4_service.export_sie4(db, company_id, include_verifications)
@@ -112,9 +107,9 @@ def export_sie4_file(
             media_type="text/plain",
             headers={
                 "Content-Disposition": f"attachment; filename=company_{company_id}_{sie4_service.date.today().strftime('%Y%m%d')}.se"
-            }
+            },
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Export failed: {str(e)}") from e

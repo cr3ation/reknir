@@ -12,13 +12,16 @@ import type {
   Supplier,
   Invoice,
   InvoiceListItem,
+  InvoiceCreateData,
   SupplierInvoice,
   SupplierInvoiceListItem,
+  SupplierInvoiceCreateData,
   DefaultAccount,
   SIE4ImportResponse,
   VATReport,
   VATPeriodsResponse,
   Expense,
+  ExpenseCreateData,
   MonthlyStatistics,
 } from '@/types'
 
@@ -181,7 +184,7 @@ export const invoiceApi = {
   list: (companyId: number, params?: { customer_id?: number; status?: string }) =>
     api.get<InvoiceListItem[]>('/invoices/', { params: { company_id: companyId, ...params } }),
   get: (id: number) => api.get<Invoice>(`/invoices/${id}`),
-  create: (data: any) => api.post<Invoice>('/invoices/', data),
+  create: (data: InvoiceCreateData) => api.post<Invoice>('/invoices/', data),
   update: (id: number, data: Partial<Invoice>) => api.patch<Invoice>(`/invoices/${id}`, data),
   send: (id: number) => api.post<Invoice>(`/invoices/${id}/send`),
   markPaid: (id: number, data: { paid_date: string; paid_amount?: number; bank_account_id?: number }) =>
@@ -194,7 +197,7 @@ export const supplierInvoiceApi = {
   list: (companyId: number, params?: { supplier_id?: number; status?: string }) =>
     api.get<SupplierInvoiceListItem[]>('/supplier-invoices/', { params: { company_id: companyId, ...params } }),
   get: (id: number) => api.get<SupplierInvoice>(`/supplier-invoices/${id}`),
-  create: (data: any) => api.post<SupplierInvoice>('/supplier-invoices/', data),
+  create: (data: SupplierInvoiceCreateData) => api.post<SupplierInvoice>('/supplier-invoices/', data),
   update: (id: number, data: Partial<SupplierInvoice>) =>
     api.patch<SupplierInvoice>(`/supplier-invoices/${id}`, data),
   register: (id: number) => api.post<SupplierInvoice>(`/supplier-invoices/${id}/register`),
@@ -248,7 +251,7 @@ export const expenseApi = {
   list: (companyId: number, params?: { status_filter?: string; employee_name?: string; start_date?: string; end_date?: string }) =>
     api.get<Expense[]>('/expenses/', { params: { company_id: companyId, ...params } }),
   get: (id: number) => api.get<Expense>(`/expenses/${id}`),
-  create: (data: any) => api.post<Expense>('/expenses/', data),
+  create: (data: ExpenseCreateData) => api.post<Expense>('/expenses/', data),
   update: (id: number, data: Partial<Expense>) => api.patch<Expense>(`/expenses/${id}`, data),
   delete: (id: number) => api.delete(`/expenses/${id}`),
   submit: (id: number) => api.post<Expense>(`/expenses/${id}/submit`),

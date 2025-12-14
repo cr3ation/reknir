@@ -722,8 +722,8 @@ As you grow:
 
 ### Documentation
 
-- Main README: `README.md`
-- Codebase Guide: `CLAUDE.md`
+- Main README: [`README.md`](../README.md)
+- Codebase Guide: [`CLAUDE.md`](CLAUDE.md)
 - Setup Scripts: `setup-production.sh`
 
 ### Useful Commands
@@ -752,7 +752,7 @@ alias reknir-restart='docker compose -f docker-compose.prod.yml restart'
 
 ## License
 
-MIT License - See LICENSE file for details
+BSD 3-Clause License - See LICENSE file for details
 
 ---
 

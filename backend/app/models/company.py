@@ -1,24 +1,30 @@
-from sqlalchemy import Column, Integer, String, Date, Enum as SQLEnum
-from sqlalchemy.orm import relationship
-from app.database import Base
 import enum
+
+from sqlalchemy import Column, Date, Integer, String
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import relationship
+
+from app.database import Base
 
 
 class AccountingBasis(str, enum.Enum):
     """Accounting basis type"""
+
     ACCRUAL = "accrual"  # Bokföringsmässiga grunder
     CASH = "cash"  # Kontantmetoden
 
 
 class VATReportingPeriod(str, enum.Enum):
     """VAT reporting period frequency"""
-    MONTHLY = "monthly"      # Månatlig (omsättning > 40M SEK/år)
+
+    MONTHLY = "monthly"  # Månatlig (omsättning > 40M SEK/år)
     QUARTERLY = "quarterly"  # Kvartalsvis (vanligast för små företag)
-    YEARLY = "yearly"        # Årlig (omsättning < 1M SEK/år)
+    YEARLY = "yearly"  # Årlig (omsättning < 1M SEK/år)
 
 
 class Company(Base):
     """Company/organization information"""
+
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -34,20 +40,20 @@ class Company(Base):
 
     # Fiscal year
     fiscal_year_start = Column(Date, nullable=False)  # Räkenskapsår start
-    fiscal_year_end = Column(Date, nullable=False)    # Räkenskapsår slut
+    fiscal_year_end = Column(Date, nullable=False)  # Räkenskapsår slut
 
     # Accounting settings
     accounting_basis = Column(
         SQLEnum(AccountingBasis, values_callable=lambda x: [e.value for e in x]),
         default=AccountingBasis.ACCRUAL,
-        nullable=False
+        nullable=False,
     )
 
     # VAT settings
     vat_reporting_period = Column(
         SQLEnum(VATReportingPeriod, values_callable=lambda x: [e.value for e in x]),
         default=VATReportingPeriod.QUARTERLY,
-        nullable=False
+        nullable=False,
     )
 
     # Relationships

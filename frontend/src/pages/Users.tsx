@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Users as UsersIcon, Plus, Building2, Trash2 } from 'lucide-react'
 import api from '../services/api'
+import { getErrorMessage } from '../utils/errors'
 
 interface User {
   id: number
@@ -75,8 +76,8 @@ export default function Users() {
       setShowCreateModal(false)
       setNewUser({ email: '', full_name: '', password: '' })
       loadUsers()
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to create user')
+    } catch (error) {
+      alert(getErrorMessage(error, 'Failed to create user'))
     }
   }
 
@@ -90,8 +91,8 @@ export default function Users() {
       )
       loadUserCompanies(selectedUser.id)
       setSelectedCompanyId(null)
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to grant access')
+    } catch (error) {
+      alert(getErrorMessage(error, 'Failed to grant access'))
     }
   }
 
@@ -103,8 +104,8 @@ export default function Users() {
       if (selectedUser) {
         loadUserCompanies(selectedUser.id)
       }
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to revoke access')
+    } catch (error) {
+      alert(getErrorMessage(error, 'Failed to revoke access'))
     }
   }
 

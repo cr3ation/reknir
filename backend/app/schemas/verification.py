@@ -1,17 +1,18 @@
-from pydantic import BaseModel, Field, field_validator
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class TransactionLineBase(BaseModel):
     """Base transaction line schema"""
+
     account_id: int
     debit: Decimal = Decimal("0.00")
     credit: Decimal = Decimal("0.00")
-    description: Optional[str] = None
+    description: str | None = None
 
-    @field_validator('debit', 'credit')
+    @field_validator("debit", "credit")
     @classmethod
     def validate_amounts(cls, v):
         """Ensure amounts are non-negative"""
@@ -22,25 +23,26 @@ class TransactionLineBase(BaseModel):
 
 class TransactionLineCreate(TransactionLineBase):
     """Schema for creating a transaction line"""
+
     pass
 
 
 class TransactionLineResponse(TransactionLineBase):
     """Schema for transaction line response"""
+
     id: int
     verification_id: int
     account_number: int = 0  # Will be populated from account
-    account_name: str = ""   # Will be populated from account
+    account_name: str = ""  # Will be populated from account
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            Decimal: float
-        }
+        json_encoders = {Decimal: float}
 
 
 class VerificationBase(BaseModel):
     """Base verification schema"""
+
     series: str = Field(default="A", max_length=10)
     transaction_date: date
     description: str = Field(..., min_length=1)
@@ -48,10 +50,11 @@ class VerificationBase(BaseModel):
 
 class VerificationCreate(VerificationBase):
     """Schema for creating a verification"""
-    company_id: int
-    transaction_lines: List[TransactionLineCreate] = Field(..., min_length=2)
 
-    @field_validator('transaction_lines')
+    company_id: int
+    transaction_lines: list[TransactionLineCreate] = Field(..., min_length=2)
+
+    @field_validator("transaction_lines")
     @classmethod
     def validate_balance(cls, lines):
         """Ensure debit equals credit"""
@@ -59,21 +62,21 @@ class VerificationCreate(VerificationBase):
         total_credit = sum(line.credit for line in lines)
 
         if abs(total_debit - total_credit) > Decimal("0.01"):
-            raise ValueError(
-                f"Verification must balance: Debit={total_debit}, Credit={total_credit}"
-            )
+            raise ValueError(f"Verification must balance: Debit={total_debit}, Credit={total_credit}")
 
         return lines
 
 
 class VerificationUpdate(BaseModel):
     """Schema for updating a verification"""
-    description: Optional[str] = None
-    transaction_date: Optional[date] = None
+
+    description: str | None = None
+    transaction_date: date | None = None
 
 
 class VerificationResponse(VerificationBase):
     """Schema for verification response"""
+
     id: int
     company_id: int
     verification_number: int
@@ -81,19 +84,18 @@ class VerificationResponse(VerificationBase):
     locked: bool
     created_at: datetime
     updated_at: datetime
-    transaction_lines: List[TransactionLineResponse]
+    transaction_lines: list[TransactionLineResponse]
     is_balanced: bool
     total_amount: Decimal
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            Decimal: float
-        }
+        json_encoders = {Decimal: float}
 
 
 class VerificationListItem(BaseModel):
     """Simplified verification for list views"""
+
     id: int
     verification_number: int
     series: str
@@ -104,6 +106,4 @@ class VerificationListItem(BaseModel):
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            Decimal: float
-        }
+        json_encoders = {Decimal: float}

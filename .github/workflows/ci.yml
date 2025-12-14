@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t reknir-backend ./backend
+
+      - name: Lint with ruff
+        run: docker run --rm reknir-backend ruff check .
+
+      - name: Check formatting with ruff
+        run: docker run --rm reknir-backend ruff format --check .
+
+      - name: Run tests
+        run: docker run --rm -e SECRET_KEY=test-secret reknir-backend pytest -v --tb=short
+
+  frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: docker build -t reknir-frontend ./frontend
+
+      - name: Lint
+        run: docker run --rm reknir-frontend npm run lint
+
+      - name: Type check
+        run: docker run --rm reknir-frontend npx tsc --noEmit
+
+      - name: Build
+        run: docker run --rm reknir-frontend npm run build
+
+  docker-compose:
+    name: Docker Compose Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build all services
+        run: docker compose build

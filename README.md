@@ -2,14 +2,18 @@
 
 Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kontoplan support.
 
-## Features (MVP)
+## Features
 
-- ✅ Swedish BAS 2024 kontoplan
-- ✅ Double-entry bookkeeping (verifikationer)
-- ✅ Transaction management with audit trail
-- ✅ Balance sheet and income statement
-- ✅ SIE4 export for årsredovisning
-- ✅ PostgreSQL with automatic backups
+- Swedish BAS 2024 kontoplan
+- Double-entry bookkeeping (verifikationer)
+- Customer invoices with PDF generation
+- Supplier invoices with attachment support
+- Employee expense management with receipt uploads
+- VAT reporting (momsrapport)
+- Balance sheet and income statement
+- SIE4 import/export for integration with other accounting software
+- Multi-user authentication with role-based access
+- PostgreSQL with automatic backups
 
 ## Tech Stack
 
@@ -18,13 +22,7 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 - **Database**: PostgreSQL 16
 - **Deployment**: Docker Compose
 
-## Quick Start
-
-### Prerequisites
-- Docker and Docker Compose
-- (For development: Node.js 18+, Python 3.11+)
-
-### Development Setup (Local)
+## Quick Start (Docker)
 
 ```bash
 # Clone the repository
@@ -32,61 +30,56 @@ git clone <repo-url>
 cd reknir
 
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # Initialize database with BAS kontoplan
-docker-compose exec backend python -m app.cli seed-bas
+docker compose exec backend python -m app.cli seed-bas
 
 # Access the application
 # Frontend: http://localhost:5173
 # API docs: http://localhost:8000/docs
 ```
 
-### Production Deployment
+## Documentation
 
-For production deployment with Cloudflare Tunnel, HTTPS, and automatic backups:
+| Document | Description |
+|----------|-------------|
+| [Quick Start](docs/QUICKSTART.md) | Setup guide for development and production |
+| [Production Deployment](docs/PRODUCTION.md) | Detailed production deployment with HTTPS |
+| [Architecture](docs/ARCHITECTURE.md) | System design and codebase overview |
+| [Authentication Setup](docs/AUTH_SETUP.md) | Configure user authentication |
+| [Contributing](CONTRIBUTING.md) | CI pipeline, code style, and contribution guidelines |
 
-📖 **See [PRODUCTION.md](PRODUCTION.md) for complete production deployment guide**
+## Development Setup
 
-Quick production start:
-```bash
-# Run interactive setup script
-./setup-production.sh
+For local development without Docker:
 
-# Deploy with production configuration
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-```
+### Backend
 
-### Development Setup
-
-#### Backend
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Set up database
+# Start PostgreSQL (via Docker or locally)
+# Set database URL
 export DATABASE_URL="postgresql://reknir:reknir@localhost:5432/reknir"
+
+# Run migrations
 alembic upgrade head
 
-# Run development server
+# Start development server
 uvicorn app.main:app --reload --port 8000
 ```
 
-#### Frontend
+### Frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-## Database Backups
-
-Automatic daily backups are configured in Docker Compose:
-- Location: `./backups/`
-- Retention: 7 years (Swedish law requirement)
-- Manual backup: `docker-compose exec postgres pg_dump -U reknir reknir > backup.sql`
 
 ## Project Structure
 
@@ -108,19 +101,10 @@ reknir/
 │   │   └── main.py       # FastAPI app
 │   ├── alembic/          # Database migrations
 │   └── requirements.txt
-├── database/
-│   └── seeds/            # Initial data (BAS kontoplan)
-├── docker-compose.yml
-└── README.md
+├── docs/                 # Documentation
+├── docker-compose.yml    # Development containers
+└── docker-compose.prod.yml  # Production containers
 ```
-
-## Configuration
-
-Environment variables (see `.env.example`):
-
-- `DATABASE_URL`: PostgreSQL connection string
-- `SECRET_KEY`: For future auth (currently not used)
-- `CORS_ORIGINS`: Allowed frontend origins
 
 ## Swedish Accounting Compliance
 
@@ -135,4 +119,4 @@ For issues and questions, please open a GitHub issue.
 
 ## License
 
-MIT License - see LICENSE file
+BSD 3-Clause License - see LICENSE file

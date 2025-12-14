@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { reportApi } from '@/services/api'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -22,30 +22,7 @@ export default function Reports() {
   const [showVerificationsModal, setShowVerificationsModal] = useState(false)
   const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
-  useEffect(() => {
-    loadData()
-  }, [selectedCompany])
-
-  useEffect(() => {
-    if (selectedCompany) {
-      loadFiscalYears(selectedCompany.id)
-      loadVatPeriods()
-    }
-  }, [selectedCompany, vatYear])
-
-  useEffect(() => {
-    if (selectedCompany && selectedPeriod) {
-      loadVatReport()
-    }
-  }, [selectedCompany, selectedPeriod, excludeVatSettlements])
-
-  useEffect(() => {
-    if (selectedCompany && selectedFiscalYear && activeTab === 'general-ledger') {
-      loadGeneralLedger()
-    }
-  }, [selectedCompany, selectedFiscalYear, activeTab])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!selectedCompany) {
       setLoading(false)
       return
@@ -67,9 +44,9 @@ export default function Reports() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompany])
 
-  const loadVatPeriods = async () => {
+  const loadVatPeriods = useCallback(async () => {
     if (!selectedCompany) return
 
     try {
@@ -83,9 +60,9 @@ export default function Reports() {
     } catch (error) {
       console.error('Failed to load VAT periods:', error)
     }
-  }
+  }, [selectedCompany, vatYear])
 
-  const loadVatReport = async () => {
+  const loadVatReport = useCallback(async () => {
     if (!selectedCompany || !selectedPeriod) return
 
     try {
@@ -102,9 +79,9 @@ export default function Reports() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompany, selectedPeriod, excludeVatSettlements])
 
-  const loadGeneralLedger = async () => {
+  const loadGeneralLedger = useCallback(async () => {
     if (!selectedCompany || !selectedFiscalYear) return
 
     try {
@@ -116,7 +93,30 @@ export default function Reports() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCompany, selectedFiscalYear])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (selectedCompany) {
+      loadFiscalYears(selectedCompany.id)
+      loadVatPeriods()
+    }
+  }, [selectedCompany, loadFiscalYears, loadVatPeriods])
+
+  useEffect(() => {
+    if (selectedCompany && selectedPeriod) {
+      loadVatReport()
+    }
+  }, [selectedCompany, selectedPeriod, loadVatReport])
+
+  useEffect(() => {
+    if (selectedCompany && selectedFiscalYear && activeTab === 'general-ledger') {
+      loadGeneralLedger()
+    }
+  }, [selectedCompany, selectedFiscalYear, activeTab, loadGeneralLedger])
 
   if (!selectedCompany) {
     return (
@@ -789,9 +789,9 @@ export default function Reports() {
               <div className="mt-4">
                 <button
                   onClick={() => {
-                    if (!company || !selectedPeriod) return
+                    if (!selectedCompany || !selectedPeriod) return
                     const url = new URL('/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
-                    url.searchParams.append('company_id', company.id.toString())
+                    url.searchParams.append('company_id', selectedCompany.id.toString())
                     url.searchParams.append('start_date', selectedPeriod.start_date)
                     url.searchParams.append('end_date', selectedPeriod.end_date)
                     url.searchParams.append('exclude_vat_settlements', excludeVatSettlements.toString())

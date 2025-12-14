@@ -120,9 +120,9 @@ export default function Invoices() {
       })
       await loadInvoices()
       alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to mark invoice as paid:', error)
-      alert(`Kunde inte markera som betald: ${error.response?.data?.detail || error.message}`)
+      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -148,9 +148,9 @@ export default function Invoices() {
       })
       await loadInvoices()
       alert('Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to mark supplier invoice as paid:', error)
-      alert(`Kunde inte markera som betald: ${error.response?.data?.detail || error.message}`)
+      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -471,7 +471,7 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
     }
   }
 
-  const updateLine = (index: number, field: keyof InvoiceLine, value: any) => {
+  const updateLine = (index: number, field: keyof InvoiceLine, value: string | number | undefined) => {
     const newLines = [...lines]
     newLines[index] = { ...newLines[index], [field]: value }
     setLines(newLines)
@@ -531,7 +531,7 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
         })),
       })
       onSuccess()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create invoice:', err)
       setError(getErrorMessage(err, 'Kunde inte skapa faktura'))
     } finally {
@@ -835,7 +835,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
     }
   }
 
-  const updateLine = (index: number, field: keyof InvoiceLine, value: any) => {
+  const updateLine = (index: number, field: keyof InvoiceLine, value: string | number | undefined) => {
     const newLines = [...lines]
     newLines[index] = { ...newLines[index], [field]: value }
     setLines(newLines)
@@ -892,13 +892,14 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
         supplier_invoice_lines: lines.map(line => ({
           description: line.description,
           quantity: line.quantity,
+          unit: line.unit,
           unit_price: line.unit_price,
           vat_rate: line.vat_rate,
           account_id: line.account_id,
         })),
       })
       onSuccess()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to create supplier invoice:', err)
       setError(getErrorMessage(err, 'Kunde inte skapa leverantörsfaktura'))
     } finally {

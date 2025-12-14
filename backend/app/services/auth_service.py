@@ -1,16 +1,16 @@
 """
 Authentication service for password hashing and JWT token management
 """
+
 from datetime import datetime, timedelta
-from typing import Optional
-from jose import jwt, JWTError
+
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.user import User
 from app.schemas.user import TokenData
-
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -43,7 +43,7 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """
     Create a JWT access token
 
@@ -67,7 +67,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[TokenData]:
+def decode_access_token(token: str) -> TokenData | None:
     """
     Decode and validate a JWT access token
 
@@ -85,7 +85,7 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         is_admin: bool = payload.get("is_admin", False)
 
         if sub is None or email is None:
-            print(f"DEBUG: sub or email is None, returning None")
+            print("DEBUG: sub or email is None, returning None")
             return None
 
         # Convert sub (string) to user_id (int)
@@ -103,7 +103,7 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         return None
 
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """
     Authenticate a user by email and password
 
@@ -142,13 +142,7 @@ def create_user(db: Session, email: str, password: str, full_name: str, is_admin
     """
     hashed_password = get_password_hash(password)
 
-    user = User(
-        email=email,
-        hashed_password=hashed_password,
-        full_name=full_name,
-        is_admin=is_admin,
-        is_active=True
-    )
+    user = User(email=email, hashed_password=hashed_password, full_name=full_name, is_admin=is_admin, is_active=True)
 
     db.add(user)
     db.commit()

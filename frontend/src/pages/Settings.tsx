@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
-import type { Account, DefaultAccount, VATReportingPeriod, FiscalYear, Company } from '@/types'
+import type { Account, DefaultAccount, FiscalYear } from '@/types'
+import { VATReportingPeriod, AccountingBasis } from '@/types'
 import { Plus, Trash2, Calendar, Building2, Edit2, Save, X } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 
@@ -50,8 +51,8 @@ export default function SettingsPage() {
     email: '',
     fiscal_year_start: new Date().getFullYear() + '-01-01',
     fiscal_year_end: new Date().getFullYear() + '-12-31',
-    accounting_basis: 'accrual' as 'accrual' | 'cash',
-    vat_reporting_period: 'quarterly' as VATReportingPeriod,
+    accounting_basis: AccountingBasis.ACCRUAL as AccountingBasis,
+    vat_reporting_period: VATReportingPeriod.QUARTERLY as VATReportingPeriod,
   })
 
   const getNextFiscalYearDefaults = () => {
@@ -135,8 +136,8 @@ export default function SettingsPage() {
       email: '',
       fiscal_year_start: new Date().getFullYear() + '-01-01',
       fiscal_year_end: new Date().getFullYear() + '-12-31',
-      accounting_basis: 'accrual',
-      vat_reporting_period: 'quarterly',
+      accounting_basis: AccountingBasis.ACCRUAL,
+      vat_reporting_period: VATReportingPeriod.QUARTERLY,
     })
   }
 
@@ -199,8 +200,8 @@ export default function SettingsPage() {
         email: '',
         fiscal_year_start: new Date().getFullYear() + '-01-01',
         fiscal_year_end: new Date().getFullYear() + '-12-31',
-        accounting_basis: 'accrual',
-        vat_reporting_period: 'quarterly',
+        accounting_basis: AccountingBasis.ACCRUAL,
+        vat_reporting_period: VATReportingPeriod.QUARTERLY,
       })
       await loadCompanies()
       setSelectedCompany(response.data)
@@ -516,14 +517,14 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Bokföringsmetod</label>
                   <p className="text-gray-900">
-                    {selectedCompany.accounting_basis === 'accrual' ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
+                    {selectedCompany.accounting_basis === AccountingBasis.ACCRUAL ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
                   </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Momsredovisning</label>
                   <p className="text-gray-900">
-                    {selectedCompany.vat_reporting_period === 'monthly' ? 'Månadsvis' :
-                     selectedCompany.vat_reporting_period === 'quarterly' ? 'Kvartalsvis' : 'Årlig'}
+                    {selectedCompany.vat_reporting_period === VATReportingPeriod.MONTHLY ? 'Månadsvis' :
+                     selectedCompany.vat_reporting_period === VATReportingPeriod.QUARTERLY ? 'Kvartalsvis' : 'Årlig'}
                   </p>
                 </div>
               </div>
@@ -661,11 +662,11 @@ export default function SettingsPage() {
                   </label>
                   <select
                     value={companyForm.accounting_basis}
-                    onChange={(e) => setCompanyForm({ ...companyForm, accounting_basis: e.target.value as 'accrual' | 'cash' })}
+                    onChange={(e) => setCompanyForm({ ...companyForm, accounting_basis: e.target.value as AccountingBasis })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
-                    <option value="accrual">Bokföringsmässiga grunder</option>
-                    <option value="cash">Kontantmetoden</option>
+                    <option value={AccountingBasis.ACCRUAL}>Bokföringsmässiga grunder</option>
+                    <option value={AccountingBasis.CASH}>Kontantmetoden</option>
                   </select>
                 </div>
                 <div>
@@ -750,15 +751,15 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 gap-3">
             {/* Monthly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === 'monthly'
+              selectedCompany?.vat_reporting_period === VATReportingPeriod.MONTHLY
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
               <input
                 type="radio"
                 name="vat_period"
-                value="monthly"
-                checked={selectedCompany?.vat_reporting_period === 'monthly'}
+                value={VATReportingPeriod.MONTHLY}
+                checked={selectedCompany?.vat_reporting_period === VATReportingPeriod.MONTHLY}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -773,15 +774,15 @@ export default function SettingsPage() {
 
             {/* Quarterly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === 'quarterly'
+              selectedCompany?.vat_reporting_period === VATReportingPeriod.QUARTERLY
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
               <input
                 type="radio"
                 name="vat_period"
-                value="quarterly"
-                checked={selectedCompany?.vat_reporting_period === 'quarterly'}
+                value={VATReportingPeriod.QUARTERLY}
+                checked={selectedCompany?.vat_reporting_period === VATReportingPeriod.QUARTERLY}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -796,15 +797,15 @@ export default function SettingsPage() {
 
             {/* Yearly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === 'yearly'
+              selectedCompany?.vat_reporting_period === VATReportingPeriod.YEARLY
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
               <input
                 type="radio"
                 name="vat_period"
-                value="yearly"
-                checked={selectedCompany?.vat_reporting_period === 'yearly'}
+                value={VATReportingPeriod.YEARLY}
+                checked={selectedCompany?.vat_reporting_period === VATReportingPeriod.YEARLY}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"

@@ -1,10 +1,11 @@
-from pydantic import BaseModel, Field
 from datetime import date
-from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class FiscalYearBase(BaseModel):
     """Base fiscal year schema"""
+
     year: int = Field(..., ge=1900, le=2100, description="Year (e.g., 2024)")
     label: str = Field(..., min_length=1, max_length=100, description="Display label (e.g., '2024' or '2024/2025')")
     start_date: date
@@ -14,6 +15,7 @@ class FiscalYearBase(BaseModel):
 
 class FiscalYearCreate(BaseModel):
     """Schema for creating a fiscal year"""
+
     company_id: int
     year: int = Field(..., ge=1900, le=2100)
     label: str = Field(..., min_length=1, max_length=100)
@@ -24,14 +26,16 @@ class FiscalYearCreate(BaseModel):
 
 class FiscalYearUpdate(BaseModel):
     """Schema for updating a fiscal year"""
-    label: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    is_closed: Optional[bool] = None
+
+    label: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    is_closed: bool | None = None
 
 
 class FiscalYearResponse(FiscalYearBase):
     """Schema for fiscal year response"""
+
     id: int
     company_id: int
     is_current: bool = Field(default=False, description="Whether this fiscal year is currently active")

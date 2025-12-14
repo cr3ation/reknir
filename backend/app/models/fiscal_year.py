@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Date, Boolean, ForeignKey
+from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+
 from app.database import Base
 
 
@@ -8,6 +9,7 @@ class FiscalYear(Base):
     Fiscal Year (Räkenskapsår)
     Represents a fiscal/accounting year for a company
     """
+
     __tablename__ = "fiscal_years"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -35,5 +37,6 @@ class FiscalYear(Base):
     def is_current(self) -> bool:
         """Check if this fiscal year is currently active"""
         from datetime import date
+
         today = date.today()
         return self.start_date <= today <= self.end_date

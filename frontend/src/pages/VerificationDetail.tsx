@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-react'
 import { verificationApi, accountApi } from '@/services/api'
@@ -13,12 +13,7 @@ export default function VerificationDetail() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadVerification()
-    loadAccounts()
-  }, [verificationId, selectedCompany])
-
-  const loadVerification = async () => {
+  const loadVerification = useCallback(async () => {
     try {
       const response = await verificationApi.get(parseInt(verificationId!))
       setVerification(response.data)
@@ -28,9 +23,9 @@ export default function VerificationDetail() {
       alert('Kunde inte ladda verifikationen')
       navigate('/verifications')
     }
-  }
+  }, [verificationId, navigate])
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     if (!selectedCompany) return
 
     try {
@@ -39,7 +34,12 @@ export default function VerificationDetail() {
     } catch (error) {
       console.error('Failed to load accounts:', error)
     }
-  }
+  }, [selectedCompany])
+
+  useEffect(() => {
+    loadVerification()
+    loadAccounts()
+  }, [loadVerification, loadAccounts])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {

@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Date, Boolean, ForeignKey, Numeric, DateTime, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.database import Base
 
 
@@ -9,11 +10,14 @@ class Verification(Base):
     Verification/Transaction (Verifikation)
     A verification contains one or more transaction lines that must balance
     """
+
     __tablename__ = "verifications"
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    fiscal_year_id = Column(Integer, ForeignKey("fiscal_years.id"), nullable=True)  # Nullable for backwards compatibility
+    fiscal_year_id = Column(
+        Integer, ForeignKey("fiscal_years.id"), nullable=True
+    )  # Nullable for backwards compatibility
 
     # Verification identity
     verification_number = Column(Integer, nullable=False, index=True)  # Löpnummer
@@ -36,11 +40,7 @@ class Verification(Base):
     # Relationships
     company = relationship("Company", back_populates="verifications")
     fiscal_year = relationship("FiscalYear", back_populates="verifications")
-    transaction_lines = relationship(
-        "TransactionLine",
-        back_populates="verification",
-        cascade="all, delete-orphan"
-    )
+    transaction_lines = relationship("TransactionLine", back_populates="verification", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Verification {self.series}{self.verification_number} - {self.description[:30]}>"
@@ -63,6 +63,7 @@ class TransactionLine(Base):
     Individual transaction line (Transaktionsrad)
     Part of a verification, represents debit or credit to an account
     """
+
     __tablename__ = "transaction_lines"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -70,7 +71,7 @@ class TransactionLine(Base):
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
 
     # Amounts (always use debit/credit, never negative numbers)
-    debit = Column(Numeric(15, 2), default=0, nullable=False)   # Debet
+    debit = Column(Numeric(15, 2), default=0, nullable=False)  # Debet
     credit = Column(Numeric(15, 2), default=0, nullable=False)  # Kredit
 
     # Optional details

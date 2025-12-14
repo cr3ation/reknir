@@ -1,7 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import settings
-from app.routers import accounts, verifications, companies, reports, customers, suppliers, invoices, supplier_invoices, sie4, default_accounts, fiscal_years, expenses, auth, invitations, dashboard
+from app.routers import (
+    accounts,
+    auth,
+    companies,
+    customers,
+    dashboard,
+    default_accounts,
+    expenses,
+    fiscal_years,
+    invitations,
+    invoices,
+    reports,
+    sie4,
+    supplier_invoices,
+    suppliers,
+    verifications,
+)
 
 # Create FastAPI application
 app = FastAPI(
@@ -62,9 +79,9 @@ async def root():
             "Automatic verification creation",
             "SIE4 import/export",
             "Configurable default accounts",
-            "Reports"
+            "Reports",
         ],
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
