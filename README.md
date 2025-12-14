@@ -48,6 +48,7 @@ docker compose exec backend python -m app.cli seed-bas
 | [Production Deployment](docs/PRODUCTION.md) | Detailed production deployment with HTTPS |
 | [Architecture](docs/ARCHITECTURE.md) | System design and codebase overview |
 | [Authentication Setup](docs/AUTH_SETUP.md) | Configure user authentication |
+| [Contributing](CONTRIBUTING.md) | CI pipeline, code style, and contribution guidelines |
 
 ## Development Setup
 
