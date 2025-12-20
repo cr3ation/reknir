@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { fiscalYearApi } from '@/services/api'
 import type { FiscalYear } from '@/types'
 import { useCompany } from './CompanyContext'
@@ -19,7 +19,7 @@ export function FiscalYearProvider({ children }: { children: ReactNode }) {
   const [selectedFiscalYear, setSelectedFiscalYear] = useState<FiscalYear | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const loadFiscalYears = async (companyId: number) => {
+  const loadFiscalYears = useCallback(async (companyId: number) => {
     try {
       setLoading(true)
       const response = await fiscalYearApi.list(companyId)
@@ -29,7 +29,9 @@ export function FiscalYearProvider({ children }: { children: ReactNode }) {
       // Auto-select current fiscal year or most recent one
       if (years.length > 0) {
         const current = years.find((fy) => fy.is_current)
-        setSelectedFiscalYear(current || years[0])
+        const newFy = current || years[0]
+        // Only update if ID changed to avoid infinite loops
+        setSelectedFiscalYear((prev) => (prev?.id === newFy.id ? prev : newFy))
       } else {
         setSelectedFiscalYear(null)
       }
@@ -38,7 +40,7 @@ export function FiscalYearProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   // Auto-load fiscal years when selected company changes
   useEffect(() => {
