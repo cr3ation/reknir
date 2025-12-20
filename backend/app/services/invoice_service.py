@@ -226,9 +226,7 @@ def create_invoice_payment_verification(
                     db, invoice.company_id, fiscal_year.id, line.vat_rate
                 )
                 if not account:
-                    raise ValueError(
-                        f"Default revenue account for VAT rate {line.vat_rate}% not configured."
-                    )
+                    raise ValueError(f"Default revenue account for VAT rate {line.vat_rate}% not configured.")
 
             credit_line = TransactionLine(
                 verification_id=verification.id,
