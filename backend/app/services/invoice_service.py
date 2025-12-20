@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.models.account import Account
+from app.models.company import AccountingBasis
 from app.models.default_account import DefaultAccountType
 from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, SupplierInvoice
@@ -143,13 +144,24 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
 
 
 def create_invoice_payment_verification(
-    db: Session, invoice: Invoice, paid_date: date, paid_amount: Decimal, bank_account_id: int | None = None
+    db: Session,
+    invoice: Invoice,
+    paid_date: date,
+    paid_amount: Decimal,
+    bank_account_id: int | None = None,
+    accounting_basis: AccountingBasis = AccountingBasis.ACCRUAL,
 ) -> Verification:
     """
-    Create automatic verification when invoice is paid
+    Create automatic verification when invoice is paid.
 
-    Debit:  1930 Bank account (or specified)
-    Credit: 1510 Customer receivables
+    Accrual method (ACCRUAL):
+        Debit:  1930 Bank account
+        Credit: 1510 Customer receivables
+
+    Cash method (CASH):
+        Debit:  1930 Bank account
+        Credit: 3xxx Revenue accounts (proportional per line)
+        Credit: 26xx VAT outgoing accounts (proportional by VAT rate)
     """
 
     # Get fiscal year for payment date
@@ -173,7 +185,6 @@ def create_invoice_payment_verification(
 
     # Debit: Bank account
     if not bank_account_id:
-        # Default to 1930 (Företagskonto)
         bank_account = (
             db.query(Account)
             .filter(
@@ -199,23 +210,77 @@ def create_invoice_payment_verification(
     db.add(debit_line)
     bank_account.current_balance += paid_amount
 
-    # Credit: Customer receivables
-    receivables_account = default_account_service.get_default_account(
-        db, invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_RECEIVABLE
-    )
+    if accounting_basis == AccountingBasis.CASH:
+        # Cash method: Credit revenue and VAT accounts (proportionally for partial payments)
+        payment_ratio = paid_amount / invoice.total_amount
+        vat_by_rate: dict[float, Decimal] = {}
 
-    if not receivables_account:
-        raise ValueError("Default accounts receivable account not configured.")
+        for line in invoice.invoice_lines:
+            proportional_net = line.net_amount * payment_ratio
 
-    credit_line = TransactionLine(
-        verification_id=verification.id,
-        account_id=receivables_account.id,
-        debit=Decimal("0"),
-        credit=paid_amount,
-        description=f"Betalning faktura {invoice.invoice_series}{invoice.invoice_number}",
-    )
-    db.add(credit_line)
-    receivables_account.current_balance -= paid_amount
+            # Revenue account - use line's account or default based on VAT rate
+            if line.account_id:
+                account = db.query(Account).filter(Account.id == line.account_id).first()
+            else:
+                account = default_account_service.get_revenue_account_for_vat_rate(
+                    db, invoice.company_id, fiscal_year.id, line.vat_rate
+                )
+                if not account:
+                    raise ValueError(
+                        f"Default revenue account for VAT rate {line.vat_rate}% not configured."
+                    )
+
+            credit_line = TransactionLine(
+                verification_id=verification.id,
+                account_id=account.id,
+                debit=Decimal("0"),
+                credit=proportional_net,
+                description=line.description,
+            )
+            db.add(credit_line)
+            account.current_balance -= proportional_net
+
+            # Accumulate VAT by rate
+            vat_rate = float(line.vat_rate)
+            if vat_rate > 0:
+                proportional_vat = line.vat_amount * payment_ratio
+                if vat_rate not in vat_by_rate:
+                    vat_by_rate[vat_rate] = Decimal("0")
+                vat_by_rate[vat_rate] += proportional_vat
+
+        # Credit: VAT outgoing accounts
+        for vat_rate, vat_amount in vat_by_rate.items():
+            vat_account = default_account_service.get_vat_outgoing_account_for_rate(
+                db, invoice.company_id, fiscal_year.id, Decimal(str(vat_rate))
+            )
+            if vat_account:
+                vat_line = TransactionLine(
+                    verification_id=verification.id,
+                    account_id=vat_account.id,
+                    debit=Decimal("0"),
+                    credit=vat_amount,
+                    description=f"Utgående moms {int(vat_rate)}%",
+                )
+                db.add(vat_line)
+                vat_account.current_balance -= vat_amount
+    else:
+        # Accrual method: Credit customer receivables
+        receivables_account = default_account_service.get_default_account(
+            db, invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_RECEIVABLE
+        )
+
+        if not receivables_account:
+            raise ValueError("Default accounts receivable account not configured.")
+
+        credit_line = TransactionLine(
+            verification_id=verification.id,
+            account_id=receivables_account.id,
+            debit=Decimal("0"),
+            credit=paid_amount,
+            description=f"Betalning faktura {invoice.invoice_series}{invoice.invoice_number}",
+        )
+        db.add(credit_line)
+        receivables_account.current_balance -= paid_amount
 
     db.commit()
     db.refresh(verification)
@@ -333,12 +398,19 @@ def create_supplier_invoice_payment_verification(
     paid_date: date,
     paid_amount: Decimal,
     bank_account_id: int | None = None,
+    accounting_basis: AccountingBasis = AccountingBasis.ACCRUAL,
 ) -> Verification:
     """
-    Create automatic verification when supplier invoice is paid
+    Create automatic verification when supplier invoice is paid.
 
-    Debit:  2440 Accounts payable
-    Credit: 1930 Bank account
+    Accrual method (ACCRUAL):
+        Debit:  2440 Accounts payable
+        Credit: 1930 Bank account
+
+    Cash method (CASH):
+        Debit:  6xxx Expense accounts (proportional per line)
+        Debit:  2640 Input VAT (proportional)
+        Credit: 1930 Bank account
     """
 
     # Get fiscal year for payment date
@@ -360,25 +432,72 @@ def create_supplier_invoice_payment_verification(
     db.add(verification)
     db.flush()
 
-    # Debit: Accounts payable
-    payables_account = default_account_service.get_default_account(
-        db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_PAYABLE
-    )
+    if accounting_basis == AccountingBasis.CASH:
+        # Cash method: Debit expense and VAT accounts (proportionally for partial payments)
+        payment_ratio = paid_amount / supplier_invoice.total_amount
+        total_proportional_vat = Decimal("0")
 
-    if not payables_account:
-        raise ValueError("Default accounts payable account not configured.")
+        for line in supplier_invoice.supplier_invoice_lines:
+            proportional_net = line.net_amount * payment_ratio
+            proportional_vat = line.vat_amount * payment_ratio
+            total_proportional_vat += proportional_vat
 
-    debit_line = TransactionLine(
-        verification_id=verification.id,
-        account_id=payables_account.id,
-        debit=paid_amount,
-        credit=Decimal("0"),
-        description=f"Betalning faktura {supplier_invoice.supplier_invoice_number}",
-    )
-    db.add(debit_line)
-    payables_account.current_balance += paid_amount
+            # Expense account - use line's account or default
+            if line.account_id:
+                account = db.query(Account).filter(Account.id == line.account_id).first()
+            else:
+                account = default_account_service.get_default_account(
+                    db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.EXPENSE_DEFAULT
+                )
+                if not account:
+                    raise ValueError("Default expense account not configured.")
 
-    # Credit: Bank account
+            debit_line = TransactionLine(
+                verification_id=verification.id,
+                account_id=account.id,
+                debit=proportional_net,
+                credit=Decimal("0"),
+                description=line.description,
+            )
+            db.add(debit_line)
+            account.current_balance += proportional_net
+
+        # Debit: Input VAT (proportional)
+        if total_proportional_vat > 0:
+            # TODO: Track VAT by rate in supplier invoices too
+            vat_account = default_account_service.get_default_account(
+                db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.VAT_INCOMING_25
+            )
+            if vat_account:
+                vat_line = TransactionLine(
+                    verification_id=verification.id,
+                    account_id=vat_account.id,
+                    debit=total_proportional_vat,
+                    credit=Decimal("0"),
+                    description="Ingående moms",
+                )
+                db.add(vat_line)
+                vat_account.current_balance += total_proportional_vat
+    else:
+        # Accrual method: Debit accounts payable
+        payables_account = default_account_service.get_default_account(
+            db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_PAYABLE
+        )
+
+        if not payables_account:
+            raise ValueError("Default accounts payable account not configured.")
+
+        debit_line = TransactionLine(
+            verification_id=verification.id,
+            account_id=payables_account.id,
+            debit=paid_amount,
+            credit=Decimal("0"),
+            description=f"Betalning faktura {supplier_invoice.supplier_invoice_number}",
+        )
+        db.add(debit_line)
+        payables_account.current_balance += paid_amount
+
+    # Credit: Bank account (same for both methods)
     if not bank_account_id:
         bank_account = (
             db.query(Account)

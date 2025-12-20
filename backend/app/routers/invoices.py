@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
-from app.models.company import Company
+from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice, InvoiceLine, InvoiceStatus
 from app.models.user import User
@@ -182,12 +182,14 @@ async def send_invoice(
     invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
-    Mark invoice as sent and create automatic verification
+    Mark invoice as sent and create automatic verification (accrual method only).
 
-    Creates accounting entry:
-    Debit:  1510 Kundfordringar
-    Credit: 3xxx Revenue accounts
-    Credit: 26xx VAT accounts
+    Accrual method creates accounting entry:
+        Debit:  1510 Kundfordringar
+        Credit: 3xxx Revenue accounts
+        Credit: 26xx VAT accounts
+
+    Cash method: No verification is created - revenue is recognized on payment.
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
@@ -199,13 +201,17 @@ async def send_invoice(
     if invoice.status != InvoiceStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not in draft status")
 
-    # Create verification
-    verification = create_invoice_verification(db, invoice)
+    # Get company accounting basis
+    company = db.query(Company).filter(Company.id == invoice.company_id).first()
 
-    # Update invoice
+    # Create verification only for accrual method
+    if company.accounting_basis == AccountingBasis.ACCRUAL:
+        verification = create_invoice_verification(db, invoice)
+        invoice.invoice_verification_id = verification.id
+
+    # Update invoice status
     invoice.status = InvoiceStatus.SENT
     invoice.sent_at = datetime.now()
-    invoice.invoice_verification_id = verification.id
 
     db.commit()
     db.refresh(invoice)
@@ -221,11 +227,16 @@ async def mark_invoice_paid(
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Mark invoice as paid and create payment verification
+    Mark invoice as paid and create payment verification.
 
-    Creates accounting entry:
-    Debit:  1930 Bank account
-    Credit: 1510 Customer receivables
+    Accrual method:
+        Debit:  1930 Bank account
+        Credit: 1510 Customer receivables
+
+    Cash method:
+        Debit:  1930 Bank account
+        Credit: 3xxx Revenue accounts (proportional)
+        Credit: 26xx VAT accounts (proportional)
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
@@ -237,17 +248,25 @@ async def mark_invoice_paid(
     if invoice.status == InvoiceStatus.PAID:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is already paid")
 
-    # If invoice was draft, send it first
+    # Get company accounting basis
+    company = db.query(Company).filter(Company.id == invoice.company_id).first()
+
+    # Handle draft invoices based on accounting method
     if invoice.status == InvoiceStatus.DRAFT:
-        verification = create_invoice_verification(db, invoice)
-        invoice.invoice_verification_id = verification.id
+        if company.accounting_basis == AccountingBasis.ACCRUAL:
+            # Accrual: Create invoice verification first
+            verification = create_invoice_verification(db, invoice)
+            invoice.invoice_verification_id = verification.id
+        # Cash method: Just update status, no verification needed
+        invoice.status = InvoiceStatus.SENT
+        invoice.sent_at = datetime.now()
 
     # Determine payment amount
     paid_amount = payment.paid_amount if payment.paid_amount else (invoice.total_amount - invoice.paid_amount)
 
-    # Create payment verification
+    # Create payment verification with appropriate accounting method
     payment_verification = create_invoice_payment_verification(
-        db, invoice, payment.paid_date, paid_amount, payment.bank_account_id
+        db, invoice, payment.paid_date, paid_amount, payment.bank_account_id, company.accounting_basis
     )
 
     # Update invoice
