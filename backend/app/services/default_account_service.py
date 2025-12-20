@@ -8,7 +8,7 @@ from app.models.account import Account
 from app.models.default_account import DefaultAccount, DefaultAccountType
 
 
-def get_default_account(db: Session, company_id: int, account_type: str) -> Account | None:
+def get_default_account(db: Session, company_id: int, fiscal_year_id: int, account_type: str) -> Account | None:
     """
     Get the default account for a given account type.
     Returns None if no default is configured.
@@ -22,7 +22,17 @@ def get_default_account(db: Session, company_id: int, account_type: str) -> Acco
     if not default_mapping:
         return None
 
-    return db.query(Account).filter(Account.id == default_mapping.account_id).first()
+    # Get the stored account to find its account_number
+    stored_account = db.query(Account).filter(Account.id == default_mapping.account_id).first()
+    if not stored_account:
+        return None
+
+    # Find the account with the same number in the target fiscal year
+    return db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
+        Account.account_number == stored_account.account_number
+    ).first()
 
 
 def set_default_account(db: Session, company_id: int, account_type: str, account_id: int) -> DefaultAccount:
@@ -96,7 +106,7 @@ def initialize_default_accounts_from_existing(db: Session, company_id: int, fisc
                 break
 
 
-def get_revenue_account_for_vat_rate(db: Session, company_id: int, vat_rate: Decimal) -> Account | None:
+def get_revenue_account_for_vat_rate(db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal) -> Account | None:
     """
     Get the revenue account for a given VAT rate.
     Returns None if no default is configured.
@@ -104,16 +114,16 @@ def get_revenue_account_for_vat_rate(db: Session, company_id: int, vat_rate: Dec
     vat_rate_float = float(vat_rate)
 
     if vat_rate_float == 25.0:
-        return get_default_account(db, company_id, DefaultAccountType.REVENUE_25)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.REVENUE_25)
     elif vat_rate_float == 12.0:
-        return get_default_account(db, company_id, DefaultAccountType.REVENUE_12)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.REVENUE_12)
     elif vat_rate_float == 6.0:
-        return get_default_account(db, company_id, DefaultAccountType.REVENUE_6)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.REVENUE_6)
     else:
-        return get_default_account(db, company_id, DefaultAccountType.REVENUE_0)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.REVENUE_0)
 
 
-def get_vat_outgoing_account_for_rate(db: Session, company_id: int, vat_rate: Decimal) -> Account | None:
+def get_vat_outgoing_account_for_rate(db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal) -> Account | None:
     """
     Get the outgoing VAT account for a given VAT rate.
     Returns None if no default is configured.
@@ -121,16 +131,16 @@ def get_vat_outgoing_account_for_rate(db: Session, company_id: int, vat_rate: De
     vat_rate_float = float(vat_rate)
 
     if vat_rate_float == 25.0:
-        return get_default_account(db, company_id, DefaultAccountType.VAT_OUTGOING_25)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.VAT_OUTGOING_25)
     elif vat_rate_float == 12.0:
-        return get_default_account(db, company_id, DefaultAccountType.VAT_OUTGOING_12)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.VAT_OUTGOING_12)
     elif vat_rate_float == 6.0:
-        return get_default_account(db, company_id, DefaultAccountType.VAT_OUTGOING_6)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.VAT_OUTGOING_6)
     else:
         return None
 
 
-def get_vat_incoming_account_for_rate(db: Session, company_id: int, vat_rate: Decimal) -> Account | None:
+def get_vat_incoming_account_for_rate(db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal) -> Account | None:
     """
     Get the incoming VAT account for a given VAT rate.
     Returns None if no default is configured.
@@ -138,10 +148,10 @@ def get_vat_incoming_account_for_rate(db: Session, company_id: int, vat_rate: De
     vat_rate_float = float(vat_rate)
 
     if vat_rate_float == 25.0:
-        return get_default_account(db, company_id, DefaultAccountType.VAT_INCOMING_25)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.VAT_INCOMING_25)
     elif vat_rate_float == 12.0:
-        return get_default_account(db, company_id, DefaultAccountType.VAT_INCOMING_12)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.VAT_INCOMING_12)
     elif vat_rate_float == 6.0:
-        return get_default_account(db, company_id, DefaultAccountType.VAT_INCOMING_6)
+        return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.VAT_INCOMING_6)
     else:
         return None
