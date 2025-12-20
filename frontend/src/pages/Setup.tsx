@@ -1,14 +1,23 @@
 import { useState } from 'react'
 import { companyApi, fiscalYearApi } from '@/services/api'
-import { CheckCircle, Building2, Calendar, BookOpen } from 'lucide-react'
+import { authService } from '@/services/authService'
+import { CheckCircle, Building2, Calendar, BookOpen, UserPlus } from 'lucide-react'
 import { AccountingBasis, VATReportingPeriod } from '@/types'
 
-type SetupStep = 'company' | 'fiscal-year' | 'chart-of-accounts' | 'complete'
+type SetupStep = 'admin-user' | 'company' | 'fiscal-year' | 'chart-of-accounts' | 'complete'
 
 export default function Setup() {
-  const [currentStep, setCurrentStep] = useState<SetupStep>('company')
+  const [currentStep, setCurrentStep] = useState<SetupStep>('admin-user')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Admin user data
+  const [adminData, setAdminData] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  })
 
   // Company data
   const currentYear = new Date().getFullYear()
@@ -41,7 +50,50 @@ export default function Setup() {
   // Chart of accounts choice
   const [importBAS, setImportBAS] = useState<boolean | null>(null)
 
-  // Step 1: Create Company
+  // Step 1: Create Admin User
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    // Validate passwords match
+    if (adminData.password !== adminData.confirmPassword) {
+      setError('Lösenorden matchar inte')
+      return
+    }
+
+    // Validate password length
+    if (adminData.password.length < 8) {
+      setError('Lösenordet måste vara minst 8 tecken')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      // Register the admin user
+      await authService.register({
+        email: adminData.email,
+        password: adminData.password,
+        full_name: adminData.full_name,
+      })
+
+      // Login immediately after registration
+      const loginResponse = await authService.login(adminData.email, adminData.password)
+      authService.saveToken(loginResponse.access_token)
+
+      setCurrentStep('company')
+    } catch (err: any) {
+      if (err.response?.status === 403) {
+        setError('En användare finns redan i systemet. Logga in istället.')
+      } else {
+        setError(err.response?.data?.detail || 'Kunde inte skapa användare')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Step 2: Create Company
   const handleCompanySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -152,6 +204,7 @@ export default function Setup() {
 
   // Render progress indicator
   const steps = [
+    { id: 'admin-user', label: 'Administratör', icon: UserPlus },
     { id: 'company', label: 'Företag', icon: Building2 },
     { id: 'fiscal-year', label: 'Räkenskapsår', icon: Calendar },
     { id: 'chart-of-accounts', label: 'Kontoplan', icon: BookOpen },
@@ -171,34 +224,35 @@ export default function Setup() {
         {/* Progress Steps */}
         {currentStep !== 'complete' && (
           <div className="mb-8">
-            <div className="flex justify-between">
+            {/* Step circles and labels */}
+            <div className="grid grid-cols-4 gap-0">
               {steps.map((step, index) => {
                 const Icon = step.icon
                 const isActive = index === currentStepIndex
                 const isCompleted = index < currentStepIndex
 
                 return (
-                  <div key={step.id} className="flex-1">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isCompleted ? 'bg-green-500' : isActive ? 'bg-indigo-600' : 'bg-gray-300'
-                      } text-white mb-2`}>
-                        {isCompleted ? (
-                          <CheckCircle className="w-6 h-6" />
-                        ) : (
-                          <Icon className="w-6 h-6" />
-                        )}
-                      </div>
-                      <span className={`text-sm font-medium ${
-                        isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                      }`}>
-                        {step.label}
-                      </span>
+                  <div key={step.id} className="flex flex-col items-center relative">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      isCompleted ? 'bg-green-500' : isActive ? 'bg-indigo-600' : 'bg-gray-300'
+                    } text-white mb-2 z-10`}>
+                      {isCompleted ? (
+                        <CheckCircle className="w-6 h-6" />
+                      ) : (
+                        <Icon className="w-6 h-6" />
+                      )}
                     </div>
+                    <span className={`text-sm font-medium text-center whitespace-nowrap ${
+                      isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    }`}>
+                      {step.label}
+                    </span>
+                    {/* Connecting line to next step */}
                     {index < steps.length - 1 && (
-                      <div className={`h-1 mt-6 -mx-4 ${
-                        isCompleted ? 'bg-green-500' : 'bg-gray-300'
-                      }`} style={{ width: 'calc(100% - 2rem)' }} />
+                      <div
+                        className={`absolute top-6 h-1 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`}
+                        style={{ left: '50%', width: '100%' }}
+                      />
                     )}
                   </div>
                 )
@@ -214,7 +268,85 @@ export default function Setup() {
           </div>
         )}
 
-        {/* Step 1: Company Info */}
+        {/* Step 1: Admin User */}
+        {currentStep === 'admin-user' && (
+          <form onSubmit={handleAdminSubmit} className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="font-medium text-blue-900 mb-2">Skapa ditt administratörskonto</h3>
+              <p className="text-sm text-blue-800">
+                Detta konto kommer att ha full tillgång till systemet och kan bjuda in andra användare.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Namn *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminData.full_name}
+                  onChange={(e) => setAdminData({ ...adminData, full_name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Ditt fullständiga namn"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  E-postadress *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={adminData.email}
+                  onChange={(e) => setAdminData({ ...adminData, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="din@epost.se"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lösenord *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={adminData.password}
+                  onChange={(e) => setAdminData({ ...adminData, password: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Minst 8 tecken"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Bekräfta lösenord *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={adminData.confirmPassword}
+                  onChange={(e) => setAdminData({ ...adminData, confirmPassword: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Skriv lösenordet igen"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 font-medium"
+            >
+              {loading ? 'Skapar konto...' : 'Nästa: Skapa företag'}
+            </button>
+          </form>
+        )}
+
+        {/* Step 2: Company Info */}
         {currentStep === 'company' && (
           <form onSubmit={handleCompanySubmit} className="space-y-6">
             <div className="space-y-4">

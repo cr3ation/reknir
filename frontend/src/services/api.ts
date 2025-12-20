@@ -28,10 +28,10 @@ import type {
   MonthlyStatistics,
 } from '@/types'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: `${API_BASE_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -89,7 +89,7 @@ export const companyApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  getLogo: (id: number) => `${API_BASE_URL}/companies/${id}/logo`,
+  getLogo: (id: number) => `${API_BASE_URL}/api/companies/${id}/logo`,
   deleteLogo: (id: number) => api.delete<Company>(`/companies/${id}/logo`),
 }
 

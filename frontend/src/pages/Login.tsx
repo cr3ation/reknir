@@ -1,15 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn } from 'lucide-react';
+import { systemService } from '../services/systemService';
+import { LogIn, Loader2 } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Check if setup is needed on mount
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const info = await systemService.getSystemInfo();
+        if (info.needs_setup) {
+          navigate('/setup', { replace: true });
+        }
+      } catch (err) {
+        console.error('Failed to check system info:', err);
+      } finally {
+        setIsCheckingSetup(false);
+      }
+    };
+    checkSetup();
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +49,15 @@ const Login: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Show loading while checking if setup is needed
+  if (isCheckingSetup) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">

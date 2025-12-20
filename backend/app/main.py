@@ -18,6 +18,7 @@ from app.routers import (
     sie4,
     supplier_invoices,
     suppliers,
+    system,
     verifications,
 )
 
@@ -40,6 +41,9 @@ app.add_middleware(
 # Include routers
 # Authentication (no prefix, already set in router)
 app.include_router(auth.router)
+
+# System info (no prefix, already set in router)
+app.include_router(system.router)
 
 # Invitations (no prefix, already set in router)
 app.include_router(invitations.router)
