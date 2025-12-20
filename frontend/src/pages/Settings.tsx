@@ -485,7 +485,7 @@ export default function SettingsPage() {
       default_series: '',
       default_journal_text: '',
       template_lines: [{
-        account_id: 0,
+        account_number: 0,
         formula: '{total}',
         description: '',
         sort_order: 0
@@ -517,7 +517,7 @@ export default function SettingsPage() {
 
     // Validate template lines
     for (const line of templateForm.template_lines) {
-      if (!line.account_id || !line.formula) {
+      if (!line.account_number || !line.formula) {
         showMessage('Alla rader måste ha konto och formel', 'error')
         return
       }
@@ -548,7 +548,7 @@ export default function SettingsPage() {
     setTemplateForm(prev => ({
       ...prev,
       template_lines: [...prev.template_lines, {
-        account_id: 0,
+        account_number: 0,
         formula: '{total}',
         description: '',
         sort_order: prev.template_lines.length
@@ -1755,13 +1755,13 @@ export default function SettingsPage() {
                             </td>
                             <td className="px-4 py-2">
                               <select
-                                value={line.account_id}
-                                onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
+                                value={line.account_number}
+                                onChange={(e) => updateTemplateLine(index, 'account_number', parseInt(e.target.value))}
                                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                               >
                                 <option value={0}>Välj konto...</option>
                                 {allAccounts.map((account) => (
-                                  <option key={account.id} value={account.id}>
+                                  <option key={account.account_number} value={account.account_number}>
                                     {account.account_number} - {account.name}
                                   </option>
                                 ))}

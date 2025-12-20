@@ -356,7 +356,8 @@ def seed_posting_templates(
 
             # Create template lines
             for line_data in template_data["lines"]:
-                account = (
+                # Verify account exists in this fiscal year
+                account_exists = (
                     db.query(Account)
                     .filter(
                         Account.company_id == company_id,
@@ -366,10 +367,10 @@ def seed_posting_templates(
                     .first()
                 )
 
-                if account:  # Only create line if account exists
+                if account_exists:  # Only create line if account exists
                     line = PostingTemplateLine(
                         template_id=template.id,
-                        account_id=account.id,
+                        account_number=line_data["account_number"],
                         formula=line_data["formula"],
                         description=line_data["description"],
                         sort_order=line_data["sort_order"],

@@ -195,19 +195,20 @@ def seed_posting_templates(company_id: int):
             # Create template lines
             for line_data in template_data["lines"]:
                 try:
-                    account = (
+                    # Verify account exists
+                    account_exists = (
                         db.query(Account)
                         .filter(Account.company_id == company_id, Account.account_number == line_data["account_number"])
                         .first()
                     )
 
-                    if not account:
+                    if not account_exists:
                         print(f"    Warning: Account {line_data['account_number']} not found - skipping line")
                         continue
 
                     line = PostingTemplateLine(
                         template_id=template.id,
-                        account_id=account.id,
+                        account_number=line_data["account_number"],
                         formula=line_data["formula"],
                         description=line_data["description"],
                         sort_order=line_data["sort_order"],
