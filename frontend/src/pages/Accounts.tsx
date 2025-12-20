@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Edit2, Save, X, FileText, Trash2 } from 'lucide-react'
+import { Edit2, Save, X, FileText, Trash2, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { accountApi, defaultAccountApi, companyApi } from '@/services/api'
 import type { Account, DefaultAccount } from '@/types'
@@ -45,6 +45,11 @@ export default function Accounts() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
 
+  // Add account state
+  const [showAddAccount, setShowAddAccount] = useState(false)
+  const [basAccounts, setBasAccounts] = useState<any[]>([])
+  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
+
   const showMessage = (msg: string, type: 'success' | 'error') => {
     setMessage(msg)
     setMessageType(type)
@@ -80,6 +85,63 @@ export default function Accounts() {
       setDefaultAccounts(defaultsRes.data)
     } catch (error) {
       console.error('Failed to load default accounts:', error)
+    }
+  }
+
+  const loadBasAccounts = async () => {
+    try {
+      const response = await companyApi.getBasAccounts()
+      setBasAccounts(response.data.accounts)
+    } catch (error) {
+      console.error('Failed to load BAS accounts:', error)
+      showMessage('Kunde inte ladda BAS-konton', 'error')
+    }
+  }
+
+  const handleShowAddAccount = async () => {
+    await Promise.all([
+      loadBasAccounts(),
+      selectedFiscalYear && selectedCompany
+        ? accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+            .then(res => setAccounts(res.data))
+        : Promise.resolve()
+    ])
+    setShowAddAccount(true)
+  }
+
+  const handleAddAccount = async () => {
+    if (!selectedCompany || !selectedFiscalYear || !selectedBasAccount) return
+
+    const basAccount = basAccounts.find(acc => acc.account_number === parseInt(selectedBasAccount))
+    if (!basAccount) {
+      showMessage('Kunde inte hitta det valda kontot', 'error')
+      return
+    }
+
+    try {
+      setLoading(true)
+      await accountApi.create({
+        company_id: selectedCompany.id,
+        fiscal_year_id: selectedFiscalYear.id,
+        account_number: basAccount.account_number,
+        name: basAccount.name,
+        account_type: basAccount.account_type,
+        description: basAccount.description,
+        active: true,
+        opening_balance: 0,
+        is_bas_account: true,
+      })
+
+      showMessage('Konto tillagt!', 'success')
+      setSelectedBasAccount('')
+      setShowAddAccount(false)
+      await loadAccounts()
+    } catch (error: unknown) {
+      console.error('Failed to add account:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Kunde inte lägga till konto'
+      showMessage(errorMessage, 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -284,6 +346,62 @@ export default function Accounts() {
       {/* Kontoplan Tab */}
       {activeTab === 'accounts' && (
         <>
+          {/* Add Account Button and Form */}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={handleShowAddAccount}
+              disabled={loading}
+              className="btn btn-primary inline-flex items-center"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Lägg till konto
+            </button>
+          </div>
+
+          {showAddAccount && (
+            <div className="card mb-6 bg-gray-50 border border-gray-200">
+              <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
+              <div className="mb-4">
+                <select
+                  value={selectedBasAccount}
+                  onChange={(e) => setSelectedBasAccount(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">-- Välj ett BAS-konto --</option>
+                  {basAccounts
+                    .filter(bas => !accounts.some(acc => acc.account_number === bas.account_number))
+                    .map(bas => (
+                      <option key={bas.account_number} value={bas.account_number}>
+                        {bas.account_number} - {bas.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Endast BAS-konton som inte redan finns i kontoplanen visas
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddAccount}
+                  disabled={loading || !selectedBasAccount}
+                  className="btn btn-primary"
+                >
+                  Lägg till
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddAccount(false)
+                    setSelectedBasAccount('')
+                  }}
+                  disabled={loading}
+                  className="btn btn-secondary"
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Filters */}
       <div className="card mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

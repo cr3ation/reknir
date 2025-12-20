@@ -33,9 +33,6 @@ export default function SettingsPage() {
   const [templates, setTemplates] = useState<PostingTemplate[]>([])
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PostingTemplate | null>(null)
-  const [showAddAccount, setShowAddAccount] = useState(false)
-  const [basAccounts, setBasAccounts] = useState<any[]>([])
-  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
   const [templateForm, setTemplateForm] = useState<PostingTemplate>({
     company_id: 0,
     name: '',
@@ -697,61 +694,6 @@ export default function SettingsPage() {
       // Revert the local change if API call fails
       setTemplates(templates)
       showMessage('Kunde inte uppdatera ordning', 'error')
-    }
-  }
-
-  // Account management functions
-  const loadBasAccounts = async () => {
-    try {
-      const response = await companyApi.getBasAccounts()
-      setBasAccounts(response.data.accounts)
-    } catch (error: any) {
-      console.error('Failed to load BAS accounts:', error)
-      showMessage('Kunde inte ladda BAS-konton', 'error')
-    }
-  }
-
-  const handleShowAddAccount = async () => {
-    // Reload both BAS accounts AND current accounts to ensure filtering works
-    await Promise.all([
-      loadBasAccounts(),
-      selectedFiscalYear && selectedCompany
-        ? accountApi.list(selectedCompany.id, selectedFiscalYear.id)
-            .then(res => setAllAccounts(res.data))
-        : Promise.resolve()
-    ])
-    setShowAddAccount(true)
-  }
-
-  const handleAddAccount = async () => {
-    if (!selectedCompany || !selectedFiscalYear || !selectedBasAccount) return
-
-    const basAccount = basAccounts.find(acc => acc.account_number === selectedBasAccount)
-    if (!basAccount) return
-
-    try {
-      setLoading(true)
-      await accountApi.create({
-        company_id: selectedCompany.id,
-        fiscal_year_id: selectedFiscalYear.id,
-        account_number: basAccount.account_number,
-        name: basAccount.name,
-        account_type: basAccount.account_type,
-        description: basAccount.description,
-        active: true,
-        opening_balance: 0,
-        is_bas_account: true,
-      })
-
-      showMessage('Konto tillagt!', 'success')
-      setSelectedBasAccount('')
-      setShowAddAccount(false)
-      await loadData()
-    } catch (error: any) {
-      console.error('Failed to add account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -1462,64 +1404,11 @@ export default function SettingsPage() {
           <div className="card mt-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Alla konton</h2>
-              <button
-                onClick={handleShowAddAccount}
-                disabled={loading}
-                className="btn btn-primary inline-flex items-center"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Lägg till konto
-              </button>
             </div>
 
             <p className="text-gray-600 mb-4">
-              Hantera alla konton i kontoplanen.
+              Hantera alla konton i kontoplanen. För att lägga till nya konton, gå till Kontoplan-sidan.
             </p>
-
-            {/* Add Account Form */}
-            {showAddAccount && (
-              <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
-                <div className="mb-4">
-                  <select
-                    value={selectedBasAccount}
-                    onChange={(e) => setSelectedBasAccount(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="">-- Välj ett BAS-konto --</option>
-                    {basAccounts
-                      .filter(bas => !allAccounts.some(acc => acc.account_number === bas.account_number))
-                      .map(bas => (
-                        <option key={bas.account_number} value={bas.account_number}>
-                          {bas.account_number} - {bas.name}
-                        </option>
-                      ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Endast BAS-konton som inte redan finns i kontoplanen visas
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddAccount}
-                    disabled={loading || !selectedBasAccount}
-                    className="btn btn-primary"
-                  >
-                    Lägg till
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddAccount(false)
-                      setSelectedBasAccount('')
-                    }}
-                    disabled={loading}
-                    className="btn btn-secondary"
-                  >
-                    Avbryt
-                  </button>
-                </div>
-              </div>
-            )}
 
             {loading ? (
               <div className="text-center py-8">
