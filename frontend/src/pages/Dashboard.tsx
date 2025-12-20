@@ -6,6 +6,7 @@ import { useFiscalYear } from '../contexts/FiscalYearContext'
 import StatCard from '../components/StatCard'
 import RevenueExpenseChart from '../components/RevenueExpenseChart'
 import MonthVerificationsModal from '../components/MonthVerificationsModal'
+import FiscalYearSelector from '../components/FiscalYearSelector'
 
 interface MonthVerification {
   id: number
@@ -176,19 +177,22 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Översikt</h1>
-        <div className="flex items-center gap-3 mt-1">
-          <p className="text-gray-500">{selectedCompany.name}</p>
-          {data?.fiscal_year && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-              Räkenskapsår: {data.fiscal_year.label}
-              {data.fiscal_year.is_closed && (
-                <span className="ml-2 text-xs">(Avslutat)</span>
-              )}
-            </span>
-          )}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Översikt</h1>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-gray-500">{selectedCompany.name}</p>
+            {data?.fiscal_year && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                Räkenskapsår: {data.fiscal_year.label}
+                {data.fiscal_year.is_closed && (
+                  <span className="ml-2 text-xs">(Avslutat)</span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
+        <FiscalYearSelector />
       </div>
 
       {/* Current Month KPIs */}

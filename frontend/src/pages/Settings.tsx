@@ -5,6 +5,7 @@ import { VATReportingPeriod, AccountingBasis } from '@/types'
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -948,7 +949,10 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6">Inställningar</h1>
+      <div className="mb-6 flex items-start justify-between">
+        <h1 className="text-3xl font-bold">Inställningar</h1>
+        <FiscalYearSelector />
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
