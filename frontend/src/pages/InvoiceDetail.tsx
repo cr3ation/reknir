@@ -52,12 +52,20 @@ export default function InvoiceDetail() {
   }
 
   const handleSendInvoice = async () => {
-    if (!confirm('Skicka denna faktura? En verifikation kommer att skapas.')) return
+    const isAccrualMethod = selectedCompany?.accounting_basis === 'accrual'
+    const confirmMessage = isAccrualMethod
+      ? 'Skicka denna faktura? En verifikation kommer att skapas.'
+      : 'Skicka denna faktura?'
+
+    if (!confirm(confirmMessage)) return
 
     try {
       await invoiceApi.send(parseInt(invoiceId!))
       await loadInvoice()
-      alert('Fakturan har skickats och bokförts')
+      const successMessage = isAccrualMethod
+        ? 'Fakturan har skickats och bokförts'
+        : 'Fakturan har skickats'
+      alert(successMessage)
     } catch (error: any) {
       console.error('Failed to send invoice:', error)
       alert(`Kunde inte skicka fakturan: ${error.response?.data?.detail || error.message}`)
@@ -319,7 +327,7 @@ export default function InvoiceDetail() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                 >
                   <FileText className="w-4 h-4" />
-                  Skicka och bokför
+                  {selectedCompany?.accounting_basis === 'accrual' ? 'Skicka och bokför' : 'Skicka'}
                 </button>
               )}
               {invoice.status !== 'paid' && invoice.status !== 'draft' && (

@@ -4,6 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -13,6 +14,7 @@ from app.models.company import Company
 from app.models.default_account import DefaultAccount
 from app.models.fiscal_year import FiscalYear
 from app.models.user import CompanyUser, User
+from app.models.verification import Verification
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
 from app.services import default_account_service
 
@@ -134,8 +136,38 @@ def update_company(
             detail="You don't have access to this company",
         )
 
-    # Update fields
     update_data = company_update.model_dump(exclude_unset=True)
+
+    # Validate accounting_basis change
+    if "accounting_basis" in update_data and update_data["accounting_basis"] != company.accounting_basis:
+        # Get the most recent fiscal year
+        current_fy = (
+            db.query(FiscalYear)
+            .filter(FiscalYear.company_id == company_id)
+            .order_by(desc(FiscalYear.start_date))
+            .first()
+        )
+
+        if current_fy:
+            # Check if verifications exist in the current fiscal year
+            verification_count = (
+                db.query(Verification)
+                .filter(
+                    Verification.company_id == company_id,
+                    Verification.fiscal_year_id == current_fy.id,
+                )
+                .count()
+            )
+
+            if verification_count > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot change accounting method. There are {verification_count} verifications "
+                    f"in fiscal year {current_fy.label}. The method can only be changed before the first "
+                    f"verification of a new fiscal year.",
+                )
+
+    # Update fields
     for field, value in update_data.items():
         setattr(company, field, value)
 

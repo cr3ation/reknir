@@ -286,7 +286,7 @@ export default function Invoices() {
                           <button
                             onClick={() => setConfirmSendInvoice(invoice)}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                            title="Skicka och bokför faktura"
+                            title={selectedCompany?.accounting_basis === 'accrual' ? 'Skicka och bokför faktura' : 'Skicka faktura'}
                           >
                             Skicka
                           </button>
@@ -482,7 +482,9 @@ export default function Invoices() {
                 Vill du skicka denna faktura?
               </p>
               <p className="text-sm text-gray-500 mt-2">
-                En verifikation kommer att skapas automatiskt och fakturan markeras som skickad.
+                {selectedCompany?.accounting_basis === 'accrual'
+                  ? 'En verifikation kommer att skapas automatiskt och fakturan markeras som skickad.'
+                  : 'Fakturan markeras som skickad.'}
               </p>
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                 <div className="flex justify-between text-sm">

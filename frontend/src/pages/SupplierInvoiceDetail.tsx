@@ -55,15 +55,23 @@ export default function SupplierInvoiceDetail() {
   }, [loadInvoice, loadAccounts])
 
   const handleRegister = async () => {
-    if (!confirm('Bokför denna leverantörsfaktura? En verifikation kommer att skapas.')) return
+    const isAccrualMethod = selectedCompany?.accounting_basis === 'accrual'
+    const confirmMessage = isAccrualMethod
+      ? 'Registrera denna leverantörsfaktura? En verifikation kommer att skapas.'
+      : 'Registrera denna leverantörsfaktura?'
+
+    if (!confirm(confirmMessage)) return
 
     try {
       await supplierInvoiceApi.register(parseInt(invoiceId!))
       await loadInvoice()
-      alert('Leverantörsfakturan har bokförts och en verifikation har skapats')
+      const successMessage = isAccrualMethod
+        ? 'Leverantörsfakturan har registrerats och en verifikation har skapats'
+        : 'Leverantörsfakturan har registrerats'
+      alert(successMessage)
     } catch (error) {
       console.error('Failed to register:', error)
-      alert(`Kunde inte bokföra: ${getErrorMessage(error, 'Unknown error')}`)
+      alert(`Kunde inte registrera: ${getErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -401,7 +409,7 @@ export default function SupplierInvoiceDetail() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                 >
                   <BookOpen className="w-4 h-4" />
-                  Bokför faktura
+                  {selectedCompany?.accounting_basis === 'accrual' ? 'Registrera och bokför' : 'Registrera'}
                 </button>
               )}
               {invoice.status !== 'paid' && invoice.status !== 'draft' && (
