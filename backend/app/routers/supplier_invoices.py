@@ -13,6 +13,7 @@ from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Supplier
+from app.models.fiscal_year import FiscalYear
 from app.models.invoice import InvoiceStatus, SupplierInvoice, SupplierInvoiceLine
 from app.models.user import User
 from app.schemas.invoice import (
@@ -104,6 +105,7 @@ async def create_supplier_invoice(
 @router.get("/", response_model=list[SupplierInvoiceListItem])
 async def list_supplier_invoices(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int | None = Query(None, description="Filter by fiscal year"),
     supplier_id: int | None = None,
     status: InvoiceStatus | None = None,
     start_date: date | None = None,
@@ -122,6 +124,13 @@ async def list_supplier_invoices(
         .join(Supplier, SupplierInvoice.supplier_id == Supplier.id)
         .filter(SupplierInvoice.company_id == company_id)
     )
+
+    # Filter by fiscal year date range
+    if fiscal_year_id:
+        fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+        if fiscal_year:
+            query = query.filter(SupplierInvoice.invoice_date >= fiscal_year.start_date)
+            query = query.filter(SupplierInvoice.invoice_date <= fiscal_year.end_date)
 
     if supplier_id:
         query = query.filter(SupplierInvoice.supplier_id == supplier_id)

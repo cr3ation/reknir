@@ -231,7 +231,7 @@ export const supplierApi = {
 
 // Invoices (Outgoing)
 export const invoiceApi = {
-  list: (companyId: number, params?: { customer_id?: number; status?: string }) =>
+  list: (companyId: number, params?: { customer_id?: number; status?: string; fiscal_year_id?: number }) =>
     api.get<InvoiceListItem[]>('/invoices/', { params: { company_id: companyId, ...params } }),
   get: (id: number) => api.get<Invoice>(`/invoices/${id}`),
   create: (data: InvoiceCreateData) => api.post<Invoice>('/invoices/', data),
@@ -244,7 +244,7 @@ export const invoiceApi = {
 
 // Supplier Invoices (Incoming)
 export const supplierInvoiceApi = {
-  list: (companyId: number, params?: { supplier_id?: number; status?: string }) =>
+  list: (companyId: number, params?: { supplier_id?: number; status?: string; fiscal_year_id?: number }) =>
     api.get<SupplierInvoiceListItem[]>('/supplier-invoices/', { params: { company_id: companyId, ...params } }),
   get: (id: number) => api.get<SupplierInvoice>(`/supplier-invoices/${id}`),
   create: (data: SupplierInvoiceCreateData) => api.post<SupplierInvoice>('/supplier-invoices/', data),
