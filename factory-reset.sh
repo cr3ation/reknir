@@ -251,6 +251,11 @@ seed_demo_data() {
     api_post "/api/companies/${COMPANY_ID}/seed-bas?fiscal_year_id=${FISCAL_YEAR_2025_ID}" "{}" > /dev/null
     echo "   BAS 2024 accounts created"
 
+    # Step 5.5: Seed posting templates
+    echo "Seeding posting templates..."
+    api_post "/api/companies/${COMPANY_ID}/seed-templates" "{}" > /dev/null
+    echo "   Posting templates created"
+
     # Step 6: Create 5 customers
     echo "Creating customers..."
 
