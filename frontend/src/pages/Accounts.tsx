@@ -180,10 +180,10 @@ export default function Accounts() {
       canDelete = false
       blockingReason = `Kontot har bokförda transaktioner för detta räkenskapsår och kan därför inte raderas.`
     }
-    // Check if account is used in posting templates
+    // Check if account is used in posting templates (templates use account_number)
     else {
       const usedInTemplate = templates.find(template =>
-        template.template_lines.some(line => line.account_id === account.id)
+        template.template_lines.some(line => line.account_number === account.account_number)
       )
 
       if (usedInTemplate) {
