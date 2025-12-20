@@ -6,6 +6,7 @@ import type { Expense, ExpenseStatus, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
+import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function Expenses() {
   const navigate = useNavigate()
@@ -347,9 +348,12 @@ export default function Expenses() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-4">Utlägg</h1>
-        <p className="text-gray-600">Hantera personalutlägg och kvitton</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-4">Utlägg</h1>
+          <p className="text-gray-600">Hantera personalutlägg och kvitton</p>
+        </div>
+        <FiscalYearSelector />
       </div>
 
       {/* Summary */}

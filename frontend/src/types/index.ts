@@ -105,7 +105,7 @@ export interface VerificationListItem {
 export interface PostingTemplateLine {
   id?: number
   template_id?: number
-  account_id: number
+  account_number: number
   formula: string
   description?: string
   sort_order: number

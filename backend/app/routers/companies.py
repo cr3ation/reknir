@@ -356,7 +356,8 @@ def seed_posting_templates(
 
             # Create template lines
             for line_data in template_data["lines"]:
-                account = (
+                # Verify account exists in this fiscal year
+                account_exists = (
                     db.query(Account)
                     .filter(
                         Account.company_id == company_id,
@@ -366,10 +367,10 @@ def seed_posting_templates(
                     .first()
                 )
 
-                if account:  # Only create line if account exists
+                if account_exists:  # Only create line if account exists
                     line = PostingTemplateLine(
                         template_id=template.id,
-                        account_id=account.id,
+                        account_number=line_data["account_number"],
                         formula=line_data["formula"],
                         description=line_data["description"],
                         sort_order=line_data["sort_order"],
@@ -396,12 +397,15 @@ def seed_posting_templates(
 @router.post("/{company_id}/initialize-defaults", status_code=status.HTTP_200_OK)
 def initialize_default_accounts(
     company_id: int,
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID to use for account lookup"),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """
     Initialize default account mappings for a company based on existing accounts.
     This is useful after importing SIE4 or when setting up an existing company.
+
+    fiscal_year_id is required - accounts from that fiscal year will be used.
     """
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -418,15 +422,14 @@ def initialize_default_accounts(
             detail="You don't have access to this company",
         )
 
-    # Get the first fiscal year for this company
+    # Get the specified fiscal year
     fiscal_year = (
-        db.query(FiscalYear).filter(FiscalYear.company_id == company_id).order_by(FiscalYear.start_date).first()
+        db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
     )
-
     if not fiscal_year:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Company must have at least one fiscal year before initializing defaults",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Fiscal year {fiscal_year_id} not found for this company",
         )
 
     # Initialize defaults

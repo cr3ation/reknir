@@ -50,14 +50,22 @@ async def create_posting_template(
             detail=f"Template with name '{template.name}' already exists for this company",
         )
 
-    # Verify all accounts exist
-    account_ids = [line.account_id for line in template.template_lines]
-    accounts = db.query(Account).filter(Account.id.in_(account_ids), Account.company_id == template.company_id).all()
+    # Verify all account_numbers are valid (exist in at least one fiscal year for this company)
+    account_numbers = [line.account_number for line in template.template_lines]
+    existing_accounts = (
+        db.query(Account.account_number)
+        .filter(Account.company_id == template.company_id, Account.account_number.in_(account_numbers))
+        .distinct()
+        .all()
+    )
+    found_numbers = {acc.account_number for acc in existing_accounts}
+    missing_numbers = set(account_numbers) - found_numbers
 
-    if len(accounts) != len(account_ids):
-        found_ids = {acc.id for acc in accounts}
-        missing_ids = set(account_ids) - found_ids
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Accounts not found: {list(missing_ids)}")
+    if missing_numbers:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account numbers not found in any fiscal year: {sorted(missing_numbers)}",
+        )
 
     # Create the posting template
     db_template = PostingTemplate(
@@ -74,7 +82,7 @@ async def create_posting_template(
     for i, line in enumerate(template.template_lines):
         db_line = PostingTemplateLine(
             template_id=db_template.id,
-            account_id=line.account_id,
+            account_number=line.account_number,
             formula=line.formula,
             description=line.description,
             sort_order=line.sort_order if line.sort_order > 0 else i,
@@ -107,7 +115,7 @@ async def list_posting_templates(
     # Query templates
     templates = (
         db.query(PostingTemplate)
-        .options(joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account))
+        .options(joinedload(PostingTemplate.template_lines))
         .filter(PostingTemplate.company_id == company_id)
         .order_by(PostingTemplate.sort_order, PostingTemplate.name)
         .offset(skip)
@@ -130,7 +138,7 @@ async def get_posting_template(
 
     template = (
         db.query(PostingTemplate)
-        .options(joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account))
+        .options(joinedload(PostingTemplate.template_lines))
         .filter(PostingTemplate.id == template_id)
         .first()
     )
@@ -201,24 +209,28 @@ async def update_posting_template(
         # Delete existing lines
         db.query(PostingTemplateLine).filter(PostingTemplateLine.template_id == template_id).delete()
 
-        # Verify all accounts exist
-        account_ids = [line.account_id for line in template_update.template_lines]
-        accounts = (
-            db.query(Account).filter(Account.id.in_(account_ids), Account.company_id == db_template.company_id).all()
+        # Verify all account_numbers are valid (exist in at least one fiscal year for this company)
+        account_numbers = [line.account_number for line in template_update.template_lines]
+        existing_accounts = (
+            db.query(Account.account_number)
+            .filter(Account.company_id == db_template.company_id, Account.account_number.in_(account_numbers))
+            .distinct()
+            .all()
         )
+        found_numbers = {acc.account_number for acc in existing_accounts}
+        missing_numbers = set(account_numbers) - found_numbers
 
-        if len(accounts) != len(account_ids):
-            found_ids = {acc.id for acc in accounts}
-            missing_ids = set(account_ids) - found_ids
+        if missing_numbers:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=f"Accounts not found: {list(missing_ids)}"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Account numbers not found in any fiscal year: {sorted(missing_numbers)}",
             )
 
         # Create new lines
         for i, line in enumerate(template_update.template_lines):
             db_line = PostingTemplateLine(
                 template_id=template_id,
-                account_id=line.account_id,
+                account_number=line.account_number,
                 formula=line.formula,
                 description=line.description,
                 sort_order=line.sort_order if line.sort_order > 0 else i,
@@ -272,7 +284,7 @@ async def execute_posting_template(
     # Get template with lines and account relationships
     template = (
         db.query(PostingTemplate)
-        .options(joinedload(PostingTemplate.template_lines).joinedload(PostingTemplateLine.account))
+        .options(joinedload(PostingTemplate.template_lines))
         .filter(PostingTemplate.id == template_id)
         .first()
     )

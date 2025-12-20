@@ -20,7 +20,6 @@ import Setup from './pages/Setup'
 import Login from './pages/Login'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
 import CompanySelector from './components/CompanySelector'
-import FiscalYearSelector from './components/FiscalYearSelector'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -135,7 +134,7 @@ function AppContent() {
         {/* User info and logout at bottom */}
         <div className="border-t border-gray-200">
           {/* Company Selector */}
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-4">
             <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
               Företag
             </div>
@@ -143,11 +142,6 @@ function AppContent() {
               selectedCompanyId={selectedCompany?.id || null}
               onCompanyChange={setSelectedCompany}
             />
-          </div>
-
-          {/* Fiscal Year Selector */}
-          <div className="p-4">
-            <FiscalYearSelector />
           </div>
 
           {/* User info and logout button */}

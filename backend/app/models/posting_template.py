@@ -48,31 +48,27 @@ class PostingTemplate(Base):
         Returns:
             List of dicts with account_id, debit, credit, description, etc.
 
-        The method translates account references from the template's original fiscal year
-        to equivalent accounts (same account_number) in the target fiscal year.
+        The method resolves account_number to the specific account in the target fiscal year.
         """
         from app.models.account import Account
 
         posting_lines = []
 
         for line in self.template_lines:
-            # Get the template's account to find its account_number
-            template_account = line.account
-
-            # Find the equivalent account in the target fiscal year
+            # Find the account with this account_number in the target fiscal year
             target_account = (
                 db.query(Account)
                 .filter(
                     Account.company_id == self.company_id,
                     Account.fiscal_year_id == fiscal_year_id,
-                    Account.account_number == template_account.account_number,
+                    Account.account_number == line.account_number,
                 )
                 .first()
             )
 
             if not target_account:
                 raise ValueError(
-                    f"Account {template_account.account_number} ({template_account.name}) "
+                    f"Account {line.account_number} "
                     f"not found in fiscal year {fiscal_year_id}. "
                     f"Please ensure the account exists in the target fiscal year."
                 )
@@ -97,18 +93,18 @@ class PostingTemplate(Base):
 class PostingTemplateLine(Base):
     """
     Individual posting line in a posting template
-    Contains account reference and a formula for amount calculation.
+    Contains account reference (by account_number) and a formula for amount calculation.
 
-    The account_id references a specific account in a specific fiscal year.
-    When using templates across fiscal years, the system will find the equivalent
-    account (same account_number) in the target fiscal year.
+    The account_number is the stable BAS account identifier (e.g., 3001, 2611).
+    When using templates, the system resolves this to the specific account
+    in the target fiscal year.
     """
 
     __tablename__ = "posting_template_lines"
 
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(Integer, ForeignKey("posting_templates.id"), nullable=False)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    account_number = Column(Integer, nullable=False)  # BAS account number (e.g., 3001, 2611)
 
     # Formula for amount calculation
     formula = Column(String(500), nullable=False)  # e.g., "{total} * 0.25", "-{total}"
@@ -121,10 +117,9 @@ class PostingTemplateLine(Base):
 
     # Relationships
     template = relationship("PostingTemplate", back_populates="template_lines")
-    account = relationship("Account")
 
     def __repr__(self):
-        return f"<PostingTemplateLine Account:{self.account_id} Formula:{self.formula}>"
+        return f"<PostingTemplateLine Account:{self.account_number} Formula:{self.formula}>"
 
     def evaluate_formula(self, amount: float) -> float:
         """

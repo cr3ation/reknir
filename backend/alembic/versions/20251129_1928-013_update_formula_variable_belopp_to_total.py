@@ -1,7 +1,7 @@
 """update_formula_variable_belopp_to_total
 
-Revision ID: f8d6d475181b
-Revises: 681955f3756a
+Revision ID: 013
+Revises: 012
 Create Date: 2025-11-29 19:28:31.461737
 
 """
@@ -9,8 +9,8 @@ Create Date: 2025-11-29 19:28:31.461737
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "f8d6d475181b"
-down_revision = "681955f3756a"
+revision = "013"
+down_revision = "012"
 branch_labels = None
 depends_on = None
 

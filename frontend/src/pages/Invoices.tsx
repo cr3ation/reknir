@@ -6,6 +6,7 @@ import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Acco
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function Invoices() {
   const navigate = useNavigate()
@@ -205,7 +206,10 @@ export default function Invoices() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6">Fakturor</h1>
+      <div className="mb-6 flex items-start justify-between">
+        <h1 className="text-3xl font-bold">Fakturor</h1>
+        <FiscalYearSelector />
+      </div>
 
       {/* Outgoing Invoices */}
       <div className="mb-8">

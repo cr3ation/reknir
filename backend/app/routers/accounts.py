@@ -214,10 +214,18 @@ def delete_account(
             detail=f"Kontot kan inte raderas eftersom det har {transaction_count} bokförda transaktioner för detta räkenskapsår. Kontot måste vara tomt för att kunna raderas.",
         )
 
-    # Check if account is used in posting templates
+    # Check if account is used in posting templates (templates use account_number)
     from app.models.posting_template import PostingTemplate, PostingTemplateLine
 
-    template_line = db.query(PostingTemplateLine).filter(PostingTemplateLine.account_id == account_id).first()
+    template_line = (
+        db.query(PostingTemplateLine)
+        .join(PostingTemplate)
+        .filter(
+            PostingTemplate.company_id == account.company_id,
+            PostingTemplateLine.account_number == account.account_number,
+        )
+        .first()
+    )
 
     if template_line:
         # Get template name for better error message

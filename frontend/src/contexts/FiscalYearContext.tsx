@@ -26,12 +26,17 @@ export function FiscalYearProvider({ children }: { children: ReactNode }) {
       const years = response.data
       setFiscalYears(years)
 
-      // Auto-select current fiscal year or most recent one
+      // Preserve user's selection if it's still valid, otherwise auto-select
       if (years.length > 0) {
-        const current = years.find((fy) => fy.is_current)
-        const newFy = current || years[0]
-        // Only update if ID changed to avoid infinite loops
-        setSelectedFiscalYear((prev) => (prev?.id === newFy.id ? prev : newFy))
+        setSelectedFiscalYear((prev) => {
+          // If user has a selection and it's still in the list, keep it
+          if (prev && years.some((fy) => fy.id === prev.id)) {
+            return prev
+          }
+          // Otherwise, select current fiscal year or most recent one
+          const current = years.find((fy) => fy.is_current)
+          return current || years[0]
+        })
       } else {
         setSelectedFiscalYear(null)
       }

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 class PostingTemplateLineBase(BaseModel):
     """Base verification template line schema"""
 
-    account_id: int = Field(..., description="Account ID for this posting line")
+    account_number: int = Field(..., description="BAS account number (e.g., 3001, 2611)")
     formula: str = Field(..., description="Formula for calculating the amount (e.g., '{total} * 0.25')")
     description: str | None = Field(None, max_length=255, description="Optional line description")
     sort_order: int = Field(0, description="Sort order for line ordering")
@@ -45,7 +45,7 @@ class PostingTemplateLineCreate(PostingTemplateLineBase):
 class PostingTemplateLineUpdate(BaseModel):
     """Schema for updating a verification template line"""
 
-    account_id: int | None = None
+    account_number: int | None = None
     formula: str | None = None
     description: str | None = Field(None, max_length=255)
     sort_order: int | None = None

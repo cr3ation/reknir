@@ -1,7 +1,7 @@
 """add_company_logo
 
-Revision ID: 6b60dd14b9bb
-Revises: f8d6d475181b
+Revision ID: 014
+Revises: 013
 Create Date: 2025-11-29 20:08:14.852191
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "6b60dd14b9bb"
-down_revision = "f8d6d475181b"
+revision = "014"
+down_revision = "013"
 branch_labels = None
 depends_on = None
 
