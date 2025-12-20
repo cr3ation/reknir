@@ -59,9 +59,7 @@ class Account(Base):
     )
 
     # Balance tracking
-    opening_balance = Column(
-        Numeric(15, 2), default=0, nullable=False
-    )  # Ingående balans (IB)
+    opening_balance = Column(Numeric(15, 2), default=0, nullable=False)  # Ingående balans (IB)
     current_balance = Column(Numeric(15, 2), default=0, nullable=False)  # Current balance
 
     # Status

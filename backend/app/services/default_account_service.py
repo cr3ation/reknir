@@ -28,11 +28,15 @@ def get_default_account(db: Session, company_id: int, fiscal_year_id: int, accou
         return None
 
     # Find the account with the same number in the target fiscal year
-    return db.query(Account).filter(
-        Account.company_id == company_id,
-        Account.fiscal_year_id == fiscal_year_id,
-        Account.account_number == stored_account.account_number
-    ).first()
+    return (
+        db.query(Account)
+        .filter(
+            Account.company_id == company_id,
+            Account.fiscal_year_id == fiscal_year_id,
+            Account.account_number == stored_account.account_number,
+        )
+        .first()
+    )
 
 
 def set_default_account(db: Session, company_id: int, account_type: str, account_id: int) -> DefaultAccount:
@@ -106,7 +110,9 @@ def initialize_default_accounts_from_existing(db: Session, company_id: int, fisc
                 break
 
 
-def get_revenue_account_for_vat_rate(db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal) -> Account | None:
+def get_revenue_account_for_vat_rate(
+    db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal
+) -> Account | None:
     """
     Get the revenue account for a given VAT rate.
     Returns None if no default is configured.
@@ -123,7 +129,9 @@ def get_revenue_account_for_vat_rate(db: Session, company_id: int, fiscal_year_i
         return get_default_account(db, company_id, fiscal_year_id, DefaultAccountType.REVENUE_0)
 
 
-def get_vat_outgoing_account_for_rate(db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal) -> Account | None:
+def get_vat_outgoing_account_for_rate(
+    db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal
+) -> Account | None:
     """
     Get the outgoing VAT account for a given VAT rate.
     Returns None if no default is configured.
@@ -140,7 +148,9 @@ def get_vat_outgoing_account_for_rate(db: Session, company_id: int, fiscal_year_
         return None
 
 
-def get_vat_incoming_account_for_rate(db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal) -> Account | None:
+def get_vat_incoming_account_for_rate(
+    db: Session, company_id: int, fiscal_year_id: int, vat_rate: Decimal
+) -> Account | None:
     """
     Get the incoming VAT account for a given VAT rate.
     Returns None if no default is configured.

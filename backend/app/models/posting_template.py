@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
+import re
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.database import Base
-import re
 
 
 class PostingTemplate(Base):
@@ -10,6 +12,7 @@ class PostingTemplate(Base):
     Posting Template (Bokföringsmall)
     A template for creating recurring journal entries with predefined posting logic
     """
+
     __tablename__ = "posting_templates"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -28,11 +31,7 @@ class PostingTemplate(Base):
 
     # Relationships
     company = relationship("Company", back_populates="posting_templates")
-    template_lines = relationship(
-        "PostingTemplateLine",
-        back_populates="template",
-        cascade="all, delete-orphan"
-    )
+    template_lines = relationship("PostingTemplateLine", back_populates="template", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<PostingTemplate {self.name} - {self.description}>"
@@ -61,11 +60,15 @@ class PostingTemplate(Base):
             template_account = line.account
 
             # Find the equivalent account in the target fiscal year
-            target_account = db.query(Account).filter(
-                Account.company_id == self.company_id,
-                Account.fiscal_year_id == fiscal_year_id,
-                Account.account_number == template_account.account_number
-            ).first()
+            target_account = (
+                db.query(Account)
+                .filter(
+                    Account.company_id == self.company_id,
+                    Account.fiscal_year_id == fiscal_year_id,
+                    Account.account_number == template_account.account_number,
+                )
+                .first()
+            )
 
             if not target_account:
                 raise ValueError(
@@ -84,7 +87,7 @@ class PostingTemplate(Base):
                 "account_id": target_account.id,
                 "debit": debit,
                 "credit": credit,
-                "description": line.description
+                "description": line.description,
             }
             posting_lines.append(posting_line)
 
@@ -100,6 +103,7 @@ class PostingTemplateLine(Base):
     When using templates across fiscal years, the system will find the equivalent
     account (same account_number) in the target fiscal year.
     """
+
     __tablename__ = "posting_template_lines"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -130,19 +134,19 @@ class PostingTemplateLine(Base):
         try:
             # Replace the {total} variable with the actual value
             expression = self.formula.replace("{total}", str(amount))
-            
+
             # Validate the expression contains only allowed characters
-            if not re.match(r'^[0-9+\-*/.() ]+$', expression):
+            if not re.match(r"^[0-9+\-*/.() ]+$", expression):
                 raise ValueError(f"Invalid formula: {self.formula}")
-            
+
             # Evaluate the mathematical expression
             # Note: In production, consider using a safer eval alternative like simpleeval
             result = eval(expression)
-            
+
             return float(result)
-            
+
         except Exception as e:
-            raise ValueError(f"Error evaluating formula '{self.formula}' with amount {amount}: {str(e)}")
+            raise ValueError(f"Error evaluating formula '{self.formula}' with amount {amount}: {str(e)}") from e
 
     @staticmethod
     def validate_formula(formula: str) -> bool:
@@ -153,17 +157,17 @@ class PostingTemplateLine(Base):
             # Check if formula contains the required {total} variable
             if "{total}" not in formula:
                 return False
-            
+
             # Test with a dummy value
             test_expression = formula.replace("{total}", "100")
-            
+
             # Validate allowed characters
-            if not re.match(r'^[0-9+\-*/.(){} ]+$', test_expression.replace("{total}", "1")):
+            if not re.match(r"^[0-9+\-*/.(){} ]+$", test_expression.replace("{total}", "1")):
                 return False
-            
+
             # Try to evaluate with test value
             eval(test_expression)
             return True
-            
-        except:
+
+        except Exception:
             return False

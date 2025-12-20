@@ -287,10 +287,7 @@ def seed_posting_templates(
     # Get the first fiscal year for this company to find accounts
     # Posting templates are company-wide but need to reference accounts from a fiscal year
     fiscal_year = (
-        db.query(FiscalYear)
-        .filter(FiscalYear.company_id == company_id)
-        .order_by(FiscalYear.start_date)
-        .first()
+        db.query(FiscalYear).filter(FiscalYear.company_id == company_id).order_by(FiscalYear.start_date).first()
     )
 
     if not fiscal_year:
@@ -300,9 +297,7 @@ def seed_posting_templates(
         )
 
     # Check if templates already exist
-    existing_count = (
-        db.query(PostingTemplate).filter(PostingTemplate.company_id == company_id).count()
-    )
+    existing_count = db.query(PostingTemplate).filter(PostingTemplate.company_id == company_id).count()
     if existing_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -363,7 +358,7 @@ def seed_posting_templates(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to seed posting templates: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/{company_id}/initialize-defaults", status_code=status.HTTP_200_OK)
@@ -393,10 +388,7 @@ def initialize_default_accounts(
 
     # Get the first fiscal year for this company
     fiscal_year = (
-        db.query(FiscalYear)
-        .filter(FiscalYear.company_id == company_id)
-        .order_by(FiscalYear.start_date)
-        .first()
+        db.query(FiscalYear).filter(FiscalYear.company_id == company_id).order_by(FiscalYear.start_date).first()
     )
 
     if not fiscal_year:

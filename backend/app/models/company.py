@@ -71,7 +71,7 @@ class Company(Base):
 
     def __repr__(self):
         return f"<Company {self.name} ({self.org_number})>"
-    
+
     @property
     def vat_number(self) -> str:
         """
@@ -81,12 +81,12 @@ class Company(Base):
         """
         if not self.org_number:
             return ""
-        
+
         # Remove any dashes and spaces from org_number
-        clean_org_number = self.org_number.replace('-', '').replace(' ', '')
-        
+        clean_org_number = self.org_number.replace("-", "").replace(" ", "")
+
         # Swedish VAT number format: SE + org_number (10 digits) + 01
         if len(clean_org_number) == 10 and clean_org_number.isdigit():
             return f"SE{clean_org_number}01"
-        
+
         return ""

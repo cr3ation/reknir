@@ -205,9 +205,7 @@ def delete_account(
         )
 
     # Check if account has any transaction lines (MOST RESTRICTIVE - check first)
-    transaction_count = (
-        db.query(TransactionLine).filter(TransactionLine.account_id == account_id).count()
-    )
+    transaction_count = db.query(TransactionLine).filter(TransactionLine.account_id == account_id).count()
 
     if transaction_count > 0:
         # Cannot delete - account has transactions
@@ -219,15 +217,11 @@ def delete_account(
     # Check if account is used in posting templates
     from app.models.posting_template import PostingTemplate, PostingTemplateLine
 
-    template_line = (
-        db.query(PostingTemplateLine).filter(PostingTemplateLine.account_id == account_id).first()
-    )
+    template_line = db.query(PostingTemplateLine).filter(PostingTemplateLine.account_id == account_id).first()
 
     if template_line:
         # Get template name for better error message
-        template = (
-            db.query(PostingTemplate).filter(PostingTemplate.id == template_line.template_id).first()
-        )
+        template = db.query(PostingTemplate).filter(PostingTemplate.id == template_line.template_id).first()
         template_name = template.name if template else "okänd mall"
 
         raise HTTPException(
@@ -238,9 +232,7 @@ def delete_account(
     # Check if account is used in default accounts
     from app.models.default_account import DefaultAccount
 
-    default_account = (
-        db.query(DefaultAccount).filter(DefaultAccount.account_id == account_id).first()
-    )
+    default_account = db.query(DefaultAccount).filter(DefaultAccount.account_id == account_id).first()
 
     if default_account:
         raise HTTPException(

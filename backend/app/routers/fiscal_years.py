@@ -1,16 +1,15 @@
 from datetime import date
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
+from app.models.account import Account
 from app.models.company import Company
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.models.verification import Verification
-from app.models.account import Account
 from app.schemas.fiscal_year import FiscalYearCreate, FiscalYearResponse, FiscalYearUpdate
 
 router = APIRouter()
@@ -204,9 +203,7 @@ def assign_verifications_to_fiscal_year(
 
 @router.post("/{fiscal_year_id}/copy-chart-of-accounts", status_code=status.HTTP_200_OK)
 def copy_chart_of_accounts(
-    fiscal_year_id: int,
-    source_fiscal_year_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    fiscal_year_id: int, source_fiscal_year_id: int | None = None, db: Session = Depends(get_db)
 ):
     """
     Copy chart of accounts from a previous fiscal year to this fiscal year.
@@ -215,19 +212,14 @@ def copy_chart_of_accounts(
     # Get target fiscal year
     target_fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
     if not target_fiscal_year:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Fiscal year {fiscal_year_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Fiscal year {fiscal_year_id} not found")
 
     # Check if target fiscal year already has accounts
-    existing_accounts_count = db.query(Account).filter(
-        Account.fiscal_year_id == fiscal_year_id
-    ).count()
+    existing_accounts_count = db.query(Account).filter(Account.fiscal_year_id == fiscal_year_id).count()
     if existing_accounts_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Target fiscal year already has {existing_accounts_count} accounts. Cannot copy chart of accounts."
+            detail=f"Target fiscal year already has {existing_accounts_count} accounts. Cannot copy chart of accounts.",
         )
 
     # Determine source fiscal year
@@ -235,50 +227,49 @@ def copy_chart_of_accounts(
         source_fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == source_fiscal_year_id).first()
         if not source_fiscal_year:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Source fiscal year {source_fiscal_year_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Source fiscal year {source_fiscal_year_id} not found"
             )
         if source_fiscal_year.company_id != target_fiscal_year.company_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Source and target fiscal years must belong to the same company"
+                detail="Source and target fiscal years must belong to the same company",
             )
     else:
         # Find the most recent previous fiscal year for this company
-        source_fiscal_year = db.query(FiscalYear).filter(
-            FiscalYear.company_id == target_fiscal_year.company_id,
-            FiscalYear.end_date < target_fiscal_year.start_date
-        ).order_by(FiscalYear.end_date.desc()).first()
+        source_fiscal_year = (
+            db.query(FiscalYear)
+            .filter(
+                FiscalYear.company_id == target_fiscal_year.company_id,
+                FiscalYear.end_date < target_fiscal_year.start_date,
+            )
+            .order_by(FiscalYear.end_date.desc())
+            .first()
+        )
 
         if not source_fiscal_year:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No previous fiscal year found to copy from"
+                status_code=status.HTTP_404_NOT_FOUND, detail="No previous fiscal year found to copy from"
             )
 
     # Get all accounts from source fiscal year
-    source_accounts = db.query(Account).filter(
-        Account.fiscal_year_id == source_fiscal_year.id
-    ).all()
+    source_accounts = db.query(Account).filter(Account.fiscal_year_id == source_fiscal_year.id).all()
 
     if not source_accounts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Source fiscal year {source_fiscal_year.label} has no accounts to copy"
+            detail=f"Source fiscal year {source_fiscal_year.label} has no accounts to copy",
         )
 
     # Copy accounts to target fiscal year
     from app.models.account import AccountType
+
     created_accounts = []
 
     for source_account in source_accounts:
         # Determine opening balance for the new fiscal year:
         # - Balance accounts (Asset, Equity/Liability): carry forward current_balance from previous year
         # - Result accounts (Revenue, Cost): reset to 0
-        is_balance_account = source_account.account_type in [
-            AccountType.ASSET,
-            AccountType.EQUITY_LIABILITY
-        ]
+        is_balance_account = source_account.account_type in [AccountType.ASSET, AccountType.EQUITY_LIABILITY]
         opening_balance = source_account.current_balance if is_balance_account else 0
 
         new_account = Account(
@@ -291,7 +282,7 @@ def copy_chart_of_accounts(
             opening_balance=opening_balance,
             current_balance=opening_balance,  # Current balance starts at opening balance
             active=source_account.active,  # Preserve active/inactive status
-            is_bas_account=source_account.is_bas_account
+            is_bas_account=source_account.is_bas_account,
         )
         db.add(new_account)
         created_accounts.append(new_account)
@@ -304,5 +295,5 @@ def copy_chart_of_accounts(
         "source_fiscal_year_label": source_fiscal_year.label,
         "target_fiscal_year_id": target_fiscal_year.id,
         "target_fiscal_year_label": target_fiscal_year.label,
-        "accounts_copied": len(created_accounts)
+        "accounts_copied": len(created_accounts),
     }

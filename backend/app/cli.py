@@ -2,10 +2,11 @@
 CLI commands for Reknir
 Run with: python -m app.cli <command>
 """
-import sys
+
 import json
+import sys
 from pathlib import Path
-from sqlalchemy.orm import Session
+
 from app.database import SessionLocal
 from app.models import Account, Company
 from app.models.account import AccountType
@@ -34,7 +35,7 @@ def seed_bas_accounts(company_id: int):
         if existing_count > 0:
             print(f"Warning: Company {company_id} already has {existing_count} accounts")
             response = input("Do you want to continue and add more accounts? (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 print("Aborted")
                 return False
 
@@ -45,7 +46,7 @@ def seed_bas_accounts(company_id: int):
             print(f"Error: BAS accounts file not found at {json_path}")
             return False
 
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, encoding="utf-8") as f:
             accounts_data = json.load(f)
 
         # Import accounts
@@ -54,10 +55,11 @@ def seed_bas_accounts(company_id: int):
 
         for acc_data in accounts_data:
             # Check if account already exists
-            existing = db.query(Account).filter(
-                Account.company_id == company_id,
-                Account.account_number == acc_data['account_number']
-            ).first()
+            existing = (
+                db.query(Account)
+                .filter(Account.company_id == company_id, Account.account_number == acc_data["account_number"])
+                .first()
+            )
 
             if existing:
                 print(f"  Skipping {acc_data['account_number']} - {acc_data['name']} (already exists)")
@@ -67,14 +69,14 @@ def seed_bas_accounts(company_id: int):
             # Create account
             account = Account(
                 company_id=company_id,
-                account_number=acc_data['account_number'],
-                name=acc_data['name'],
-                description=acc_data.get('description'),
-                account_type=AccountType(acc_data['account_type']),
+                account_number=acc_data["account_number"],
+                name=acc_data["name"],
+                description=acc_data.get("description"),
+                account_type=AccountType(acc_data["account_type"]),
                 opening_balance=0,
                 current_balance=0,
                 is_bas_account=True,
-                active=True
+                active=True,
             )
             db.add(account)
             imported += 1
@@ -92,6 +94,7 @@ def seed_bas_accounts(company_id: int):
         db.rollback()
         print(f"Error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
@@ -101,7 +104,7 @@ def seed_bas_accounts(company_id: int):
 def load_posting_templates():
     """Load posting templates from JSON file"""
     template_file = Path(__file__).parent.parent.parent / "database" / "seeds" / "posting_templates.json"
-    with open(template_file, 'r', encoding='utf-8') as f:
+    with open(template_file, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -114,26 +117,26 @@ def seed_all(company_id: int):
     """
     print(f"Complete setup for company ID {company_id}")
     print("=" * 50)
-    
+
     # Seed BAS accounts first
     print("1. Seeding BAS kontoplan...")
     bas_success = seed_bas_accounts(company_id)
-    
+
     if not bas_success:
         print("ERROR: BAS seeding failed, aborting complete setup")
         return False
-    
+
     print("SUCCESS: BAS kontoplan seeded successfully!")
     print()
-    
+
     # Seed posting templates
     print("2. Seeding posting templates...")
     template_success = seed_posting_templates(company_id)
-    
+
     if not template_success:
         print("ERROR: Template seeding failed")
         return False
-    
+
     print("SUCCESS: Posting templates seeded successfully!")
     print()
     print("Complete setup finished! Your company is ready to use.")
@@ -163,13 +166,14 @@ def seed_posting_templates(company_id: int):
         skipped = 0
 
         templates = load_posting_templates()
-        
+
         for template_data in templates:
             # Check if template already exists
-            existing = db.query(PostingTemplate).filter(
-                PostingTemplate.company_id == company_id,
-                PostingTemplate.name == template_data['name']
-            ).first()
+            existing = (
+                db.query(PostingTemplate)
+                .filter(PostingTemplate.company_id == company_id, PostingTemplate.name == template_data["name"])
+                .first()
+            )
 
             if existing:
                 print(f"  Skipping '{template_data['name']}' (already exists)")
@@ -179,22 +183,23 @@ def seed_posting_templates(company_id: int):
             # Create template
             template = PostingTemplate(
                 company_id=company_id,
-                name=template_data['name'],
-                description=template_data['description'],
-                default_series=template_data['default_series'],
-                default_journal_text=template_data['default_journal_text']
+                name=template_data["name"],
+                description=template_data["description"],
+                default_series=template_data["default_series"],
+                default_journal_text=template_data["default_journal_text"],
             )
 
             db.add(template)
             db.flush()  # Get template ID
 
             # Create template lines
-            for line_data in template_data['lines']:
+            for line_data in template_data["lines"]:
                 try:
-                    account = db.query(Account).filter(
-                        Account.company_id == company_id,
-                        Account.account_number == line_data['account_number']
-                    ).first()
+                    account = (
+                        db.query(Account)
+                        .filter(Account.company_id == company_id, Account.account_number == line_data["account_number"])
+                        .first()
+                    )
 
                     if not account:
                         print(f"    Warning: Account {line_data['account_number']} not found - skipping line")
@@ -203,9 +208,9 @@ def seed_posting_templates(company_id: int):
                     line = PostingTemplateLine(
                         template_id=template.id,
                         account_id=account.id,
-                        formula=line_data['formula'],
-                        description=line_data['description'],
-                        sort_order=line_data['sort_order']
+                        formula=line_data["formula"],
+                        description=line_data["description"],
+                        sort_order=line_data["sort_order"],
                     )
 
                     db.add(line)
@@ -229,6 +234,7 @@ def seed_posting_templates(company_id: int):
         db.rollback()
         print(f"Error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
