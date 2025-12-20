@@ -1,7 +1,7 @@
 """add sort_order to posting templates
 
-Revision ID: 681955f3756a
-Revises: 010
+Revision ID: 012
+Revises: 011
 Create Date: 2025-11-29 16:06:24.538191
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "681955f3756a"
-down_revision = "010"
+revision = "012"
+down_revision = "011"
 branch_labels = None
 depends_on = None
 

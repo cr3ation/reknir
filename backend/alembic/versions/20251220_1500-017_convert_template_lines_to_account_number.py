@@ -1,7 +1,7 @@
 """convert posting template lines from account_id to account_number
 
-Revision ID: 011
-Revises: 10ce8918cca6
+Revision ID: 017
+Revises: 016
 Create Date: 2025-12-20 15:00:00.000000
 
 This migration converts posting_template_lines to use account_number instead of account_id.
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "011"
-down_revision: str | None = "10ce8918cca6"
+revision: str = "017"
+down_revision: str | None = "016"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -1,7 +1,7 @@
 """add_unique_constraint_account_and_notnull_verification_fiscal_year
 
-Revision ID: 10ce8918cca6
-Revises: 8c3d07e09af6
+Revision ID: 016
+Revises: 015
 Create Date: 2025-12-03 22:54:09.947544
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "10ce8918cca6"
-down_revision = "8c3d07e09af6"
+revision = "016"
+down_revision = "015"
 branch_labels = None
 depends_on = None
 

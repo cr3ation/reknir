@@ -1,7 +1,7 @@
 """add_fiscal_year_id_to_accounts
 
-Revision ID: 8c3d07e09af6
-Revises: 6b60dd14b9bb
+Revision ID: 015
+Revises: 014
 Create Date: 2025-12-01 21:58:39.559120
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "8c3d07e09af6"
-down_revision = "6b60dd14b9bb"
+revision = "015"
+down_revision = "014"
 branch_labels = None
 depends_on = None
 

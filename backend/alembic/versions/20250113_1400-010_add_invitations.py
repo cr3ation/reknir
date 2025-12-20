@@ -1,7 +1,7 @@
 """add invitations
 
-Revision ID: 009
-Revises: 008b
+Revision ID: 010
+Revises: 009
 Create Date: 2025-01-13 14:00:00.000000
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "009"
-down_revision = "008b"
+revision = "010"
+down_revision = "009"
 branch_labels = None
 depends_on = None
 
