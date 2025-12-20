@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { companyApi, fiscalYearApi } from '@/services/api'
 import { authService } from '@/services/authService'
+import { useAuth } from '@/contexts/AuthContext'
 import { CheckCircle, Building2, Calendar, BookOpen, UserPlus } from 'lucide-react'
 import { AccountingBasis, VATReportingPeriod } from '@/types'
 
 type SetupStep = 'admin-user' | 'company' | 'fiscal-year' | 'chart-of-accounts' | 'complete'
 
 export default function Setup() {
+  const { login } = useAuth()
   const [currentStep, setCurrentStep] = useState<SetupStep>('admin-user')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,8 +80,7 @@ export default function Setup() {
       })
 
       // Login immediately after registration
-      const loginResponse = await authService.login(adminData.email, adminData.password)
-      authService.saveToken(loginResponse.access_token)
+      await login(adminData.email, adminData.password)
 
       setCurrentStep('company')
     } catch (err: any) {
@@ -155,26 +156,15 @@ export default function Setup() {
     try {
       if (choice) {
         // Seed BAS accounts for this fiscal year
-        const basUrl = `/api/companies/${companyId}/seed-bas?fiscal_year_id=${fiscalYearId}`
-        const basResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${basUrl}`, {
-          method: 'POST',
-        })
-
-        if (!basResponse.ok) {
-          const errorData = await basResponse.json()
-          throw new Error(errorData.detail || 'Failed to seed BAS accounts')
-        }
+        await companyApi.seedBas(companyId!, fiscalYearId!)
 
         // Initialize default accounts
         await companyApi.initializeDefaults(companyId!)
 
         // Seed posting templates
-        const templatesUrl = `/api/companies/${companyId}/seed-templates`
-        const templatesResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${templatesUrl}`, {
-          method: 'POST',
-        })
-
-        if (!templatesResponse.ok) {
+        try {
+          await companyApi.seedTemplates(companyId!)
+        } catch {
           console.warn('Failed to seed posting templates, but continuing...')
         }
       }

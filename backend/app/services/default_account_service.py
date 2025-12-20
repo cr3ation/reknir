@@ -49,7 +49,7 @@ def set_default_account(db: Session, company_id: int, account_type: str, account
         return new_mapping
 
 
-def initialize_default_accounts_from_existing(db: Session, company_id: int) -> None:
+def initialize_default_accounts_from_existing(db: Session, company_id: int, fiscal_year_id: int) -> None:
     """
     Initialize default account mappings based on existing accounts.
     This is useful when importing SIE4 or setting up a new company.
@@ -82,7 +82,11 @@ def initialize_default_accounts_from_existing(db: Session, company_id: int) -> N
         for account_number in possible_numbers:
             account = (
                 db.query(Account)
-                .filter(Account.company_id == company_id, Account.account_number == account_number)
+                .filter(
+                    Account.company_id == company_id,
+                    Account.fiscal_year_id == fiscal_year_id,
+                    Account.account_number == account_number,
+                )
                 .first()
             )
 
