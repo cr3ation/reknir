@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Edit2, Save, X, FileText, Trash2, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { accountApi, defaultAccountApi, companyApi } from '@/services/api'
-import type { Account, DefaultAccount } from '@/types'
+import { accountApi, defaultAccountApi, companyApi, postingTemplateApi } from '@/services/api'
+import type { Account, DefaultAccount, PostingTemplate } from '@/types'
 import api from '@/services/api'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -50,6 +50,20 @@ export default function Accounts() {
   const [basAccounts, setBasAccounts] = useState<any[]>([])
   const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
 
+  // Delete account state
+  const [templates, setTemplates] = useState<PostingTemplate[]>([])
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    show: boolean
+    account: Account | null
+    canDelete: boolean
+    blockingReason: string | null
+  }>({
+    show: false,
+    account: null,
+    canDelete: true,
+    blockingReason: null
+  })
+
   const showMessage = (msg: string, type: 'success' | 'error') => {
     setMessage(msg)
     setMessageType(type)
@@ -59,6 +73,7 @@ export default function Accounts() {
   useEffect(() => {
     loadAccounts()
     loadDefaultAccounts()
+    loadTemplates()
   }, [selectedCompany, selectedFiscalYear])
 
   const loadAccounts = async () => {
@@ -85,6 +100,16 @@ export default function Accounts() {
       setDefaultAccounts(defaultsRes.data)
     } catch (error) {
       console.error('Failed to load default accounts:', error)
+    }
+  }
+
+  const loadTemplates = async () => {
+    if (!selectedCompany) return
+    try {
+      const templatesRes = await postingTemplateApi.list(selectedCompany.id)
+      setTemplates(templatesRes.data)
+    } catch (error) {
+      console.error('Failed to load templates:', error)
     }
   }
 
@@ -143,6 +168,67 @@ export default function Accounts() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleDeleteAccount = (account: Account) => {
+    // Check if account can be deleted
+    let canDelete = true
+    let blockingReason: string | null = null
+
+    // Check if account has transactions (balance has changed)
+    if (account.current_balance !== account.opening_balance) {
+      canDelete = false
+      blockingReason = `Kontot har bokförda transaktioner för detta räkenskapsår och kan därför inte raderas.`
+    }
+    // Check if account is used in posting templates
+    else {
+      const usedInTemplate = templates.find(template =>
+        template.template_lines.some(line => line.account_id === account.id)
+      )
+
+      if (usedInTemplate) {
+        canDelete = false
+        blockingReason = `Kontot används i konteringsmall "${usedInTemplate.name}". Ta bort eller redigera mallen först.`
+      }
+      // Check if account is used as default account
+      else {
+        const usedAsDefault = defaultAccounts.find(da => da.account_id === account.id)
+        if (usedAsDefault) {
+          canDelete = false
+          const label = DEFAULT_ACCOUNT_LABELS[usedAsDefault.account_type] || usedAsDefault.account_type
+          blockingReason = `Kontot används som standardkonto för "${label}". Ändra standardkontomappningen först.`
+        }
+      }
+    }
+
+    setDeleteConfirmation({
+      show: true,
+      account,
+      canDelete,
+      blockingReason
+    })
+  }
+
+  const confirmDeleteAccount = async () => {
+    if (!deleteConfirmation.account) return
+
+    try {
+      setLoading(true)
+      await accountApi.delete(deleteConfirmation.account.id)
+      showMessage('Konto borttaget!', 'success')
+      await loadAccounts()
+    } catch (error: unknown) {
+      console.error('Failed to delete account:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Kunde inte ta bort konto'
+      showMessage(errorMessage, 'error')
+    } finally {
+      setLoading(false)
+      setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
+    }
+  }
+
+  const cancelDeleteAccount = () => {
+    setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
   }
 
   const getAccountForType = (accountType: string): DefaultAccount | undefined => {
@@ -556,6 +642,13 @@ export default function Accounts() {
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
+                              <button
+                                onClick={() => handleDeleteAccount(account)}
+                                className="p-1 text-red-600 hover:text-red-800"
+                                title="Ta bort konto"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -667,6 +760,13 @@ export default function Accounts() {
                             title="Sätt ingående balans"
                           >
                             <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAccount(account)}
+                            className="p-1 text-red-600 hover:text-red-800"
+                            title="Ta bort konto"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -966,6 +1066,104 @@ export default function Accounts() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Dialog */}
+      {deleteConfirmation.show && deleteConfirmation.account && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white bg-opacity-20 p-2 rounded-full">
+                  <Trash2 className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-white">Ta bort konto</h3>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5">
+              <div className="mb-4">
+                <p className="text-gray-700 mb-3">
+                  {deleteConfirmation.canDelete
+                    ? 'Är du säker på att du vill ta bort följande konto?'
+                    : 'Följande konto kan inte raderas:'}
+                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="bg-blue-100 text-blue-600 rounded px-2 py-1 text-sm font-mono font-semibold">
+                        {deleteConfirmation.account.account_number}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">
+                        {deleteConfirmation.account.name}
+                      </p>
+                      {deleteConfirmation.account.description && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          {deleteConfirmation.account.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!deleteConfirmation.canDelete && deleteConfirmation.blockingReason && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800 mb-1">Kan inte raderas</p>
+                      <p className="text-sm text-red-700">
+                        {deleteConfirmation.blockingReason}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={cancelDeleteAccount}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteConfirmation.canDelete ? 'Avbryt' : 'Stäng'}
+              </button>
+              {deleteConfirmation.canDelete && (
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Tar bort...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Ta bort</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -1,32 +1,15 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
-import type { Account, DefaultAccount, FiscalYear, PostingTemplate, PostingTemplateLine } from '@/types'
+import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
+import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine } from '@/types'
 import { VATReportingPeriod, AccountingBasis } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
-const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
-  revenue_25: 'Försäljning 25% moms',
-  revenue_12: 'Försäljning 12% moms',
-  revenue_6: 'Försäljning 6% moms',
-  revenue_0: 'Försäljning 0% moms (export)',
-  vat_outgoing_25: 'Utgående moms 25%',
-  vat_outgoing_12: 'Utgående moms 12%',
-  vat_outgoing_6: 'Utgående moms 6%',
-  vat_incoming_25: 'Ingående moms 25%',
-  vat_incoming_12: 'Ingående moms 12%',
-  vat_incoming_6: 'Ingående moms 6%',
-  accounts_receivable: 'Kundfordringar',
-  accounts_payable: 'Leverantörsskulder',
-  expense_default: 'Standardkostnadskonto',
-}
-
 export default function SettingsPage() {
   const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
-  const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [accountCountsByFiscalYear, setAccountCountsByFiscalYear] = useState<Record<number, number>>({})
@@ -44,7 +27,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
-  const [activeTab, setActiveTab] = useState<'company' | 'accounts' | 'fiscal' | 'templates' | 'import'>('company')
+  const [activeTab, setActiveTab] = useState<'company' | 'fiscal' | 'templates' | 'import'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -118,14 +101,12 @@ export default function SettingsPage() {
       )
       setAccountCountsByFiscalYear(accountCounts)
 
-      // If we have a selected fiscal year, load accounts and defaults
+      // If we have a selected fiscal year, load accounts
       if (selectedFiscalYear) {
-        const [defaultsRes, accountsRes, templatesRes] = await Promise.all([
-          defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        const [accountsRes, templatesRes] = await Promise.all([
           accountApi.list(selectedCompany.id, selectedFiscalYear.id),
           postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
         ])
-        setDefaultAccounts(defaultsRes.data)
         setAllAccounts(accountsRes.data)
         setTemplates(templatesRes.data)
       }
@@ -595,19 +576,6 @@ export default function SettingsPage() {
   const [draggedTemplate, setDraggedTemplate] = useState<PostingTemplate | null>(null)
   const [dropIndicator, setDropIndicator] = useState<{ templateId: number; position: 'before' | 'after' } | null>(null)
 
-  // Delete account confirmation state
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{
-    show: boolean
-    account: Account | null
-    canDelete: boolean
-    blockingReason: string | null
-  }>({
-    show: false,
-    account: null,
-    canDelete: true,
-    blockingReason: null
-  })
-
   const handleDragStart = (e: any, template: PostingTemplate) => {
     setDraggedTemplate(template)
     e.dataTransfer.effectAllowed = 'move'
@@ -697,84 +665,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDeleteAccount = (account: Account) => {
-    // Check if account can be deleted
-    let canDelete = true
-    let blockingReason: string | null = null
-
-    // Check if account has transactions (balance has changed)
-    if (account.current_balance !== account.opening_balance) {
-      canDelete = false
-      blockingReason = `Kontot har bokförda transaktioner för detta räkenskapsår och kan därför inte raderas.`
-    }
-    // Check if account is used in posting templates
-    else {
-      const usedInTemplate = templates.find(template =>
-        template.template_lines.some(line => line.account_id === account.id)
-      )
-
-      if (usedInTemplate) {
-        canDelete = false
-        blockingReason = `Kontot används i konteringsmall "${usedInTemplate.name}". Ta bort eller redigera mallen först.`
-      }
-      // Check if account is used as default account
-      else {
-        const usedAsDefault = defaultAccounts.find(da => da.account_id === account.id)
-        if (usedAsDefault) {
-          canDelete = false
-          const label = DEFAULT_ACCOUNT_LABELS[usedAsDefault.account_type] || usedAsDefault.account_type
-          blockingReason = `Kontot används som standardkonto för "${label}". Ändra standardkontomappningen först.`
-        }
-      }
-    }
-
-    setDeleteConfirmation({
-      show: true,
-      account,
-      canDelete,
-      blockingReason
-    })
-  }
-
-  const confirmDeleteAccount = async () => {
-    if (!deleteConfirmation.account) return
-
-    try {
-      setLoading(true)
-      await accountApi.delete(deleteConfirmation.account.id)
-      showMessage('Konto borttaget!', 'success')
-      await loadData()
-    } catch (error: any) {
-      console.error('Failed to delete account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
-      setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
-    }
-  }
-
-  const cancelDeleteAccount = () => {
-    setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
-  }
-
-  const handleReactivateAccount = async (accountId: number) => {
-    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
-
-    try {
-      setLoading(true)
-      await accountApi.update(accountId, { active: true })
-      showMessage('Konto aktiverat!', 'success')
-      await loadData()
-    } catch (error: any) {
-      console.error('Failed to reactivate account:', error)
-      showMessage(formatErrorMessage(error), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-
-
   if (!selectedCompany && !loading) {
     return (
       <div className="card">
@@ -805,16 +695,6 @@ export default function SettingsPage() {
             }`}
           >
             Företag
-          </button>
-          <button
-            onClick={() => setActiveTab('accounts')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'accounts'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Konton
           </button>
           <button
             onClick={() => setActiveTab('fiscal')}
@@ -1397,160 +1277,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Accounts Tab */}
-      {activeTab === 'accounts' && (
-        <div>
-          {/* All Accounts Section */}
-          <div className="card mt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Alla konton</h2>
-            </div>
-
-            <p className="text-gray-600 mb-4">
-              Hantera alla konton i kontoplanen. För att lägga till nya konton, gå till Kontoplan-sidan.
-            </p>
-
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : allAccounts.filter(a => a.active).length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p className="mb-4">Inga konton skapade än.</p>
-                <p className="text-sm">
-                  Importera BAS-kontoplanen under fliken "Import" för att komma igång.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Kontonummer
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Namn
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Typ
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Saldo
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Åtgärder
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {allAccounts.filter(a => a.active).map((account) => (
-                      <tr key={account.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono">
-                          {account.account_number}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {account.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {account.account_type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                          {account.current_balance?.toLocaleString('sv-SE', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }) || '0,00'} kr
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => handleDeleteAccount(account)}
-                            disabled={loading}
-                            className="text-red-600 hover:text-red-900"
-                            title="Ta bort konto"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Inactive Accounts Section */}
-          {allAccounts.filter(a => !a.active).length > 0 && (
-            <div className="card mt-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Inaktiva konton</h2>
-              </div>
-
-              <p className="text-gray-600 mb-4">
-                Dessa konton har markerats som inaktiva eftersom de har bokförda transaktioner. De kan återaktiveras vid behov.
-              </p>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Kontonummer
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Namn
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Typ
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Saldo
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Åtgärder
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {allAccounts.filter(a => !a.active).map((account) => (
-                      <tr key={account.id} className="hover:bg-gray-50 opacity-60">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
-                          <span className="text-amber-600 mr-1" title="Inaktivt konto">⚠</span>
-                          {account.account_number}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {account.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                          {account.account_type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                          {account.current_balance?.toLocaleString('sv-SE', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }) || '0,00'} kr
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => handleReactivateAccount(account.id)}
-                            disabled={loading}
-                            className="text-green-600 hover:text-green-900 flex items-center gap-1 ml-auto"
-                            title="Aktivera konto"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            Aktivera
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Fiscal Years Tab */}
       {activeTab === 'fiscal' && (
         <div>
@@ -2104,104 +1830,6 @@ export default function SettingsPage() {
                   {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Account Confirmation Dialog */}
-      {deleteConfirmation.show && deleteConfirmation.account && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-white bg-opacity-20 p-2 rounded-full">
-                  <Trash2 className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-xl font-semibold text-white">Ta bort konto</h3>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="px-6 py-5">
-              <div className="mb-4">
-                <p className="text-gray-700 mb-3">
-                  {deleteConfirmation.canDelete
-                    ? 'Är du säker på att du vill ta bort följande konto?'
-                    : 'Följande konto kan inte raderas:'}
-                </p>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-shrink-0 mt-0.5">
-                      <div className="bg-blue-100 text-blue-600 rounded px-2 py-1 text-sm font-mono font-semibold">
-                        {deleteConfirmation.account.account_number}
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900">
-                        {deleteConfirmation.account.name}
-                      </p>
-                      {deleteConfirmation.account.description && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          {deleteConfirmation.account.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {!deleteConfirmation.canDelete && deleteConfirmation.blockingReason && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <div className="flex gap-3">
-                    <div className="flex-shrink-0">
-                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-red-800 mb-1">Kan inte raderas</p>
-                      <p className="text-sm text-red-700">
-                        {deleteConfirmation.blockingReason}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
-              <button
-                onClick={cancelDeleteAccount}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {deleteConfirmation.canDelete ? 'Avbryt' : 'Stäng'}
-              </button>
-              {deleteConfirmation.canDelete && (
-                <button
-                  onClick={confirmDeleteAccount}
-                  disabled={loading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span>Tar bort...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4" />
-                      <span>Ta bort</span>
-                    </>
-                  )}
-                </button>
-              )}
             </div>
           </div>
         </div>
