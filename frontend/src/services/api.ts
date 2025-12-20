@@ -74,9 +74,11 @@ export const companyApi = {
   create: (data: Omit<Company, 'id'>) => api.post<Company>('/companies/', data),
   update: (id: number, data: Partial<Company>) => api.patch<Company>(`/companies/${id}`, data),
   delete: (id: number) => api.delete(`/companies/${id}`),
-  initializeDefaults: (id: number) =>
+  initializeDefaults: (id: number, fiscalYearId?: number) =>
     api.post<{ message: string; default_accounts_configured: number }>(
-      `/companies/${id}/initialize-defaults`
+      `/companies/${id}/initialize-defaults`,
+      null,
+      fiscalYearId ? { params: { fiscal_year_id: fiscalYearId } } : undefined
     ),
   getBasAccounts: () => api.get<{ version: string; description: string; accounts: unknown[] }>('/companies/bas-accounts'),
   seedBas: (id: number, fiscalYearId: number) =>

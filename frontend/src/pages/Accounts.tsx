@@ -303,11 +303,14 @@ export default function Accounts() {
   }
 
   const handleInitializeDefaults = async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Du måste välja ett räkenskapsår först', 'error')
+      return
+    }
 
     try {
       setLoading(true)
-      const response = await companyApi.initializeDefaults(selectedCompany.id)
+      const response = await companyApi.initializeDefaults(selectedCompany.id, selectedFiscalYear.id)
       showMessage(response.data.message, 'success')
       await loadDefaultAccounts()
     } catch (error: unknown) {

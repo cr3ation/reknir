@@ -159,7 +159,7 @@ export default function Setup() {
         await companyApi.seedBas(companyId!, fiscalYearId!)
 
         // Initialize default accounts
-        await companyApi.initializeDefaults(companyId!)
+        await companyApi.initializeDefaults(companyId!, fiscalYearId!)
 
         // Seed posting templates
         try {
