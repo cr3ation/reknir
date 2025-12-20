@@ -50,6 +50,7 @@ async def create_verification(
     # Create verification
     db_verification = Verification(
         company_id=verification.company_id,
+        fiscal_year_id=verification.fiscal_year_id,
         verification_number=next_number,
         series=verification.series,
         transaction_date=verification.transaction_date,
@@ -98,6 +99,7 @@ async def create_verification(
 @router.get("/", response_model=list[VerificationListItem])
 async def list_verifications(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int | None = Query(None, description="Fiscal Year ID"),
     start_date: date | None = None,
     end_date: date | None = None,
     series: str | None = None,
@@ -112,6 +114,8 @@ async def list_verifications(
 
     query = db.query(Verification).filter(Verification.company_id == company_id)
 
+    if fiscal_year_id:
+        query = query.filter(Verification.fiscal_year_id == fiscal_year_id)
     if start_date:
         query = query.filter(Verification.transaction_date >= start_date)
     if end_date:

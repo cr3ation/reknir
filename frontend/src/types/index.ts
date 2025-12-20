@@ -26,6 +26,7 @@ export interface Company {
   id: number
   name: string
   org_number: string
+  vat_number: string
   address?: string
   postal_code?: string
   city?: string
@@ -35,6 +36,7 @@ export interface Company {
   fiscal_year_end: string
   accounting_basis: AccountingBasis
   vat_reporting_period: VATReportingPeriod
+  logo_filename?: string
 }
 
 export interface FiscalYear {
@@ -51,6 +53,7 @@ export interface FiscalYear {
 export interface Account {
   id: number
   company_id: number
+  fiscal_year_id: number
   account_number: number
   name: string
   description?: string
@@ -98,6 +101,63 @@ export interface VerificationListItem {
   locked: boolean
 }
 
+// Posting Templates
+export interface PostingTemplateLine {
+  id?: number
+  template_id?: number
+  account_id: number
+  formula: string
+  description?: string
+  sort_order: number
+}
+
+export interface PostingTemplate {
+  id?: number
+  company_id: number
+  name: string
+  description: string
+  default_series?: string
+  default_journal_text?: string
+  created_at?: string
+  updated_at?: string
+  template_lines: PostingTemplateLine[]
+}
+
+export interface PostingTemplateListItem {
+  id: number
+  name: string
+  description: string
+  default_series?: string
+  created_at: string
+  updated_at: string
+  line_count: number
+  sort_order?: number
+}
+
+export interface TemplateExecutionRequest {
+  amount: number
+  fiscal_year_id: number
+  transaction_date?: string
+  description_override?: string
+}
+
+export interface TemplateExecutionLine {
+  account_id: number
+  debit: number
+  credit: number
+  description?: string
+}
+
+export interface TemplateExecutionResult {
+  template_id: number
+  template_name: string
+  amount: number
+  posting_lines: TemplateExecutionLine[]
+  total_debit: number
+  total_credit: number
+  is_balanced: boolean
+}
+
 export interface BalanceSheet {
   company_id: number
   report_type: string
@@ -113,6 +173,7 @@ export interface BalanceSheet {
     accounts: Array<{ account_number: number; name: string; balance: number }>
     total: number
   }
+  current_year_result: number
   total_liabilities_and_equity: number
   balanced: boolean
 }

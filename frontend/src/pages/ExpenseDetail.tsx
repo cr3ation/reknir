@@ -4,11 +4,13 @@ import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen, Download, U
 import { expenseApi, accountApi } from '@/services/api'
 import type { Expense, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function ExpenseDetail() {
   const { expenseId } = useParams<{ expenseId: string }>()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [expense, setExpense] = useState<Expense | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,10 +54,10 @@ export default function ExpenseDetail() {
   }
 
   const loadAccounts = async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)

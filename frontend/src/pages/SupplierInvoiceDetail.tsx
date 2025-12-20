@@ -4,12 +4,14 @@ import { ArrowLeft, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } f
 import { supplierInvoiceApi, accountApi, supplierApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
 
 export default function SupplierInvoiceDetail() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [invoice, setInvoice] = useState<SupplierInvoice | null>(null)
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -37,15 +39,15 @@ export default function SupplierInvoiceDetail() {
   }, [invoiceId, navigate])
 
   const loadAccounts = useCallback(async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
     }
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   useEffect(() => {
     loadInvoice()

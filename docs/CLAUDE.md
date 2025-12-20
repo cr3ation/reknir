@@ -11,6 +11,8 @@ Reknir är ett komplett bokföringssystem byggt för svenska företag med stöd 
 - **PostgreSQL** - Databas
 - **Alembic** - Databasmigrationer
 - **Pydantic** - Datavalidering
+- **WeasyPrint** - PDF-generering
+- **Jinja2** - HTML-mallar för PDF
 
 ### Frontend
 - **React 18** med TypeScript
@@ -41,26 +43,124 @@ reknir/
 │   └── package.json
 ├── receipts/                 # Utläggskvitton
 ├── invoices/                 # Fakturabilagor
+├── uploads/                  # Uppladdade filer (logotyper)
+│   └── logos/                # Företagslogotyper
 └── docker-compose.yml        # Container orchestration
 ```
 
 ## Huvudfunktioner
 
-### 1. Kontoplan (BAS)
-- Import av BAS-kontoplan (svensk standard)
-- Kontohantering med typer (Tillgång, Skuld, Intäkt, Kostnad)
-- Kontoreskontra (huvudbok)
-- Automatisk balansuppdatering
+### 1. Räkenskapsår och Kontoplan
 
-**Viktiga konton:**
-- **1510** - Kundfordringar
-- **1930** - Företagskonto/Bankgiro (standard bankkonto)
-- **2440** - Leverantörsskulder
-- **2641** - Ingående moms 25%
-- **2890** - Upplupna kostnader (anställdas utlägg)
-- **2610-2650** - Utgående moms
-- **3xxx** - Intäktskonton
-- **4xxx-8xxx** - Kostnadskonton
+#### Räkenskapsår (Fiscal Years)
+Varje företag kan ha flera räkenskapsår. Varje räkenskapsår har sin egen kontoplan.
+
+**Viktiga principer:**
+- Varje konto tillhör ett specifikt räkenskapsår
+- Samma kontonummer kan finnas i flera år, men det är olika konton i systemet
+- Verifikationer kopplas till konton i ett specifikt räkenskapsår
+- Konton med transaktioner kan inte tas bort, endast inaktiveras
+
+#### Skapa första räkenskapsåret (Onboarding)
+
+Under onboarding när ett företag skapas:
+1. Användaren skapar företaget via `/setup` (Setup-sidan)
+2. Användaren skapar första räkenskapsåret: `POST /api/fiscal-years/`
+3. Användaren väljer om BAS-kontoplanen ska importeras:
+   - **JA**: `POST /api/companies/{id}/seed-bas?fiscal_year_id={fy_id}`
+     - Systemet skapar 43 BAS-konton knutna till räkenskapsåret
+     - Alla konton får `opening_balance = 0` och `current_balance = 0`
+     - Standardkonton initialiseras automatiskt: `POST /api/companies/{id}/initialize-defaults`
+     - Konteringsmallar skapas: `POST /api/companies/{id}/seed-templates`
+   - **NEJ**: Inga konton skapas, användaren lägger till egna konton senare
+
+**Viktigt**: Alla konton i första räkenskapsåret skapas med `fiscal_year_id` satt till det nya räkenskapsårets ID.
+
+#### Skapa nytt räkenskapsår (Efterföljande år)
+
+När ett nytt räkenskapsår skapas i Settings:
+1. Användaren skapar räkenskapsåret: `POST /api/fiscal-years/`
+2. **Automatiskt**: Frontend anropar `POST /api/fiscal-years/{new_fy_id}/copy-chart-of-accounts`
+   - Backend hittar automatiskt senaste avslutade räkenskapsåret
+   - Alla konton kopieras från föregående år till det nya året
+   - Varje konto får ett nytt `id` men behåller samma `account_number`
+   - **Balanskonton** (Asset, Equity/Liability): `opening_balance` = föregående års `current_balance`
+   - **Resultatkonton** (Revenue, Cost): `opening_balance = 0` (nollställs inför nytt år)
+   - `current_balance` sätts till samma värde som `opening_balance`
+   - `active`/`inactive` status bevaras från föregående år
+   - `is_bas_account` bevaras
+
+**Exempel**:
+```
+År 2024:
+  - Konto ID=100, account_number=1930 (Bankkonto, Asset)
+    opening_balance=0, current_balance=50000
+
+  - Konto ID=101, account_number=3001 (Försäljning, Revenue)
+    opening_balance=0, current_balance=200000
+
+År 2025 (efter kopiering):
+  - Konto ID=200, account_number=1930 (Bankkonto, Asset)
+    opening_balance=50000, current_balance=50000  ← Balanseras från 2024
+
+  - Konto ID=201, account_number=3001 (Försäljning, Revenue)
+    opening_balance=0, current_balance=0  ← Nollställs för nytt år
+```
+
+#### Kontohantering mellan räkenskapsår
+
+**Viktiga principer:**
+- Varje konto är **unikt per räkenskapsår** via `fiscal_year_id`
+- Samma kontonummer kan finnas i flera år, men är olika konton i systemet
+- Ändringar i ett års kontoplan påverkar INTE andra år
+- Default accounts matchar automatiskt via kontonummer mellan år
+
+**Användning av konton:**
+- När användare skapar verifikation väljs räkenskapsår (via datum eller explicit val)
+- Systemet visar bara konton från det valda räkenskapsåret
+- Inaktiva konton visas inte i dropdowns för nya verifikationer
+- Inaktiva konton visas fortfarande i rapporter och historik
+
+**Redigering och borttagning:**
+- Konton kan läggas till i vilket räkenskapsår som helst
+- Konton kan redigeras (namn, beskrivning, typ, aktiv/inaktiv)
+- Konton med transaktioner KAN INTE tas bort
+- Konton utan transaktioner KAN tas bort
+- Inaktivering är det rekommenderade sättet att "gömma" konton
+
+**API Endpoints:**
+- `POST /api/fiscal-years/` - Skapa nytt räkenskapsår
+- `GET /api/fiscal-years/?company_id={id}` - Lista räkenskapsår
+- `GET /api/fiscal-years/current/by-company/{id}` - Hämta aktuellt räkenskapsår
+- `POST /api/fiscal-years/{id}/copy-chart-of-accounts` - Kopiera kontoplan från föregående år
+- `POST /api/fiscal-years/{id}/assign-verifications` - Tilldela verifikationer till räkenskapsår
+- `GET /api/accounts/?company_id={id}&fiscal_year_id={fy_id}` - Lista konton för specifikt räkenskapsår
+- `POST /api/companies/{id}/seed-bas?fiscal_year_id={fy_id}` - Importera BAS-kontoplan för specifikt räkenskapsår
+
+#### Kontoplan (BAS)
+- Import av BAS-kontoplan (svensk standard, 43 konton)
+- Kontohantering med typer baserade på BAS-strukturen:
+  - **ASSET** (1xxx) - Tillgångar
+  - **EQUITY_LIABILITY** (2xxx) - Eget kapital och skulder
+  - **REVENUE** (3xxx) - Intäkter
+  - **COST_GOODS** (4xxx) - Kostnader för varor/material
+  - **COST_LOCAL** (5xxx) - Lokalkostnader
+  - **COST_OTHER** (6xxx) - Övriga kostnader
+  - **COST_PERSONNEL** (7xxx) - Personalkostnader
+  - **COST_MISC** (8xxx) - Diverse kostnader
+- Kontoreskontra (huvudbok per konto)
+- Automatisk balansuppdatering vid bokföring
+- **Konton är alltid knutna till ett specifikt räkenskapsår**
+
+**Viktiga BAS-konton:**
+- **1510** - Kundfordringar (Asset)
+- **1930** - Företagskonto/Bankgiro (Asset, standard bankkonto för alla betalningar)
+- **2440** - Leverantörsskulder (Equity/Liability)
+- **2641** - Ingående moms 25% (Equity/Liability)
+- **2890** - Upplupna kostnader (Equity/Liability, anställdas utlägg)
+- **2610-2650** - Utgående moms (Equity/Liability: 2611=25%, 2621=12%, 2631=6%)
+- **3xxx** - Intäktskonton (Revenue: 3001=25%, 3002=12%, 3003=6%, 3100=0%)
+- **4xxx-8xxx** - Kostnadskonton (Cost)
 
 ### 2. Verifikationer
 - Automatisk numrering per serie (A, B, C, etc.)
@@ -196,6 +296,72 @@ Kredit: 1930 Bankkonto              [Belopp]
 - Export till SIE4-format
 - Kompatibelt med andra bokföringsprogram
 
+### 10. Konteringsmallar (Posting Templates)
+- Skapande av återanvändbara konteringsmallar
+- Formelbaserade beräkningar med variabeln `{total}`
+- Automatisk beräkning av konteringsrader
+- Malleditor med drag-and-drop sortering
+- Förutfyllda svenska standardmallar
+- **Stöd för flera räkenskapsår:** Mallar refererar till konton via kontonummer och översätts automatiskt till rätt räkenskapsår vid användning
+
+**Formelexempel:**
+- `{total}` - Totalbelopp
+- `{total} * 0.25` - 25% av totalbelopp (t.ex. moms)
+- `-{total}` - Negativt belopp
+- `{total} * 1.25` - Totalbelopp plus 25%
+
+**Hantering av räkenskapsår:**
+Mallar skapas med konton från ett specifikt räkenskapsår (vanligtvis det första). När mallen används:
+1. Användaren anger vilket räkenskapsår de arbetar i
+2. Systemet hittar motsvarande konton (samma kontonummer) i det valda räkenskapsåret
+3. Verifikationsrader skapas med konton från det aktuella räkenskapsåret
+
+Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förutsatt att motsvarande konton finns i båda åren.
+
+**API Endpoints:**
+- `POST /api/posting-templates/` - Skapa mall
+- `GET /api/posting-templates/` - Lista mallar
+- `GET /api/posting-templates/{id}` - Hämta mall
+- `PUT /api/posting-templates/{id}` - Uppdatera mall
+- `DELETE /api/posting-templates/{id}` - Ta bort mall
+- `POST /api/posting-templates/{id}/execute` - Kör mall (kräver fiscal_year_id i request body)
+- `PATCH /api/posting-templates/reorder` - Ändra sortering
+
+**Routes:**
+- `/settings` - Inställningar (fliken "Konteringsmallar")
+
+### 11. Företagsinställningar
+- Företagsinformation med automatiskt VAT-nummer
+- Logotypuppladdning och visning
+- Flikbaserad navigation (Företag, Konton, Räkenskapsår, Mallar, Import)
+- Initialisering av standardkonton
+- Import av BAS-kontoplan
+- Import av standardmallar
+
+**VAT-nummer:**
+- Automatisk beräkning från organisationsnummer
+- Format: SE + 10 siffror + 01
+- Exempel: 556644-4354 → SE556644435401
+- Visas på fakturor och i företagsinformation
+
+**Logotyphantering:**
+- Format: PNG, JPEG
+- Max storlek: 5MB
+- Förhandsvisning i inställningar
+- Automatisk visning på faktura-PDF
+- UUID-baserade filnamn för säkerhet
+
+**API Endpoints:**
+- `POST /api/companies/{id}/logo` - Ladda upp logotyp
+- `GET /api/companies/{id}/logo` - Hämta logotyp
+- `DELETE /api/companies/{id}/logo` - Ta bort logotyp
+- `POST /api/companies/{id}/initialize-defaults` - Initiera standardkonton
+- `POST /api/companies/{id}/seed-bas` - Importera BAS-kontoplan
+- `POST /api/companies/{id}/seed-templates` - Importera standardmallar
+
+**Routes:**
+- `/settings` - Inställningar (flikbaserad vy)
+
 ## Standardkonfigurationer
 
 ### Bankkonto
@@ -282,6 +448,10 @@ Systemet använder default accounts för automatisk bokföring:
 - `get_revenue_account_for_vat_rate()` - Hämta intäktskonto för momssats
 - `get_vat_outgoing_account_for_rate()` - Hämta utgående momskonto
 
+### `/backend/app/services/pdf_service.py`
+- `generate_invoice_pdf()` - Genererar PDF från faktura med Jinja2-mall och WeasyPrint
+- `save_invoice_pdf()` - Sparar genererad PDF till disk
+
 ## Databasschema
 
 ### Viktiga Tabeller
@@ -298,11 +468,15 @@ Systemet använder default accounts för automatisk bokföring:
 - `customers` - Kunder
 - `suppliers` - Leverantörer
 - `default_accounts` - Standardkonton
+- `posting_templates` - Konteringsmallar
+- `posting_template_lines` - Konteringsmallrader
 
 ### Enum Types
 - `InvoiceStatus`: draft, sent, paid, partial, overdue, cancelled
 - `ExpenseStatus`: draft, submitted, approved, paid, rejected
 - `AccountType`: asset, liability, equity, revenue, expense
+- `AccountingBasis`: accrual, cash
+- `VATReportingPeriod`: monthly, quarterly, yearly
 
 ## Utveckling
 
@@ -341,6 +515,14 @@ docker compose exec backend alembic revision --autogenerate -m "beskrivning"
 - Docker volume: `./invoices:/app/invoices`
 - Format: JPG, JPEG, PNG, PDF, GIF
 - Unika filnamn: UUID
+
+### Företagslogotyper
+- Lagrad i: `/app/uploads/logos/`
+- Docker volume: `./uploads:/app/uploads`
+- Format: PNG, JPEG
+- Max storlek: 5MB
+- Unika filnamn: `{company_id}_{uuid}.{ext}`
+- Visas på faktura-PDF
 
 ## Säkerhet & Validering
 
@@ -402,6 +584,8 @@ Systemet har för närvarande ingen autentisering (single-company mode). Detta k
 - [ ] E-postutskick av fakturor
 - [ ] Automatisk momsredovisning
 - [ ] Bokslut och årsbokslut
+- [ ] Integration av konteringsmallar med faktura/utlägg-workflows
+- [ ] Automatisk matchning av banktransaktioner
 
 ### Tekniska Förbättringar
 - [ ] Caching (Redis)
@@ -432,5 +616,29 @@ BSD 3-Clause License - Se LICENSE-filen i projektets rot.
 
 ---
 
-**Version:** 1.0.0
-**Senast uppdaterad:** 2025-01-11
+**Version:** 1.2.0
+**Senast uppdaterad:** 2025-12-03
+
+## Ändringslogg
+
+### v1.2.0 (2025-12-02)
+- ✅ Fullständigt stöd för flera räkenskapsår med separata kontoplaner
+- ✅ Automatisk kopiering av kontoplan mellan räkenskapsår med korrekt balansering
+  - Balanskonton (Asset, Equity/Liability) får ingående saldo från föregående års utgående saldo
+  - Resultatkonton (Revenue, Cost) nollställs inför nytt år
+- ✅ Varje konto är unikt per räkenskapsår med egen `fiscal_year_id`
+- ✅ Konteringsmallar fungerar över räkenskapsår genom kontonummer-mappning
+- ✅ Default accounts översätts automatiskt till rätt räkenskapsår
+- ✅ Frontend automatiserar kopiering av kontoplan vid skapande av nytt räkenskapsår
+- ✅ Förbättrad dokumentation för räkenskapsår-hantering
+
+### v1.1.0 (2025-11-30)
+- ✅ Konteringsmallar med formelbaserade beräkningar
+- ✅ Företagslogotyp upload och PDF-integration
+- ✅ Automatisk VAT-nummer beräkning
+- ✅ Flikbaserad inställningssida
+- ✅ Förbättrad faktura-PDF mall
+- ✅ Etiketter på fakturarader
+
+### v1.0.0 (2025-01-11)
+- Initial release med grundläggande bokföringsfunktioner

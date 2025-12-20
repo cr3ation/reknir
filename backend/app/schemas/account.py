@@ -18,6 +18,7 @@ class AccountCreate(AccountBase):
     """Schema for creating an account"""
 
     company_id: int
+    fiscal_year_id: int
     opening_balance: Decimal = Decimal("0.00")
     is_bas_account: bool = True
 
@@ -35,6 +36,7 @@ class AccountResponse(AccountBase):
 
     id: int
     company_id: int
+    fiscal_year_id: int
     opening_balance: Decimal
     current_balance: Decimal
     active: bool

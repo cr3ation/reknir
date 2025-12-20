@@ -5,9 +5,12 @@ import { accountApi } from '@/services/api'
 import type { Account } from '@/types'
 import api from '@/services/api'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function Accounts() {
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<string>('all')
@@ -17,17 +20,17 @@ export default function Accounts() {
 
   useEffect(() => {
     loadAccounts()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadAccounts = async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
       return
     }
 
     try {
       setLoading(true)
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
@@ -103,11 +106,14 @@ export default function Accounts() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-4">Kontoplan</h1>
-        <p className="text-gray-600">
-          BAS 2024 kontoplan med {accounts.length} konton
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-4">Kontoplan</h1>
+          <p className="text-gray-600">
+            BAS 2024 kontoplan med {accounts.length} konton
+          </p>
+        </div>
+        <FiscalYearSelector />
       </div>
 
       {/* Filters */}

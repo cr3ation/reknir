@@ -5,6 +5,9 @@ import type {
   Account,
   Verification,
   VerificationListItem,
+  PostingTemplate,
+  TemplateExecutionRequest,
+  TemplateExecutionResult,
   BalanceSheet,
   IncomeStatement,
   GeneralLedger,
@@ -75,6 +78,19 @@ export const companyApi = {
     api.post<{ message: string; default_accounts_configured: number }>(
       `/companies/${id}/initialize-defaults`
     ),
+  getBasAccounts: () => api.get<{ version: string; description: string; accounts: unknown[] }>('/companies/bas-accounts'),
+  seedBas: (id: number, fiscalYearId: number) =>
+    api.post(`/companies/${id}/seed-bas`, null, { params: { fiscal_year_id: fiscalYearId } }),
+  seedTemplates: (id: number) => api.post(`/companies/${id}/seed-templates`),
+  uploadLogo: (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<Company>(`/companies/${id}/logo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  getLogo: (id: number) => `${API_BASE_URL}/companies/${id}/logo`,
+  deleteLogo: (id: number) => api.delete<Company>(`/companies/${id}/logo`),
 }
 
 // Fiscal Years
@@ -86,16 +102,28 @@ export const fiscalYearApi = {
   update: (id: number, data: Partial<FiscalYear>) => api.patch<FiscalYear>(`/fiscal-years/${id}`, data),
   delete: (id: number) => api.delete(`/fiscal-years/${id}`),
   assignVerifications: (id: number) => api.post<{ message: string; verifications_assigned: number }>(`/fiscal-years/${id}/assign-verifications`),
+  copyChartOfAccounts: (fiscalYearId: number, sourceFiscalYearId?: number) =>
+    api.post<{
+      message: string;
+      source_fiscal_year_id: number;
+      source_fiscal_year_label: string;
+      target_fiscal_year_id: number;
+      target_fiscal_year_label: string;
+      accounts_copied: number;
+    }>(`/fiscal-years/${fiscalYearId}/copy-chart-of-accounts`, null, {
+      params: sourceFiscalYearId ? { source_fiscal_year_id: sourceFiscalYearId } : undefined,
+    }),
 }
 
 // Accounts
 export const accountApi = {
-  list: (companyId: number, params?: { account_type?: string; active_only?: boolean }) =>
-    api.get<Account[]>('/accounts/', { params: { company_id: companyId, ...params } }),
+  list: (companyId: number, fiscalYearId: number, params?: { account_type?: string; active_only?: boolean }) =>
+    api.get<Account[]>('/accounts/', { params: { company_id: companyId, fiscal_year_id: fiscalYearId, ...params } }),
   get: (id: number) => api.get<Account>(`/accounts/${id}`),
   create: (data: Omit<Account, 'id' | 'current_balance'>) =>
     api.post<Account>('/accounts/', data),
   update: (id: number, data: Partial<Account>) => api.patch<Account>(`/accounts/${id}`, data),
+  delete: (id: number) => api.delete(`/accounts/${id}`),
   getLedger: (accountId: number, params?: { start_date?: string; end_date?: string }) =>
     api.get(`/accounts/${accountId}/ledger`, { params }),
 }
@@ -105,6 +133,7 @@ export const verificationApi = {
   list: (
     companyId: number,
     params?: {
+      fiscal_year_id?: number
       start_date?: string
       end_date?: string
       series?: string
@@ -122,13 +151,31 @@ export const verificationApi = {
   delete: (id: number) => api.delete(`/verifications/${id}`),
 }
 
+// Posting Templates
+export const postingTemplateApi = {
+  list: (companyId: number, params?: { skip?: number; limit?: number }) =>
+    api.get<PostingTemplate[]>('/posting-templates/', {
+      params: { company_id: companyId, ...params },
+    }),
+  get: (id: number) => api.get<PostingTemplate>(`/posting-templates/${id}`),
+  create: (data: Omit<PostingTemplate, 'id' | 'created_at' | 'updated_at'>) =>
+    api.post<PostingTemplate>('/posting-templates/', data),
+  update: (id: number, data: Partial<PostingTemplate>) =>
+    api.put<PostingTemplate>(`/posting-templates/${id}`, data),
+  delete: (id: number) => api.delete(`/posting-templates/${id}`),
+  execute: (id: number, request: TemplateExecutionRequest) =>
+    api.post<TemplateExecutionResult>(`/posting-templates/${id}/execute`, request),
+  reorder: (companyId: number, templateOrders: { id: number; sort_order: number }[]) =>
+    api.patch(`/posting-templates/reorder?company_id=${companyId}`, templateOrders),
+}
+
 // Reports
 export const reportApi = {
-  balanceSheet: (companyId: number) =>
-    api.get<BalanceSheet>('/reports/balance-sheet', { params: { company_id: companyId } }),
-  incomeStatement: (companyId: number) =>
+  balanceSheet: (companyId: number, fiscalYearId?: number) =>
+    api.get<BalanceSheet>('/reports/balance-sheet', { params: { company_id: companyId, fiscal_year_id: fiscalYearId } }),
+  incomeStatement: (companyId: number, fiscalYearId?: number) =>
     api.get<IncomeStatement>('/reports/income-statement', {
-      params: { company_id: companyId },
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId },
     }),
   generalLedger: (companyId: number, fiscalYearId?: number, startDate?: string, endDate?: string, accountNumbers?: string) =>
     api.get<GeneralLedger>('/reports/general-ledger', {
@@ -140,22 +187,23 @@ export const reportApi = {
         account_numbers: accountNumbers,
       },
     }),
-  vatReport: (companyId: number, startDate?: string, endDate?: string, excludeVatSettlements?: boolean) =>
+  vatReport: (companyId: number, fiscalYearId?: number, startDate?: string, endDate?: string, excludeVatSettlements?: boolean) =>
     api.get<VATReport>('/reports/vat-report', {
       params: {
         company_id: companyId,
+        fiscal_year_id: fiscalYearId,
         start_date: startDate,
         end_date: endDate,
         exclude_vat_settlements: excludeVatSettlements,
       },
     }),
-  vatPeriods: (companyId: number, year: number) =>
+  vatPeriods: (companyId: number, year: number, fiscalYearId?: number) =>
     api.get<VATPeriodsResponse>('/reports/vat-periods', {
-      params: { company_id: companyId, year },
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
     }),
-  monthlyStatistics: (companyId: number, year: number) =>
-    api.get<MonthlyStatistics>('/api/reports/monthly-statistics', {
-      params: { company_id: companyId, year },
+  monthlyStatistics: (companyId: number, fiscalYearId: number, year: number) =>
+    api.get<MonthlyStatistics>('/reports/monthly-statistics', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
     }),
 }
 
@@ -217,18 +265,19 @@ export const supplierInvoiceApi = {
 
 // SIE4 Import/Export
 export const sie4Api = {
-  import: (companyId: number, file: File) => {
+  import: (companyId: number, fiscalYearId: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
     return api.post<SIE4ImportResponse>(`/sie4/import/${companyId}`, formData, {
+      params: { fiscal_year_id: fiscalYearId },
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     })
   },
-  export: (companyId: number, includeVerifications: boolean = true) => {
+  export: (companyId: number, fiscalYearId: number, includeVerifications: boolean = true) => {
     return api.get(`/sie4/export/${companyId}`, {
-      params: { include_verifications: includeVerifications },
+      params: { fiscal_year_id: fiscalYearId, include_verifications: includeVerifications },
       responseType: 'blob',
     })
   },
@@ -238,12 +287,12 @@ export const sie4Api = {
 export const defaultAccountApi = {
   list: (companyId: number) =>
     api.get<DefaultAccount[]>('/default-accounts/', { params: { company_id: companyId } }),
-  update: (companyId: number, accountType: string, accountId: number) =>
-    api.post<DefaultAccount>('/default-accounts/', {
-      company_id: companyId,
-      account_type: accountType,
-      account_id: accountId,
-    }),
+  create: (data: { company_id: number; account_type: string; account_id: number }) =>
+    api.post<DefaultAccount>('/default-accounts/', data),
+  update: (defaultAccountId: number, data: { account_id: number }) =>
+    api.patch<DefaultAccount>(`/default-accounts/${defaultAccountId}`, data),
+  delete: (defaultAccountId: number) =>
+    api.delete(`/default-accounts/${defaultAccountId}`),
 }
 
 // Expenses

@@ -4,11 +4,13 @@ import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-reac
 import { verificationApi, accountApi } from '@/services/api'
 import type { Verification, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function VerificationDetail() {
   const { verificationId } = useParams<{ verificationId: string }>()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [verification, setVerification] = useState<Verification | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,15 +28,16 @@ export default function VerificationDetail() {
   }, [verificationId, navigate])
 
   const loadAccounts = useCallback(async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      // Fetch all accounts including inactive ones to properly check status
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id, { active_only: false })
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
     }
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   useEffect(() => {
     loadVerification()
@@ -53,9 +56,34 @@ export default function VerificationDetail() {
     return new Date(dateString).toLocaleDateString('sv-SE')
   }
 
-  const getAccountInfo = (accountId: number) => {
+  const getAccountInfo = (accountId: number, accountNumber?: number, accountName?: string) => {
+    // Use account info from transaction line if available (handles inactive accounts)
+    if (accountNumber && accountName) {
+      const account = accounts.find(a => a.id === accountId)
+      const isInactive = account && !account.active
+      return {
+        text: `${accountNumber} - ${accountName}`,
+        isInactive,
+        isMissing: false
+      }
+    }
+
+    // Fallback to lookup in accounts list
     const account = accounts.find(a => a.id === accountId)
-    return account ? `${account.account_number} - ${account.name}` : `Konto #${accountId}`
+    if (account) {
+      return {
+        text: `${account.account_number} - ${account.name}`,
+        isInactive: !account.active,
+        isMissing: false
+      }
+    }
+
+    // Account not found in database (data integrity issue)
+    return {
+      text: `${accountNumber || accountId} (saknas i kontoplanen)`,
+      isInactive: false,
+      isMissing: true
+    }
   }
 
   const calculateTotals = () => {
@@ -177,10 +205,20 @@ export default function VerificationDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {verification.transaction_lines.map((line, index) => (
+                  {verification.transaction_lines.map((line, index) => {
+                    const accountInfo = getAccountInfo(line.account_id, line.account_number, line.account_name)
+                    return (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium">
-                        {getAccountInfo(line.account_id)}
+                        {accountInfo.isInactive && (
+                          <span className="text-amber-600 mr-1" title="Inaktivt konto">⚠</span>
+                        )}
+                        {accountInfo.isMissing && (
+                          <span className="text-red-600 mr-1" title="Konto saknas">⛔</span>
+                        )}
+                        <span className={accountInfo.isInactive ? 'text-gray-600' : ''}>
+                          {accountInfo.text}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {line.description || '-'}
@@ -196,7 +234,8 @@ export default function VerificationDetail() {
                           : '-'}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {/* Totals Row */}
                   <tr className="bg-gray-50 font-semibold">
                     <td colSpan={2} className="px-4 py-3 text-sm">
