@@ -424,9 +424,7 @@ def initialize_default_accounts(
 
     # Get the specified fiscal year
     fiscal_year = (
-        db.query(FiscalYear)
-        .filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id)
-        .first()
+        db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
     )
     if not fiscal_year:
         raise HTTPException(
