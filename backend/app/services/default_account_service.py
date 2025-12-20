@@ -81,9 +81,9 @@ def initialize_default_accounts_from_existing(db: Session, company_id: int, fisc
         DefaultAccountType.VAT_OUTGOING_25: [2611, 2610],
         DefaultAccountType.VAT_OUTGOING_12: [2621, 2612],
         DefaultAccountType.VAT_OUTGOING_6: [2631, 2613],
-        DefaultAccountType.VAT_INCOMING_25: [2641, 2645],
-        DefaultAccountType.VAT_INCOMING_12: [2642, 2646],
-        DefaultAccountType.VAT_INCOMING_6: [2643, 2647],
+        DefaultAccountType.VAT_INCOMING_25: [2640],
+        DefaultAccountType.VAT_INCOMING_12: [2640],
+        DefaultAccountType.VAT_INCOMING_6: [2640],
         # Receivables/Payables
         DefaultAccountType.ACCOUNTS_RECEIVABLE: [1510, 1500],
         DefaultAccountType.ACCOUNTS_PAYABLE: [2440, 2441],
