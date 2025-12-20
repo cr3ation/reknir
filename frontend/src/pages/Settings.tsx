@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi } from '@/services/api'
-import type { Account, DefaultAccount, FiscalYear } from '@/types'
+import { companyApi, sie4Api, accountApi, defaultAccountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
+import type { Account, DefaultAccount, FiscalYear, PostingTemplate, PostingTemplateLine } from '@/types'
 import { VATReportingPeriod, AccountingBasis } from '@/types'
-import { Plus, Trash2, Calendar, Building2, Edit2, Save, X } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, CheckCircle } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -23,14 +24,32 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccount[]>([])
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
+  const [accountCountsByFiscalYear, setAccountCountsByFiscalYear] = useState<Record<number, number>>({})
+  const [templates, setTemplates] = useState<PostingTemplate[]>([])
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<PostingTemplate | null>(null)
+  const [showAddAccount, setShowAddAccount] = useState(false)
+  const [basAccounts, setBasAccounts] = useState<any[]>([])
+  const [selectedBasAccount, setSelectedBasAccount] = useState<string>('')
+  const [templateForm, setTemplateForm] = useState<PostingTemplate>({
+    company_id: 0,
+    name: '',
+    description: '',
+    default_series: '',
+    default_journal_text: '',
+    template_lines: []
+  })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [activeTab, setActiveTab] = useState<'company' | 'accounts' | 'fiscal' | 'templates' | 'import'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [importSummary, setImportSummary] = useState<{
     accounts_created: number
     accounts_updated: number
@@ -51,13 +70,20 @@ export default function SettingsPage() {
     email: '',
     fiscal_year_start: new Date().getFullYear() + '-01-01',
     fiscal_year_end: new Date().getFullYear() + '-12-31',
-    accounting_basis: AccountingBasis.ACCRUAL as AccountingBasis,
-    vat_reporting_period: VATReportingPeriod.QUARTERLY as VATReportingPeriod,
+    vat_number: '',
+    accounting_basis: AccountingBasis.ACCRUAL,
+    vat_reporting_period: VATReportingPeriod.QUARTERLY,
   })
+
+  // Default account modal state
+  const [editingDefaultAccountType, setEditingDefaultAccountType] = useState<string | null>(null)
+  const [selectedAccountIdForDefault, setSelectedAccountIdForDefault] = useState<number | null>(null)
+  const [savingDefaultAccount, setSavingDefaultAccount] = useState(false)
+  const [deletingDefaultAccountType, setDeletingDefaultAccountType] = useState<string | null>(null)
+  const [removingDefaultAccount, setRemovingDefaultAccount] = useState(false)
 
   const getNextFiscalYearDefaults = () => {
     const currentYear = new Date().getFullYear()
-    // Find the highest year in existing fiscal years, or use current year
     const nextYear = fiscalYears.length > 0
       ? Math.max(...fiscalYears.map(fy => fy.year)) + 1
       : currentYear
@@ -74,7 +100,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadData()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadData = async () => {
     if (!selectedCompany) {
@@ -84,14 +110,34 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      const [defaultsRes, accountsRes, fiscalYearsRes] = await Promise.all([
-        defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-        accountApi.list(selectedCompany.id),
-        fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] })),
-      ])
-      setDefaultAccounts(defaultsRes.data)
-      setAllAccounts(accountsRes.data)
+      const fiscalYearsRes = await fiscalYearApi.list(selectedCompany.id).catch(() => ({ data: [] }))
       setFiscalYears(fiscalYearsRes.data)
+
+      // Load account counts for each fiscal year (for the fiscal year tab)
+      const accountCounts: Record<number, number> = {}
+      await Promise.all(
+        fiscalYearsRes.data.map(async (fy: FiscalYear) => {
+          try {
+            const accountsRes = await accountApi.list(selectedCompany.id, fy.id)
+            accountCounts[fy.id] = accountsRes.data.length
+          } catch {
+            accountCounts[fy.id] = 0
+          }
+        })
+      )
+      setAccountCountsByFiscalYear(accountCounts)
+
+      // If we have a selected fiscal year, load accounts and defaults
+      if (selectedFiscalYear) {
+        const [defaultsRes, accountsRes, templatesRes] = await Promise.all([
+          defaultAccountApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+          accountApi.list(selectedCompany.id, selectedFiscalYear.id),
+          postingTemplateApi.list(selectedCompany.id).catch(() => ({ data: [] })),
+        ])
+        setDefaultAccounts(defaultsRes.data)
+        setAllAccounts(accountsRes.data)
+        setTemplates(templatesRes.data)
+      }
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
@@ -106,6 +152,59 @@ export default function SettingsPage() {
     setTimeout(() => setMessage(''), 5000)
   }
 
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedCompany || !event.target.files || event.target.files.length === 0) return
+
+    const file = event.target.files[0]
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showMessage('Filen måste vara en bild', 'error')
+      return
+    }
+    
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      showMessage('Endast PNG och JPG filer är tillåtna', 'error')
+      return
+    }
+    
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      showMessage('Filstorleken får inte överstiga 5MB', 'error')
+      return
+    }
+
+    setUploadingLogo(true)
+    try {
+      const response = await companyApi.uploadLogo(selectedCompany.id, file)
+      setSelectedCompany(response.data)
+      showMessage('Logotyp uppladdad', 'success')
+      
+      // Clear the input so the same file can be selected again if needed
+      event.target.value = ''
+    } catch (error: any) {
+      console.error('Logo upload failed:', error)
+      showMessage(error.response?.data?.detail || 'Uppladdning misslyckades', 'error')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleLogoDelete = async () => {
+    if (!selectedCompany || !selectedCompany.logo_filename) return
+    
+    if (!confirm('Är du säker på att du vill ta bort logotypen?')) return
+
+    try {
+      const response = await companyApi.deleteLogo(selectedCompany.id)
+      setSelectedCompany(response.data)
+      showMessage('Logotyp borttagen', 'success')
+    } catch (error: any) {
+      console.error('Logo delete failed:', error)
+      showMessage(error.response?.data?.detail || 'Borttagning misslyckades', 'error')
+    }
+  }
+
   const startEditCompany = () => {
     if (!selectedCompany) return
     setCompanyForm({
@@ -118,6 +217,7 @@ export default function SettingsPage() {
       email: selectedCompany.email || '',
       fiscal_year_start: selectedCompany.fiscal_year_start,
       fiscal_year_end: selectedCompany.fiscal_year_end,
+      vat_number: selectedCompany.vat_number || '',
       accounting_basis: selectedCompany.accounting_basis,
       vat_reporting_period: selectedCompany.vat_reporting_period,
     })
@@ -136,16 +236,13 @@ export default function SettingsPage() {
       email: '',
       fiscal_year_start: new Date().getFullYear() + '-01-01',
       fiscal_year_end: new Date().getFullYear() + '-12-31',
+      vat_number: '',
       accounting_basis: AccountingBasis.ACCRUAL,
       vat_reporting_period: VATReportingPeriod.QUARTERLY,
     })
   }
 
   const formatErrorMessage = (error: any): string => {
-    console.log('Full error:', error)
-    console.log('Error response data:', error.response?.data)
-
-    // Handle FastAPI validation errors (422)
     if (error.response?.data?.detail) {
       const detail = error.response.data.detail
       // If detail is an array of validation errors
@@ -200,6 +297,7 @@ export default function SettingsPage() {
         email: '',
         fiscal_year_start: new Date().getFullYear() + '-01-01',
         fiscal_year_end: new Date().getFullYear() + '-12-31',
+        vat_number: '',
         accounting_basis: AccountingBasis.ACCRUAL,
         vat_reporting_period: VATReportingPeriod.QUARTERLY,
       })
@@ -233,14 +331,17 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Välj ett räkenskapsår först', 'error')
+      return
+    }
 
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
       setLoading(true)
-      const response = await sie4Api.import(selectedCompany.id, file)
+      const response = await sie4Api.import(selectedCompany.id, selectedFiscalYear.id, file)
 
       // Show modal with import summary
       setImportSummary({
@@ -265,11 +366,14 @@ export default function SettingsPage() {
   }
 
   const handleSIE4Export = async (includeVerifications: boolean) => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) {
+      showMessage('Välj ett räkenskapsår först', 'error')
+      return
+    }
 
     try {
       setLoading(true)
-      const response = await sie4Api.export(selectedCompany.id, includeVerifications)
+      const response = await sie4Api.export(selectedCompany.id, selectedFiscalYear.id, includeVerifications)
 
       // Create download link
       const blob = new Blob([response.data], { type: 'text/plain' })
@@ -317,7 +421,9 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      await fiscalYearApi.create({
+
+      // Step 1: Create the new fiscal year
+      const createResponse = await fiscalYearApi.create({
         company_id: selectedCompany.id,
         year: newFiscalYear.year,
         label: newFiscalYear.label,
@@ -325,7 +431,22 @@ export default function SettingsPage() {
         end_date: newFiscalYear.end_date,
         is_closed: false,
       })
-      showMessage('Räkenskapsår skapat!', 'success')
+
+      const newFiscalYearId = createResponse.data.id
+
+      // Step 2: Copy chart of accounts from previous fiscal year
+      // This automatically finds the most recent previous fiscal year
+      showMessage('Räkenskapsår skapat! Kopierar kontoplan från föregående år...', 'success')
+
+      try {
+        const copyResponse = await fiscalYearApi.copyChartOfAccounts(newFiscalYearId)
+        showMessage(`Räkenskapsår och kontoplan skapade! ${copyResponse.data.accounts_copied} konton kopierade från ${copyResponse.data.source_fiscal_year_label}.`, 'success')
+      } catch (copyError: any) {
+        console.error('Failed to copy chart of accounts:', copyError)
+        const errorDetail = copyError.response?.data?.detail || 'Kunde inte kopiera kontoplan'
+        showMessage(`Räkenskapsår skapat, men ${errorDetail}. Du kan importera BAS-kontoplan manuellt i fliken "Import".`, 'error')
+      }
+
       await loadData()
       setShowCreateFiscalYear(false)
       // Reset to next year defaults after creating
@@ -341,7 +462,16 @@ export default function SettingsPage() {
   }
 
   const handleDeleteFiscalYear = async (fiscalYearId: number, label: string) => {
-    if (!confirm(`Är du säker på att du vill radera räkenskapsåret "${label}"? Verifikationer kommer att kopplas loss.`)) {
+    const accountCount = accountCountsByFiscalYear[fiscalYearId] || 0
+    let confirmMessage = `Är du säker på att du vill radera räkenskapsåret "${label}"?`
+
+    if (accountCount > 0) {
+      confirmMessage = `VARNING: Räkenskapsåret "${label}" har ${accountCount} konton som kommer att raderas permanent.\n\nÄr du säker på att du vill fortsätta?`
+    } else {
+      confirmMessage += ' Verifikationer kommer att kopplas loss.'
+    }
+
+    if (!confirm(confirmMessage)) {
       return
     }
 
@@ -402,10 +532,413 @@ export default function SettingsPage() {
     return account ? `${account.account_number} - ${account.name}` : 'Okänt konto'
   }
 
+  // Default account handlers
+  const handleEditDefaultAccount = (accountType: string) => {
+    const existingDefault = getAccountForType(accountType)
+    setEditingDefaultAccountType(accountType)
+    setSelectedAccountIdForDefault(existingDefault?.account_id || null)
+  }
+
+  const handleSaveDefaultAccount = async () => {
+    if (!selectedCompany || !editingDefaultAccountType || !selectedAccountIdForDefault) return
+
+    setSavingDefaultAccount(true)
+    try {
+      const existingDefault = getAccountForType(editingDefaultAccountType)
+
+      if (existingDefault) {
+        // Update existing
+        await defaultAccountApi.update(existingDefault.id, { account_id: selectedAccountIdForDefault })
+        showMessage('Standardkonto uppdaterat', 'success')
+      } else {
+        // Create new
+        await defaultAccountApi.create({
+          company_id: selectedCompany.id,
+          account_type: editingDefaultAccountType,
+          account_id: selectedAccountIdForDefault,
+        })
+        showMessage('Standardkonto sparat', 'success')
+      }
+
+      // Reload default accounts
+      const defaultsRes = await defaultAccountApi.list(selectedCompany.id)
+      setDefaultAccounts(defaultsRes.data)
+      setEditingDefaultAccountType(null)
+      setSelectedAccountIdForDefault(null)
+    } catch (error: any) {
+      console.error('Failed to save default account:', error)
+      showMessage(error.response?.data?.detail || 'Kunde inte spara standardkonto', 'error')
+    } finally {
+      setSavingDefaultAccount(false)
+    }
+  }
+
+  const handleRemoveDefaultAccount = (accountType: string) => {
+    setDeletingDefaultAccountType(accountType)
+  }
+
+  const confirmRemoveDefaultAccount = async () => {
+    if (!selectedCompany || !deletingDefaultAccountType) return
+
+    const existingDefault = getAccountForType(deletingDefaultAccountType)
+    if (!existingDefault) return
+
+    setRemovingDefaultAccount(true)
+    try {
+      await defaultAccountApi.delete(existingDefault.id)
+      showMessage('Standardkonto borttaget', 'success')
+
+      // Reload default accounts
+      const defaultsRes = await defaultAccountApi.list(selectedCompany.id)
+      setDefaultAccounts(defaultsRes.data)
+      setDeletingDefaultAccountType(null)
+    } catch (error: any) {
+      console.error('Failed to remove default account:', error)
+      showMessage(error.response?.data?.detail || 'Kunde inte ta bort standardkonto', 'error')
+    } finally {
+      setRemovingDefaultAccount(false)
+    }
+  }
+
+  const handleCreateTemplate = () => {
+    setEditingTemplate(null)
+    setTemplateForm({
+      company_id: selectedCompany?.id || 0,
+      name: '',
+      description: '',
+      default_series: '',
+      default_journal_text: '',
+      template_lines: [{
+        account_id: 0,
+        formula: '{total}',
+        description: '',
+        sort_order: 0
+      }]
+    })
+    setShowCreateTemplate(true)
+  }
+
+  const handleEditTemplate = async (template: PostingTemplate) => {
+    if (!selectedCompany || !template.id) return
+
+    try {
+      const response = await postingTemplateApi.get(template.id)
+      setEditingTemplate(template)
+      setTemplateForm(response.data)
+      setShowCreateTemplate(true)
+    } catch (error) {
+      showMessage('Kunde inte ladda mall', 'error')
+    }
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!selectedCompany) return
+
+    if (!templateForm.name || !templateForm.description || templateForm.template_lines.length === 0) {
+      showMessage('Fyll i alla obligatoriska fält', 'error')
+      return
+    }
+
+    // Validate template lines
+    for (const line of templateForm.template_lines) {
+      if (!line.account_id || !line.formula) {
+        showMessage('Alla rader måste ha konto och formel', 'error')
+        return
+      }
+    }
+
+    try {
+      setLoading(true)
+
+      if (editingTemplate && editingTemplate.id) {
+        await postingTemplateApi.update(editingTemplate.id, templateForm)
+        showMessage('Mall uppdaterad', 'success')
+      } else {
+        await postingTemplateApi.create(templateForm)
+        showMessage('Mall skapad', 'success')
+      }
+
+      setShowCreateTemplate(false)
+      setEditingTemplate(null)
+      loadData()
+    } catch (error: any) {
+      showMessage(error.response?.data?.detail || 'Kunde inte spara mall', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addTemplateLine = () => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: [...prev.template_lines, {
+        account_id: 0,
+        formula: '{total}',
+        description: '',
+        sort_order: prev.template_lines.length
+      }]
+    }))
+  }
+
+  const removeTemplateLine = (index: number) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: prev.template_lines.filter((_, i) => i !== index)
+    }))
+  }
+
+  const updateTemplateLine = (index: number, field: keyof PostingTemplateLine, value: any) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      template_lines: prev.template_lines.map((line, i) => 
+        i === index ? { ...line, [field]: value } : line
+      )
+    }))
+  }
+
+  // Simple drag and drop state
+  const [draggedTemplate, setDraggedTemplate] = useState<PostingTemplate | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<{ templateId: number; position: 'before' | 'after' } | null>(null)
+
+  // Delete account confirmation state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    show: boolean
+    account: Account | null
+    canDelete: boolean
+    blockingReason: string | null
+  }>({
+    show: false,
+    account: null,
+    canDelete: true,
+    blockingReason: null
+  })
+
+  const handleDragStart = (e: any, template: PostingTemplate) => {
+    setDraggedTemplate(template)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', template.id?.toString() || '')
+  }
+
+  const handleDragEnd = () => {
+    setDraggedTemplate(null)
+    setDropIndicator(null)
+  }
+
+  const handleDragOver = (e: any, template: PostingTemplate) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+
+    if (!draggedTemplate || !template.id || draggedTemplate.id === template.id) return
+
+    // Calculate if drop should be before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'before' : 'after'
+
+    setDropIndicator({ templateId: template.id, position })
+  }
+
+  const handleDragLeave = (e: any) => {
+    // Only clear if we're leaving the container entirely
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDropIndicator(null)
+    }
+  }
+
+  const handleDrop = async (e: any, targetTemplate: PostingTemplate) => {
+    e.preventDefault()
+
+    if (!draggedTemplate || !selectedCompany || draggedTemplate.id === targetTemplate.id || !dropIndicator) {
+      handleDragEnd()
+      return
+    }
+
+    const sortedTemplates = templates.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+    const draggedIndex = sortedTemplates.findIndex((t: any) => t.id === draggedTemplate.id)
+    const targetIndex = sortedTemplates.findIndex((t: any) => t.id === targetTemplate.id)
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      handleDragEnd()
+      return
+    }
+
+    // Calculate the insertion point based on drop indicator
+    let insertIndex = targetIndex
+    if (dropIndicator.position === 'after') {
+      insertIndex = targetIndex + 1
+    }
+
+    // Adjust for removal of dragged item
+    if (draggedIndex < insertIndex) {
+      insertIndex -= 1
+    }
+
+    // Create reordered list
+    const reorderedTemplates = Array.from(sortedTemplates)
+    const [movedTemplate] = reorderedTemplates.splice(draggedIndex, 1)
+    reorderedTemplates.splice(insertIndex, 0, movedTemplate)
+
+    // Update local state immediately for smooth UX
+    setTemplates(reorderedTemplates)
+    handleDragEnd()
+
+    try {
+      // Create the new order array with sort_order values
+      const templateOrders = reorderedTemplates.map((template: any, index: number) => ({
+        id: template.id,
+        sort_order: index + 1
+      }))
+
+      await postingTemplateApi.reorder(selectedCompany.id, templateOrders)
+      showMessage('Ordning uppdaterad', 'success')
+    } catch (error: any) {
+      // Revert the local change if API call fails
+      setTemplates(templates)
+      showMessage('Kunde inte uppdatera ordning', 'error')
+    }
+  }
+
+  // Account management functions
+  const loadBasAccounts = async () => {
+    try {
+      const response = await companyApi.getBasAccounts()
+      setBasAccounts(response.data.accounts)
+    } catch (error: any) {
+      console.error('Failed to load BAS accounts:', error)
+      showMessage('Kunde inte ladda BAS-konton', 'error')
+    }
+  }
+
+  const handleShowAddAccount = async () => {
+    // Reload both BAS accounts AND current accounts to ensure filtering works
+    await Promise.all([
+      loadBasAccounts(),
+      selectedFiscalYear && selectedCompany
+        ? accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+            .then(res => setAllAccounts(res.data))
+        : Promise.resolve()
+    ])
+    setShowAddAccount(true)
+  }
+
+  const handleAddAccount = async () => {
+    if (!selectedCompany || !selectedFiscalYear || !selectedBasAccount) return
+
+    const basAccount = basAccounts.find(acc => acc.account_number === selectedBasAccount)
+    if (!basAccount) return
+
+    try {
+      setLoading(true)
+      await accountApi.create({
+        company_id: selectedCompany.id,
+        fiscal_year_id: selectedFiscalYear.id,
+        account_number: basAccount.account_number,
+        name: basAccount.name,
+        account_type: basAccount.account_type,
+        description: basAccount.description,
+        active: true,
+        opening_balance: 0,
+        is_bas_account: true,
+      })
+
+      showMessage('Konto tillagt!', 'success')
+      setSelectedBasAccount('')
+      setShowAddAccount(false)
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to add account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = (account: Account) => {
+    // Check if account can be deleted
+    let canDelete = true
+    let blockingReason: string | null = null
+
+    // Check if account has transactions (balance has changed)
+    if (account.current_balance !== account.opening_balance) {
+      canDelete = false
+      blockingReason = `Kontot har bokförda transaktioner för detta räkenskapsår och kan därför inte raderas.`
+    }
+    // Check if account is used in posting templates
+    else {
+      const usedInTemplate = templates.find(template =>
+        template.template_lines.some(line => line.account_id === account.id)
+      )
+
+      if (usedInTemplate) {
+        canDelete = false
+        blockingReason = `Kontot används i konteringsmall "${usedInTemplate.name}". Ta bort eller redigera mallen först.`
+      }
+      // Check if account is used as default account
+      else {
+        const usedAsDefault = defaultAccounts.find(da => da.account_id === account.id)
+        if (usedAsDefault) {
+          canDelete = false
+          const label = DEFAULT_ACCOUNT_LABELS[usedAsDefault.account_type] || usedAsDefault.account_type
+          blockingReason = `Kontot används som standardkonto för "${label}". Ändra standardkontomappningen först.`
+        }
+      }
+    }
+
+    setDeleteConfirmation({
+      show: true,
+      account,
+      canDelete,
+      blockingReason
+    })
+  }
+
+  const confirmDeleteAccount = async () => {
+    if (!deleteConfirmation.account) return
+
+    try {
+      setLoading(true)
+      await accountApi.delete(deleteConfirmation.account.id)
+      showMessage('Konto borttaget!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to delete account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+      setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
+    }
+  }
+
+  const cancelDeleteAccount = () => {
+    setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
+  }
+
+  const handleReactivateAccount = async (accountId: number) => {
+    if (!confirm('Vill du aktivera detta konto igen?\n\nKontot kommer då att visas i kontolistan och kunna användas för nya transaktioner.')) return
+
+    try {
+      setLoading(true)
+      await accountApi.update(accountId, { active: true })
+      showMessage('Konto aktiverat!', 'success')
+      await loadData()
+    } catch (error: any) {
+      console.error('Failed to reactivate account:', error)
+      showMessage(formatErrorMessage(error), 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+
+
   if (!selectedCompany && !loading) {
     return (
       <div className="card">
-        <h2 className="text-2xl font-bold mb-4">Företagsinställningar</h2>
+        <h2 className="text-2xl font-bold mb-4">Inställningar</h2>
         <p className="text-gray-600">
           Inget företag hittat. Skapa ett företag först.
         </p>
@@ -415,7 +948,63 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6">Företagsinställningar</h1>
+      <h1 className="text-3xl font-bold mb-6">Inställningar</h1>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('company')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'company'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Företag
+          </button>
+          <button
+            onClick={() => setActiveTab('accounts')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'accounts'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Konton
+          </button>
+          <button
+            onClick={() => setActiveTab('fiscal')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'fiscal'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Räkenskapsår
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'templates'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Konteringsmallar
+          </button>
+          <button
+            onClick={() => setActiveTab('import')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'import'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Import/Export
+          </button>
+        </nav>
+      </div>
 
       {message && (
         <div
@@ -429,8 +1018,11 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Company Management Section */}
-      <div className="card mb-6">
+      {/* Company Tab */}
+      {activeTab === 'company' && (
+        <div>
+          {/* Company Management Section */}
+          <div className="card mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Building2 className="w-5 h-5" />
@@ -473,6 +1065,10 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
                   <p className="text-gray-900">{selectedCompany.org_number}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">VAT-nummer</label>
+                  <p className="text-gray-900">{selectedCompany.vat_number || '-'}</p>
                 </div>
               </div>
             </div>
@@ -517,14 +1113,14 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Bokföringsmetod</label>
                   <p className="text-gray-900">
-                    {selectedCompany.accounting_basis === AccountingBasis.ACCRUAL ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
+                    {selectedCompany.accounting_basis === 'accrual' ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
                   </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Momsredovisning</label>
                   <p className="text-gray-900">
-                    {selectedCompany.vat_reporting_period === VATReportingPeriod.MONTHLY ? 'Månadsvis' :
-                     selectedCompany.vat_reporting_period === VATReportingPeriod.QUARTERLY ? 'Kvartalsvis' : 'Årlig'}
+                    {selectedCompany.vat_reporting_period === 'monthly' ? 'Månadsvis' :
+                     selectedCompany.vat_reporting_period === 'quarterly' ? 'Kvartalsvis' : 'Årlig'}
                   </p>
                 </div>
               </div>
@@ -665,8 +1261,8 @@ export default function SettingsPage() {
                     onChange={(e) => setCompanyForm({ ...companyForm, accounting_basis: e.target.value as AccountingBasis })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
-                    <option value={AccountingBasis.ACCRUAL}>Bokföringsmässiga grunder</option>
-                    <option value={AccountingBasis.CASH}>Kontantmetoden</option>
+                    <option value="accrual">Bokföringsmässiga grunder</option>
+                    <option value="cash">Kontantmetoden</option>
                   </select>
                 </div>
                 <div>
@@ -751,15 +1347,15 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 gap-3">
             {/* Monthly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === VATReportingPeriod.MONTHLY
+              selectedCompany?.vat_reporting_period === 'monthly'
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
               <input
                 type="radio"
                 name="vat_period"
-                value={VATReportingPeriod.MONTHLY}
-                checked={selectedCompany?.vat_reporting_period === VATReportingPeriod.MONTHLY}
+                value="monthly"
+                checked={selectedCompany?.vat_reporting_period === 'monthly'}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -774,15 +1370,15 @@ export default function SettingsPage() {
 
             {/* Quarterly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === VATReportingPeriod.QUARTERLY
+              selectedCompany?.vat_reporting_period === 'quarterly'
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
               <input
                 type="radio"
                 name="vat_period"
-                value={VATReportingPeriod.QUARTERLY}
-                checked={selectedCompany?.vat_reporting_period === VATReportingPeriod.QUARTERLY}
+                value="quarterly"
+                checked={selectedCompany?.vat_reporting_period === 'quarterly'}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -797,15 +1393,15 @@ export default function SettingsPage() {
 
             {/* Yearly Option */}
             <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === VATReportingPeriod.YEARLY
+              selectedCompany?.vat_reporting_period === 'yearly'
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}>
               <input
                 type="radio"
                 name="vat_period"
-                value={VATReportingPeriod.YEARLY}
-                checked={selectedCompany?.vat_reporting_period === VATReportingPeriod.YEARLY}
+                value="yearly"
+                checked={selectedCompany?.vat_reporting_period === 'yearly'}
                 onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
                 disabled={loading}
                 className="mt-1 mr-3"
@@ -828,7 +1424,79 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* SIE4 Import/Export Section */}
+          {/* Company Logo Section */}
+          {selectedCompany && (
+            <div className="card mb-6">
+              <h2 className="text-xl font-semibold mb-4">Företagslogotyp</h2>
+              <div className="flex items-start space-x-6">
+                {selectedCompany.logo_filename ? (
+                  <div className="flex-shrink-0">
+                    <div className="relative">
+                      <img
+                        src={companyApi.getLogo(selectedCompany.id)}
+                        alt="Företagslogotyp"
+                        className="w-40 h-40 object-contain border-2 border-gray-300 rounded-lg bg-white shadow-sm"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                        }}
+                      />
+                      <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                        ✓
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0">
+                    <div className="w-40 h-40 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50">
+                      <Image className="w-12 h-12 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500 text-center">Ingen logotyp<br/>uppladdad</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex flex-col space-y-3">
+                    <label className="btn btn-primary cursor-pointer inline-flex items-center w-fit">
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingLogo ? 'Laddar upp...' : (selectedCompany.logo_filename ? 'Byt logotyp' : 'Ladda upp logotyp')}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg"
+                        onChange={handleLogoUpload}
+                        disabled={uploadingLogo}
+                        className="hidden"
+                      />
+                    </label>
+                    {selectedCompany.logo_filename && (
+                      <button
+                        onClick={handleLogoDelete}
+                        disabled={uploadingLogo}
+                        className="btn btn-outline-danger w-fit inline-flex items-center"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Ta bort logotyp
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-sm text-gray-600 mb-1">
+                      Rekommenderad storlek: 200x200 pixlar eller större
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Filformat: PNG eller JPG, max 5MB
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Import/Export Tab */}
+      {activeTab === 'import' && (
+        <div>
+          {/* SIE4 Import/Export Section */}
       <div className="card mb-6">
         <h2 className="text-xl font-semibold mb-4">SIE4 Import/Export</h2>
         <p className="text-gray-600 mb-4">
@@ -883,8 +1551,13 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+        </div>
+      )}
 
-      {/* Default Accounts Section */}
+      {/* Accounts Tab */}
+      {activeTab === 'accounts' && (
+        <div>
+          {/* Default Accounts Section */}
       <div className="card">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Standardkonton</h2>
@@ -905,13 +1578,6 @@ export default function SettingsPage() {
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
-        ) : defaultAccounts.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p className="mb-4">Inga standardkonton konfigurerade.</p>
-            <p className="text-sm">
-              Klicka på "Initiera automatiskt" för att automatiskt konfigurera standardkonton baserat på din kontoplan.
-            </p>
-          </div>
         ) : (
           <div className="space-y-4">
             {/* Revenue Accounts */}
@@ -922,10 +1588,30 @@ export default function SettingsPage() {
                   const defaultAcc = getAccountForType(type)
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <span className="text-sm font-mono">
-                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
-                      </span>
+                      <span className="text-sm text-gray-700 flex-shrink-0">{DEFAULT_ACCOUNT_LABELS[type]}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-600">
+                          {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : <span className="text-gray-400">-</span>}
+                        </span>
+                        <button
+                          onClick={() => handleEditDefaultAccount(type)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                          title="Ändra konto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {defaultAcc && (
+                          <button
+                            onClick={() => handleRemoveDefaultAccount(type)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded"
+                            title="Ta bort standardkonto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -947,10 +1633,30 @@ export default function SettingsPage() {
                   const defaultAcc = getAccountForType(type)
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <span className="text-sm font-mono">
-                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
-                      </span>
+                      <span className="text-sm text-gray-700 flex-shrink-0">{DEFAULT_ACCOUNT_LABELS[type]}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-600">
+                          {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : <span className="text-gray-400">-</span>}
+                        </span>
+                        <button
+                          onClick={() => handleEditDefaultAccount(type)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                          title="Ändra konto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {defaultAcc && (
+                          <button
+                            onClick={() => handleRemoveDefaultAccount(type)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded"
+                            title="Ta bort standardkonto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -965,10 +1671,30 @@ export default function SettingsPage() {
                   const defaultAcc = getAccountForType(type)
                   return (
                     <div key={type} className="flex justify-between items-center py-2 border-b">
-                      <span className="text-sm text-gray-700">{DEFAULT_ACCOUNT_LABELS[type]}</span>
-                      <span className="text-sm font-mono">
-                        {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : '-'}
-                      </span>
+                      <span className="text-sm text-gray-700 flex-shrink-0">{DEFAULT_ACCOUNT_LABELS[type]}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-600">
+                          {defaultAcc ? getAccountDisplay(defaultAcc.account_id) : <span className="text-gray-400">-</span>}
+                        </span>
+                        <button
+                          onClick={() => handleEditDefaultAccount(type)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                          title="Ändra konto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {defaultAcc && (
+                          <button
+                            onClick={() => handleRemoveDefaultAccount(type)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded"
+                            title="Ta bort standardkonto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -978,7 +1704,214 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Fiscal Years Section */}
+          {/* All Accounts Section */}
+          <div className="card mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Alla konton</h2>
+              <button
+                onClick={handleShowAddAccount}
+                disabled={loading}
+                className="btn btn-primary inline-flex items-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Lägg till konto
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-4">
+              Hantera alla konton i kontoplanen.
+            </p>
+
+            {/* Add Account Form */}
+            {showAddAccount && (
+              <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h3 className="font-medium mb-3">Lägg till konto från BAS 2024</h3>
+                <div className="mb-4">
+                  <select
+                    value={selectedBasAccount}
+                    onChange={(e) => setSelectedBasAccount(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">-- Välj ett BAS-konto --</option>
+                    {basAccounts
+                      .filter(bas => !allAccounts.some(acc => acc.account_number === bas.account_number))
+                      .map(bas => (
+                        <option key={bas.account_number} value={bas.account_number}>
+                          {bas.account_number} - {bas.name}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Endast BAS-konton som inte redan finns i kontoplanen visas
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddAccount}
+                    disabled={loading || !selectedBasAccount}
+                    className="btn btn-primary"
+                  >
+                    Lägg till
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddAccount(false)
+                      setSelectedBasAccount('')
+                    }}
+                    disabled={loading}
+                    className="btn btn-secondary"
+                  >
+                    Avbryt
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : allAccounts.filter(a => a.active).length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="mb-4">Inga konton skapade än.</p>
+                <p className="text-sm">
+                  Importera BAS-kontoplanen under fliken "Import" för att komma igång.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Kontonummer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Namn
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Typ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Saldo
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Åtgärder
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allAccounts.filter(a => a.active).map((account) => (
+                      <tr key={account.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono">
+                          {account.account_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {account.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {account.account_type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                          {account.current_balance?.toLocaleString('sv-SE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }) || '0,00'} kr
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleDeleteAccount(account)}
+                            disabled={loading}
+                            className="text-red-600 hover:text-red-900"
+                            title="Ta bort konto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Inactive Accounts Section */}
+          {allAccounts.filter(a => !a.active).length > 0 && (
+            <div className="card mt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Inaktiva konton</h2>
+              </div>
+
+              <p className="text-gray-600 mb-4">
+                Dessa konton har markerats som inaktiva eftersom de har bokförda transaktioner. De kan återaktiveras vid behov.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Kontonummer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Namn
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Typ
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Saldo
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Åtgärder
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {allAccounts.filter(a => !a.active).map((account) => (
+                      <tr key={account.id} className="hover:bg-gray-50 opacity-60">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+                          <span className="text-amber-600 mr-1" title="Inaktivt konto">⚠</span>
+                          {account.account_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {account.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                          {account.account_type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                          {account.current_balance?.toLocaleString('sv-SE', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }) || '0,00'} kr
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleReactivateAccount(account.id)}
+                            disabled={loading}
+                            className="text-green-600 hover:text-green-900 flex items-center gap-1 ml-auto"
+                            title="Aktivera konto"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Aktivera
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fiscal Years Tab */}
+      {activeTab === 'fiscal' && (
+        <div>
+          {/* Fiscal Years Section */}
       <div className="card mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Räkenskapsår</h2>
@@ -1092,6 +2025,9 @@ export default function SettingsPage() {
                         Stängt
                       </span>
                     )}
+                    <span className="px-2 py-0.5 text-xs font-medium bg-gray-50 text-gray-600 rounded">
+                      {accountCountsByFiscalYear[fy.id] || 0} konton
+                    </span>
                   </div>
                   <div className="text-sm text-gray-600 mt-1">
                     {fy.start_date} till {fy.end_date}
@@ -1125,6 +2061,120 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+        </div>
+      )}
+
+      {/* Templates Tab */}
+      {activeTab === 'templates' && (
+        <div>
+          {/* Posting Templates Section */}
+      <div className="card mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Konteringsmallar</h2>
+          <button
+            onClick={handleCreateTemplate}
+            disabled={loading}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Skapa mall
+          </button>
+        </div>
+        
+
+        {templates.length > 0 ? (
+          <div className="space-y-2">
+            {templates
+              .sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+              .map((template: any) => (
+                <div key={template.id} className="relative">
+                  {/* Drop indicator line BEFORE this template */}
+                  {dropIndicator?.templateId === template.id && dropIndicator?.position === 'before' && (
+                    <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
+                  )}
+                  
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, template)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, template)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, template)}
+                    className={`flex items-center justify-between p-3 border rounded-lg transition-all duration-200 cursor-move relative ${
+                      draggedTemplate?.id === template.id 
+                        ? 'bg-blue-50 border-blue-300 shadow-lg opacity-50' 
+                        : 'bg-white hover:bg-gray-50 hover:shadow-sm border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium">{template.name}</h3>
+                        <p className="text-sm text-gray-500">{template.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditTemplate(template)}
+                        className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                        title="Redigera mall (dra handtaget för att ändra ordning)"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!selectedCompany || !confirm(`Är du säker på att du vill radera mallen "${template.name}"?`)) return
+
+                          try {
+                            await postingTemplateApi.delete(template.id)
+                            setTemplates((prev: any) => prev.filter((t: any) => t.id !== template.id))
+                            showMessage('Mall raderad', 'success')
+                          } catch (error: any) {
+                            showMessage('Kunde inte radera mall', 'error')
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-800 p-1 rounded"
+                        title="Radera mall"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Drop indicator line AFTER this template */}
+                  {dropIndicator?.templateId === template.id && dropIndicator?.position === 'after' && (
+                    <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-sm z-10" />
+                  )}
+                </div>
+              ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p className="mb-4">Inga konteringsmallar skapade ännu.</p>
+            <button
+              onClick={handleCreateTemplate}
+              className="btn btn-primary"
+            >
+              Skapa din första mall
+            </button>
+          </div>
+        )}
+
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-blue-800">
+            <strong>Tips:</strong> Skapa mallar för återkommande transaktioner som försäljning, inköp, eller lönutbetalningar.
+            Använd formler som {'{amount * 0.25}'} för att automatiska beräkningar.
+          </p>
+        </div>
+      </div>
+        </div>
+      )}
 
       {/* Import Summary Modal */}
       {showImportSummary && importSummary && (
@@ -1200,6 +2250,461 @@ export default function SettingsPage() {
                 className="w-full btn btn-primary"
               >
                 Stäng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template Modal */}
+      {showCreateTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingTemplate ? 'Redigera mall' : 'Skapa ny mall'}
+                </h3>
+                <button
+                  onClick={() => setShowCreateTemplate(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Namn *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Inköp med 25% moms"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Beskrivning *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.description}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Försäljning med 25% moms"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Standard verifikationsserie
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.default_series || ''}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, default_series: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. A"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Standard verifikationstext
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.default_journal_text || ''}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, default_journal_text: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="t.ex. Försäljning"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-md font-medium text-gray-900">Konteringsrader</h4>
+                  <button
+                    onClick={addTemplateLine}
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Lägg till rad
+                  </button>
+                </div>
+
+                {templateForm.template_lines.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
+                    <div className="text-gray-500 mb-2">
+                      <Plus className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                      Inga konteringsrader ännu
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Lägg till minst en konteringsrad för att skapa mallen
+                    </p>
+                    <button
+                      onClick={addTemplateLine}
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Lägg till första raden
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border border-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 w-12">
+                            #
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                            Konto *
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                            Formel *
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 hidden sm:table-cell">
+                            Beskrivning
+                          </th>
+                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 w-16">
+                            Åtgärd
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {templateForm.template_lines.map((line, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-2 text-sm font-medium text-gray-700">
+                              {index + 1}
+                            </td>
+                            <td className="px-4 py-2">
+                              <select
+                                value={line.account_id}
+                                onChange={(e) => updateTemplateLine(index, 'account_id', parseInt(e.target.value))}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              >
+                                <option value={0}>Välj konto...</option>
+                                {allAccounts.map((account) => (
+                                  <option key={account.id} value={account.id}>
+                                    {account.account_number} - {account.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="text"
+                                value={line.formula}
+                                onChange={(e) => updateTemplateLine(index, 'formula', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                                placeholder="{total}"
+                              />
+                            </td>
+                            <td className="px-4 py-2 hidden sm:table-cell">
+                              <input
+                                type="text"
+                                value={line.description || ''}
+                                onChange={(e) => updateTemplateLine(index, 'description', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="Beskrivning..."
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              {templateForm.template_lines.length > 1 && (
+                                <button
+                                  onClick={() => removeTemplateLine(index)}
+                                  className="text-red-600 hover:text-red-800"
+                                  title="Ta bort rad"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-800">
+                    <strong>Formel-tips:</strong> Använd <code>{'{total}'}</code> som variabel i formler. Exempel: <code>{'{total} * 0.25'}</code> för 25% moms, <code>{'{total} * -1'}</code> för negativt belopp, <code>{'100'}</code> för fast belopp.
+                  </p>
+                  <p className="text-sm text-blue-800 mt-2">
+                    Positiva värden bokförs som <strong>debet</strong>, 
+                    negativa värden som <strong>kredit</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCreateTemplate(false)}
+                  className="btn btn-secondary"
+                  disabled={loading}
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={loading}
+                  className="btn btn-primary"
+                >
+                  {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Dialog */}
+      {deleteConfirmation.show && deleteConfirmation.account && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white bg-opacity-20 p-2 rounded-full">
+                  <Trash2 className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-white">Ta bort konto</h3>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5">
+              <div className="mb-4">
+                <p className="text-gray-700 mb-3">
+                  {deleteConfirmation.canDelete
+                    ? 'Är du säker på att du vill ta bort följande konto?'
+                    : 'Följande konto kan inte raderas:'}
+                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="bg-blue-100 text-blue-600 rounded px-2 py-1 text-sm font-mono font-semibold">
+                        {deleteConfirmation.account.account_number}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">
+                        {deleteConfirmation.account.name}
+                      </p>
+                      {deleteConfirmation.account.description && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          {deleteConfirmation.account.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!deleteConfirmation.canDelete && deleteConfirmation.blockingReason && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800 mb-1">Kan inte raderas</p>
+                      <p className="text-sm text-red-700">
+                        {deleteConfirmation.blockingReason}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={cancelDeleteAccount}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteConfirmation.canDelete ? 'Avbryt' : 'Stäng'}
+              </button>
+              {deleteConfirmation.canDelete && (
+                <button
+                  onClick={confirmDeleteAccount}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Tar bort...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Ta bort</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Default Account Selection Modal */}
+      {editingDefaultAccountType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Välj konto för "{DEFAULT_ACCOUNT_LABELS[editingDefaultAccountType]}"
+                </h3>
+                <button
+                  onClick={() => {
+                    setEditingDefaultAccountType(null)
+                    setSelectedAccountIdForDefault(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Konto
+                </label>
+                <select
+                  value={selectedAccountIdForDefault || ''}
+                  onChange={(e) => setSelectedAccountIdForDefault(e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">-- Välj konto --</option>
+                  {allAccounts
+                    .filter(account => account.active)
+                    .sort((a, b) => a.account_number - b.account_number)
+                    .map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_number} - {account.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-2 text-xs text-gray-500">
+                  Endast aktiva konton från aktuellt räkenskapsår visas.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingDefaultAccountType(null)
+                    setSelectedAccountIdForDefault(null)
+                  }}
+                  disabled={savingDefaultAccount}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  Avbryt
+                </button>
+                <button
+                  onClick={handleSaveDefaultAccount}
+                  disabled={savingDefaultAccount || !selectedAccountIdForDefault}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {savingDefaultAccount ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Sparar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Spara</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Default Account Delete Confirmation Modal */}
+      {deletingDefaultAccountType && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-red-50 px-6 py-4 border-b border-red-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Ta bort standardkonto
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {DEFAULT_ACCOUNT_LABELS[deletingDefaultAccountType]}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700">
+                Är du säker på att du vill ta bort detta standardkonto?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Funktioner som använder detta standardkonto kommer inte längre ha ett förvalt konto.
+                Du kan alltid lägga till ett nytt standardkonto senare.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setDeletingDefaultAccountType(null)}
+                disabled={removingDefaultAccount}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={confirmRemoveDefaultAccount}
+                disabled={removingDefaultAccount}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {removingDefaultAccount ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Tar bort...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Ta bort</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

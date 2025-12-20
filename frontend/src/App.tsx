@@ -34,7 +34,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/invite/:token" element={<InviteAccept />} />
-              <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
+              <Route path="/setup" element={<Setup />} />
               <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
             </Routes>
           </FiscalYearProvider>

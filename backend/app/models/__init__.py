@@ -6,6 +6,7 @@ from app.models.expense import Expense
 from app.models.fiscal_year import FiscalYear
 from app.models.invitation import Invitation
 from app.models.invoice import Invoice, InvoiceLine, SupplierInvoice, SupplierInvoiceLine
+from app.models.posting_template import PostingTemplate, PostingTemplateLine
 from app.models.user import CompanyUser, User
 from app.models.verification import TransactionLine, Verification
 
@@ -13,6 +14,8 @@ __all__ = [
     "Account",
     "Verification",
     "TransactionLine",
+    "PostingTemplate",
+    "PostingTemplateLine",
     "Company",
     "Customer",
     "Supplier",

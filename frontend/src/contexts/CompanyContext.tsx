@@ -20,13 +20,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const response = await companyApi.list()
       setCompanies(response.data)
       // Auto-select first company if none selected
-      if (!selectedCompany && response.data.length > 0) {
-        setSelectedCompany(response.data[0])
+      if (response.data.length > 0) {
+        setSelectedCompany((prev) => prev ?? response.data[0])
       }
     } catch (error) {
       console.error('Failed to load companies:', error)
     }
-  }, [selectedCompany])
+  }, [])
 
   useEffect(() => {
     loadCompanies()

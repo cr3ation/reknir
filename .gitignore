@@ -24,6 +24,7 @@ venv/
 env/
 ENV/
 .venv
+.python-version
 
 # Node
 node_modules/
@@ -51,6 +52,9 @@ postgres_data/
 # Backups
 backups/*.sql
 backups/*.sql.gz
+
+# Uploads (company logos and other user uploads)
+uploads/
 
 # IDE
 .vscode/

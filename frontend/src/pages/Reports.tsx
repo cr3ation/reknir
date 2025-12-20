@@ -4,6 +4,7 @@ import { reportApi } from '@/services/api'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
 import type { BalanceSheet, IncomeStatement, GeneralLedger, VATReport, VATPeriod } from '@/types'
+import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 type ReportTab = 'balance' | 'income' | 'general-ledger' | 'vat'
 
@@ -23,7 +24,7 @@ export default function Reports() {
   const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
 
   const loadData = useCallback(async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
       return
     }
@@ -33,8 +34,8 @@ export default function Reports() {
 
       // Load reports
       const [balanceRes, incomeRes] = await Promise.all([
-        reportApi.balanceSheet(selectedCompany.id),
-        reportApi.incomeStatement(selectedCompany.id),
+        reportApi.balanceSheet(selectedCompany.id, selectedFiscalYear.id),
+        reportApi.incomeStatement(selectedCompany.id, selectedFiscalYear.id),
       ])
 
       setBalanceSheet(balanceRes.data)
@@ -47,10 +48,10 @@ export default function Reports() {
   }, [selectedCompany])
 
   const loadVatPeriods = useCallback(async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const periodsRes = await reportApi.vatPeriods(selectedCompany.id, vatYear)
+      const periodsRes = await reportApi.vatPeriods(selectedCompany.id, selectedFiscalYear.id, vatYear)
       setVatPeriods(periodsRes.data.periods)
 
       // Auto-select the most recent period
@@ -63,12 +64,13 @@ export default function Reports() {
   }, [selectedCompany, vatYear])
 
   const loadVatReport = useCallback(async () => {
-    if (!selectedCompany || !selectedPeriod) return
+    if (!selectedCompany || !selectedFiscalYear || !selectedPeriod) return
 
     try {
       setLoading(true)
       const vatRes = await reportApi.vatReport(
         selectedCompany.id,
+        selectedFiscalYear.id,
         selectedPeriod.start_date,
         selectedPeriod.end_date,
         excludeVatSettlements
@@ -145,7 +147,10 @@ export default function Reports() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-6">Rapporter</h1>
+      <div className="mb-6 flex items-start justify-between">
+        <h1 className="text-3xl font-bold">Rapporter</h1>
+        <FiscalYearSelector />
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
@@ -313,26 +318,32 @@ export default function Reports() {
               </h3>
 
               {/* Equity */}
-              {balanceSheet.equity.accounts.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Eget kapital</h4>
-                  <table className="min-w-full">
-                    <tbody className="divide-y divide-gray-200">
-                      {balanceSheet.equity.accounts.map((account) => (
-                        <tr key={account.account_number}>
-                          <td className="py-2 text-sm font-mono text-gray-500">
-                            {account.account_number}
-                          </td>
-                          <td className="py-2 text-sm text-gray-900">{account.name}</td>
-                          <td className="py-2 text-sm text-right font-mono">
-                            {formatCurrency(Math.abs(account.balance))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Eget kapital</h4>
+                <table className="min-w-full">
+                  <tbody className="divide-y divide-gray-200">
+                    {balanceSheet.equity.accounts.map((account) => (
+                      <tr key={account.account_number}>
+                        <td className="py-2 text-sm font-mono text-gray-500">
+                          {account.account_number}
+                        </td>
+                        <td className="py-2 text-sm text-gray-900">{account.name}</td>
+                        <td className="py-2 text-sm text-right font-mono">
+                          {formatCurrency(Math.abs(account.balance))}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Årets resultat - always show */}
+                    <tr className="border-t border-gray-300">
+                      <td className="py-2 text-sm font-mono text-gray-500"></td>
+                      <td className="py-2 text-sm text-gray-900 font-medium">Årets resultat</td>
+                      <td className="py-2 text-sm text-right font-mono">
+                        {formatCurrency(balanceSheet.current_year_result)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               {/* Liabilities */}
               {balanceSheet.liabilities.accounts.length > 0 && (
@@ -360,9 +371,7 @@ export default function Reports() {
                 <div className="flex justify-between py-2">
                   <span className="text-sm font-semibold">Summa eget kapital och skulder</span>
                   <span className="text-sm font-mono font-semibold">
-                    {formatCurrency(
-                      Math.abs(balanceSheet.equity.total + balanceSheet.liabilities.total)
-                    )}
+                    {formatCurrency(balanceSheet.total_liabilities_and_equity)}
                   </span>
                 </div>
               </div>
@@ -789,9 +798,10 @@ export default function Reports() {
               <div className="mt-4">
                 <button
                   onClick={() => {
-                    if (!selectedCompany || !selectedPeriod) return
+                    if (!selectedCompany || !selectedFiscalYear || !selectedPeriod) return
                     const url = new URL('/reports/vat-report-xml', import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
                     url.searchParams.append('company_id', selectedCompany.id.toString())
+                    url.searchParams.append('fiscal_year_id', selectedFiscalYear.id.toString())
                     url.searchParams.append('start_date', selectedPeriod.start_date)
                     url.searchParams.append('end_date', selectedPeriod.end_date)
                     url.searchParams.append('exclude_vat_settlements', excludeVatSettlements.toString())

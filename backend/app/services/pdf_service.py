@@ -43,7 +43,21 @@ def generate_invoice_pdf(invoice: Invoice, customer: Customer, company: Company)
         template = env.get_template("invoice_template.html")
         print("Template loaded successfully")
 
-        html_content = template.render(invoice=invoice, customer=customer, company=company)
+        # Check for company logo
+        logo_data = None
+        if company.logo_filename:
+            logo_path = f"/app/uploads/logos/{company.logo_filename}"
+            if os.path.exists(logo_path):
+                import base64
+
+                with open(logo_path, "rb") as logo_file:
+                    logo_data = base64.b64encode(logo_file.read()).decode("utf-8")
+                    # Determine MIME type
+                    extension = company.logo_filename.split(".")[-1].lower()
+                    mime_type = "image/png" if extension == "png" else "image/jpeg"
+                    logo_data = f"data:{mime_type};base64,{logo_data}"
+
+        html_content = template.render(invoice=invoice, customer=customer, company=company, company_logo=logo_data)
         print(f"Template rendered: {len(html_content)} chars")
 
         # Generate PDF

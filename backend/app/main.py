@@ -13,10 +13,12 @@ from app.routers import (
     fiscal_years,
     invitations,
     invoices,
+    posting_templates,
     reports,
     sie4,
     supplier_invoices,
     suppliers,
+    system,
     verifications,
 )
 
@@ -40,6 +42,9 @@ app.add_middleware(
 # Authentication (no prefix, already set in router)
 app.include_router(auth.router)
 
+# System info (no prefix, already set in router)
+app.include_router(system.router)
+
 # Invitations (no prefix, already set in router)
 app.include_router(invitations.router)
 
@@ -50,6 +55,7 @@ app.include_router(companies.router, prefix="/api/companies", tags=["companies"]
 app.include_router(fiscal_years.router, prefix="/api/fiscal-years", tags=["fiscal-years"])
 app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(verifications.router, prefix="/api/verifications", tags=["verifications"])
+app.include_router(posting_templates.router, prefix="/api/posting-templates", tags=["posting-templates"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 
 # Invoice management routers

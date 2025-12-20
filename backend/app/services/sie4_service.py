@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.account import Account, AccountType
 from app.models.company import Company
+from app.models.fiscal_year import FiscalYear
 from app.models.verification import TransactionLine, Verification
 from app.services import default_account_service
 
@@ -90,9 +91,15 @@ def _parse_sie_line(line: str) -> tuple[str, list[str]]:
     return command, args
 
 
-def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, any]:
+def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content: str) -> dict[str, any]:
     """
-    Import SIE4 file content into the database.
+    Import SIE4 file content into the database for a specific fiscal year.
+
+    Args:
+        db: Database session
+        company_id: Company ID to import to
+        fiscal_year_id: Fiscal year ID to import accounts and verifications to
+        file_content: SIE4 file content as string
 
     Returns a dict with import statistics:
     - accounts_created: number of accounts created
@@ -105,6 +112,13 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise ValueError(f"Company {company_id} not found")
+
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+    if not fiscal_year:
+        raise ValueError(f"Fiscal year {fiscal_year_id} not found")
+
+    if fiscal_year.company_id != company_id:
+        raise ValueError(f"Fiscal year {fiscal_year_id} does not belong to company {company_id}")
 
     stats = {
         "accounts_created": 0,
@@ -136,10 +150,14 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
                     account_number = int(args[0])
                     account_name = args[1]
 
-                    # Check if account exists
+                    # Check if account exists in this fiscal year
                     existing = (
                         db.query(Account)
-                        .filter(Account.company_id == company_id, Account.account_number == account_number)
+                        .filter(
+                            Account.company_id == company_id,
+                            Account.fiscal_year_id == fiscal_year_id,
+                            Account.account_number == account_number,
+                        )
                         .first()
                     )
 
@@ -150,10 +168,11 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
                             stats["accounts_updated"] += 1
                         accounts_cache[account_number] = existing
                     else:
-                        # Create new account
+                        # Create new account for this fiscal year
                         account_type = _determine_account_type(account_number)
                         new_account = Account(
                             company_id=company_id,
+                            fiscal_year_id=fiscal_year_id,
                             account_number=account_number,
                             name=account_name,
                             account_type=account_type,
@@ -245,8 +264,10 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
     # Commit account changes
     db.commit()
 
-    # Reload accounts cache from database to get IDs
-    all_accounts = db.query(Account).filter(Account.company_id == company_id).all()
+    # Reload accounts cache from database to get IDs for this fiscal year
+    all_accounts = (
+        db.query(Account).filter(Account.company_id == company_id, Account.fiscal_year_id == fiscal_year_id).all()
+    )
     accounts_by_number = {acc.account_number: acc for acc in all_accounts}
 
     # Create verifications
@@ -283,9 +304,14 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
                 skipped_duplicates += 1
                 continue
 
+            # Get fiscal year for this transaction date
+            # For now, use the provided fiscal_year_id (assumes all verifications are in same fiscal year)
+            # In the future, this could be enhanced to support multiple fiscal years in one import
+
             # Create verification
             verification = Verification(
                 company_id=company_id,
+                fiscal_year_id=fiscal_year_id,
                 series=ver_data["series"],
                 verification_number=ver_data["number"],
                 transaction_date=transaction_date,
@@ -349,7 +375,7 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
     db.commit()
 
     # Initialize default account mappings based on imported accounts
-    default_account_service.initialize_default_accounts_from_existing(db, company_id)
+    default_account_service.initialize_default_accounts_from_existing(db, company_id, fiscal_year_id)
 
     # Count how many defaults were configured
     from app.models.default_account import DefaultAccount
@@ -360,13 +386,14 @@ def import_sie4(db: Session, company_id: int, file_content: str) -> dict[str, an
     return stats
 
 
-def export_sie4(db: Session, company_id: int, include_verifications: bool = True) -> str:
+def export_sie4(db: Session, company_id: int, fiscal_year_id: int, include_verifications: bool = True) -> str:
     """
-    Export company data to SIE4 format.
+    Export company data to SIE4 format for a specific fiscal year.
 
     Args:
         db: Database session
         company_id: Company to export
+        fiscal_year_id: Fiscal year to export
         include_verifications: Whether to include verifications (default True)
 
     Returns:
@@ -375,6 +402,13 @@ def export_sie4(db: Session, company_id: int, include_verifications: bool = True
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise ValueError(f"Company {company_id} not found")
+
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+    if not fiscal_year:
+        raise ValueError(f"Fiscal year {fiscal_year_id} not found")
+
+    if fiscal_year.company_id != company_id:
+        raise ValueError(f"Fiscal year {fiscal_year_id} does not belong to company {company_id}")
 
     lines = []
 
@@ -390,12 +424,12 @@ def export_sie4(db: Session, company_id: int, include_verifications: bool = True
     lines.append(f'#ORGNR "{company.org_number}"')
 
     # Fiscal year
-    lines.append(f'#RAR 0 {company.fiscal_year_start.strftime("%Y%m%d")} {company.fiscal_year_end.strftime("%Y%m%d")}')
+    lines.append(f'#RAR 0 {fiscal_year.start_date.strftime("%Y%m%d")} {fiscal_year.end_date.strftime("%Y%m%d")}')
 
     # Chart of accounts
     accounts = (
         db.query(Account)
-        .filter(Account.company_id == company_id, Account.active.is_(True))
+        .filter(Account.company_id == company_id, Account.fiscal_year_id == fiscal_year_id, Account.active.is_(True))
         .order_by(Account.account_number)
         .all()
     )
@@ -415,7 +449,7 @@ def export_sie4(db: Session, company_id: int, include_verifications: bool = True
     if include_verifications:
         verifications = (
             db.query(Verification)
-            .filter(Verification.company_id == company_id)
+            .filter(Verification.company_id == company_id, Verification.fiscal_year_id == fiscal_year_id)
             .order_by(Verification.transaction_date, Verification.verification_number)
             .all()
         )

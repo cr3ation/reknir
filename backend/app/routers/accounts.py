@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, verify_company_access
+from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
 from app.models.account import Account, AccountType
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
@@ -16,29 +16,33 @@ router = APIRouter()
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(
-    account: AccountCreate, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
+    account: AccountCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """Create a new account"""
     # Verify user has access to this company
-    from app.dependencies import get_user_company_ids
-
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail=f"You don't have access to company {account.company_id}"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You don't have access to company {account.company_id}",
         )
 
-    # Check if account number already exists for this company
+    # Check if account number already exists for this fiscal year
     existing = (
         db.query(Account)
-        .filter(Account.company_id == account.company_id, Account.account_number == account.account_number)
+        .filter(
+            Account.fiscal_year_id == account.fiscal_year_id,
+            Account.account_number == account.account_number,
+        )
         .first()
     )
 
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Account {account.account_number} already exists for this company",
+            detail=f"Account {account.account_number} already exists for this fiscal year",
         )
 
     # Create account
@@ -54,14 +58,18 @@ def create_account(
 @router.get("/", response_model=list[AccountResponse])
 def list_accounts(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     account_type: AccountType | None = None,
     active_only: bool = True,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
     _: None = Depends(verify_company_access),
 ):
-    """List all accounts for a company"""
-    query = db.query(Account).filter(Account.company_id == company_id)
+    """List all accounts for a company and fiscal year"""
+    query = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
+    )
 
     if account_type:
         query = query.filter(Account.account_type == account_type)
@@ -76,13 +84,18 @@ def list_accounts(
 @router.get("/balances", response_model=list[AccountBalance])
 def get_account_balances(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     account_type: AccountType | None = None,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
     _: None = Depends(verify_company_access),
 ):
-    """Get account balances"""
-    query = db.query(Account).filter(Account.company_id == company_id, Account.active.is_(True))
+    """Get account balances for a company and fiscal year"""
+    query = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id,
+        Account.active.is_(True),
+    )
 
     if account_type:
         query = query.filter(Account.account_type == account_type)
@@ -103,18 +116,26 @@ def get_account_balances(
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
-def get_account(account_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+def get_account(
+    account_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
     """Get a specific account"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
 
     # Verify user has access to this account's company
-    from app.dependencies import get_user_company_ids
-
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this account")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account",
+        )
 
     return account
 
@@ -129,14 +150,18 @@ def update_account(
     """Update an account"""
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
 
     # Verify user has access to this account's company
-    from app.dependencies import get_user_company_ids
-
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this account")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account",
+        )
 
     # Update fields
     update_data = account_update.model_dump(exclude_unset=True)
@@ -146,6 +171,79 @@ def update_account(
     db.commit()
     db.refresh(account)
     return account
+
+
+@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    account_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete an account.
+    - If account has transactions: returns 400 error (most restrictive - cannot delete)
+    - If account is used in posting templates: returns 400 error
+    - If account is used as default account: returns 400 error
+    - If none of above: deletes account completely
+
+    Note: Accounts with transactions must remain active in the system.
+    Manual deactivation can be done via PATCH endpoint if needed in the future.
+    """
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
+
+    # Verify user has access to this account's company
+    company_ids = get_user_company_ids(current_user, db)
+    if account.company_id not in company_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account",
+        )
+
+    # Check if account has any transaction lines (MOST RESTRICTIVE - check first)
+    transaction_count = db.query(TransactionLine).filter(TransactionLine.account_id == account_id).count()
+
+    if transaction_count > 0:
+        # Cannot delete - account has transactions
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kontot kan inte raderas eftersom det har {transaction_count} bokförda transaktioner för detta räkenskapsår. Kontot måste vara tomt för att kunna raderas.",
+        )
+
+    # Check if account is used in posting templates
+    from app.models.posting_template import PostingTemplate, PostingTemplateLine
+
+    template_line = db.query(PostingTemplateLine).filter(PostingTemplateLine.account_id == account_id).first()
+
+    if template_line:
+        # Get template name for better error message
+        template = db.query(PostingTemplate).filter(PostingTemplate.id == template_line.template_id).first()
+        template_name = template.name if template else "okänd mall"
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kan inte ta bort konto som används i konteringsmall '{template_name}'. Ta bort eller redigera mallen först.",
+        )
+
+    # Check if account is used in default accounts
+    from app.models.default_account import DefaultAccount
+
+    default_account = db.query(DefaultAccount).filter(DefaultAccount.account_id == account_id).first()
+
+    if default_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kan inte ta bort konto som används som standardkonto ({default_account.account_type}). Ändra standardkontomappningen först.",
+        )
+
+    # Safe to delete - no transactions or default account references
+    db.delete(account)
+    db.commit()
+    return None
 
 
 # Account Ledger models
@@ -188,20 +286,27 @@ def get_account_ledger(
     # Get account
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Account {account_id} not found",
+        )
 
     # Verify user has access to this account's company
-    from app.dependencies import get_user_company_ids
-
     company_ids = get_user_company_ids(current_user, db)
     if account.company_id not in company_ids:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this account")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this account",
+        )
 
     # Get all transaction lines for this account
     query = (
         db.query(TransactionLine, Verification)
         .join(Verification, TransactionLine.verification_id == Verification.id)
-        .filter(TransactionLine.account_id == account_id, Verification.company_id == account.company_id)
+        .filter(
+            TransactionLine.account_id == account_id,
+            Verification.company_id == account.company_id,
+        )
     )
 
     # Apply date filters
@@ -212,7 +317,9 @@ def get_account_ledger(
 
     # Order by date and verification number
     query = query.order_by(
-        Verification.transaction_date.asc(), Verification.series.asc(), Verification.verification_number.asc()
+        Verification.transaction_date.asc(),
+        Verification.series.asc(),
+        Verification.verification_number.asc(),
     )
 
     transactions = query.all()

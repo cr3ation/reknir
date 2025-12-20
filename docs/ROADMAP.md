@@ -1,15 +1,23 @@
 # REKNIR - Utvecklingsplan
 
-## Nuläge (v1.0)
+## Nuläge (v1.2 - December 2025)
 ✅ Komplett bokföringssystem med dubbel bokföring
 ✅ Kundfakturor med PDF och betalningshantering
 ✅ Leverantörsfakturor med bilagor och betalning
-✅ Personalutlägg med godkännandeflöde
+✅ Personalutlägg med godkännandeflöde och kvittouppladdning
 ✅ Verifikationer med automatisk numrering
-✅ Momsrapportering
+✅ Momsrapportering med XML-export till Skatteverket
 ✅ SIE4 import/export
-✅ BAS-kontoplan
+✅ BAS-kontoplan (BAS 2024, 45 konton)
 ✅ Kund- och leverantörsregister
+✅ Konteringsmallar med formelstöd
+✅ Räkenskapsår-stöd med kontoplan per år
+✅ Automatisk kopiering av kontoplan mellan år
+✅ Företagsinställningar med logotypuppladdning
+✅ Automatisk VAT-nummer beräkning
+✅ Standardkonton
+✅ Balansräkning och resultaträkning
+✅ Månatlig statistik och rapporter
 
 ---
 
@@ -42,20 +50,18 @@
   - Kommande momsredovisning
 
 ### 1.2 Rapporter & Export
+- [x] **Momsrapportering**
+  - Automatisk periodindelning (månad/kvartal)
+  - Jämförelse mellan perioder
+  - XML-export till Skatteverket
 - [ ] **PDF-export av rapporter**
   - Momsrapport som PDF
   - Balansräkning som PDF
   - Resultaträkning som PDF
-
 - [ ] **Excel-export**
   - Verifikationslista
   - Fakturalistor
   - Kontoutdrag
-
-- [ ] **Förbättrad momsrapportering**
-  - Automatisk periodindelning (månad/kvartal)
-  - Jämförelse mellan perioder
-  - Export direkt till Skatteverket (framtida)
 
 ### 1.3 Data & Säkerhet
 - [ ] **Backup-funktionalitet**
@@ -413,5 +419,6 @@
 
 ---
 
-**Senast uppdaterad:** 2025-01-11
-**Version:** 1.0
+**Senast uppdaterad:** 2025-12-03
+**Version:** 1.2 (under utveckling)
+**Status:** Funktionell MVP - lämplig för testning och utveckling, ej för produktionsdrift ännu

@@ -1,6 +1,14 @@
 import enum
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
@@ -21,12 +29,23 @@ class AccountType(str, enum.Enum):
 
 
 class Account(Base):
-    """Chart of accounts (Kontoplan) - Based on BAS 2024"""
+    """Chart of accounts (Kontoplan) - Based on BAS 2024
+    Each account belongs to a specific fiscal year.
+    """
 
     __tablename__ = "accounts"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "fiscal_year_id",
+            "account_number",
+            name="uq_account_company_fiscal_year_number",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    fiscal_year_id = Column(Integer, ForeignKey("fiscal_years.id"), nullable=False)
 
     # Account details
     account_number = Column(Integer, nullable=False, index=True)  # 1000-8999
@@ -34,7 +53,10 @@ class Account(Base):
     description = Column(String, nullable=True)  # Optional detailed description
 
     # Account classification
-    account_type = Column(SQLEnum(AccountType, values_callable=lambda x: [e.value for e in x]), nullable=False)
+    account_type = Column(
+        SQLEnum(AccountType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
 
     # Balance tracking
     opening_balance = Column(Numeric(15, 2), default=0, nullable=False)  # Ingående balans (IB)
@@ -46,6 +68,7 @@ class Account(Base):
 
     # Relationships
     company = relationship("Company", back_populates="accounts")
+    fiscal_year = relationship("FiscalYear", back_populates="accounts")
     transaction_lines = relationship("TransactionLine", back_populates="account")
 
     def __repr__(self):

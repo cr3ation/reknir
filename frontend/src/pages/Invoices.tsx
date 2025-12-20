@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Download, Plus, X, Eye, DollarSign } from 'lucide-react'
+import { Download, Plus, X, Eye, DollarSign, Send, FileText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function Invoices() {
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoiceListItem[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -17,13 +19,24 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true)
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false)
   const [showCreateSupplierInvoiceModal, setShowCreateSupplierInvoiceModal] = useState(false)
+  // Confirmation modal states
+  const [confirmSendInvoice, setConfirmSendInvoice] = useState<InvoiceListItem | null>(null)
+  const [confirmRegisterSupplierInvoice, setConfirmRegisterSupplierInvoice] = useState<SupplierInvoiceListItem | null>(null)
+  const [sendingInvoice, setSendingInvoice] = useState(false)
+  const [registeringSupplierInvoice, setRegisteringSupplierInvoice] = useState(false)
+  // Payment modal states
+  const [confirmPayInvoice, setConfirmPayInvoice] = useState<InvoiceListItem | null>(null)
+  const [confirmPaySupplierInvoice, setConfirmPaySupplierInvoice] = useState<SupplierInvoiceListItem | null>(null)
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
+  const [payingInvoice, setPayingInvoice] = useState(false)
+  const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
 
   useEffect(() => {
     loadInvoices()
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadInvoices = async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
       return
     }
@@ -35,7 +48,7 @@ export default function Invoices() {
         supplierInvoiceApi.list(selectedCompany.id),
         customerApi.list(selectedCompany.id),
         supplierApi.list(selectedCompany.id),
-        accountApi.list(selectedCompany.id),
+        accountApi.list(selectedCompany.id, selectedFiscalYear.id),
       ])
       setInvoices(outgoingRes.data)
       setSupplierInvoices(incomingRes.data)
@@ -72,35 +85,40 @@ export default function Invoices() {
     }
   }
 
-  const sendInvoice = async (invoiceId: number) => {
-    if (!confirm('Skicka denna faktura? En verifikation kommer att skapas.')) return
+  const handleSendInvoice = async () => {
+    if (!confirmSendInvoice) return
 
+    setSendingInvoice(true)
     try {
-      await invoiceApi.send(invoiceId)
+      await invoiceApi.send(confirmSendInvoice.id)
       await loadInvoices()
-      alert('Fakturan har skickats och bokförts!')
+      setConfirmSendInvoice(null)
     } catch (error) {
       console.error('Failed to send invoice:', error)
       alert('Kunde inte skicka fakturan')
+    } finally {
+      setSendingInvoice(false)
     }
   }
 
-  const registerSupplierInvoice = async (invoiceId: number) => {
-    if (!confirm('Bokför denna leverantörsfaktura? En verifikation kommer att skapas.')) return
+  const handleRegisterSupplierInvoice = async () => {
+    if (!confirmRegisterSupplierInvoice) return
 
+    setRegisteringSupplierInvoice(true)
     try {
-      await supplierInvoiceApi.register(invoiceId)
+      await supplierInvoiceApi.register(confirmRegisterSupplierInvoice.id)
       await loadInvoices()
-      alert('Leverantörsfakturan har bokförts!')
+      setConfirmRegisterSupplierInvoice(null)
     } catch (error) {
       console.error('Failed to register supplier invoice:', error)
       alert('Kunde inte bokföra leverantörsfakturan')
+    } finally {
+      setRegisteringSupplierInvoice(false)
     }
   }
 
-  const markInvoicePaid = async (invoiceId: number, totalAmount: number, paidAmount: number) => {
-    const paidDate = prompt('Ange betalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
-    if (!paidDate) return
+  const handlePayInvoice = async () => {
+    if (!confirmPayInvoice) return
 
     // Find bank account 1930 (default bank account)
     const bankAccount = accounts.find(a => a.account_number === 1930)
@@ -110,25 +128,28 @@ export default function Invoices() {
       return
     }
 
-    const remainingAmount = totalAmount - paidAmount
+    const remainingAmount = confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount
 
+    setPayingInvoice(true)
     try {
-      await invoiceApi.markPaid(invoiceId, {
-        paid_date: paidDate,
+      await invoiceApi.markPaid(confirmPayInvoice.id, {
+        paid_date: paymentDate,
         paid_amount: remainingAmount,
         bank_account_id: bankAccount.id
       })
       await loadInvoices()
+      setConfirmPayInvoice(null)
       alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
     } catch (error) {
       console.error('Failed to mark invoice as paid:', error)
       alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+    } finally {
+      setPayingInvoice(false)
     }
   }
 
-  const markSupplierInvoicePaid = async (invoiceId: number, totalAmount: number, paidAmount: number) => {
-    const paidDate = prompt('Ange betalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
-    if (!paidDate) return
+  const handlePaySupplierInvoice = async () => {
+    if (!confirmPaySupplierInvoice) return
 
     // Find bank account 1930 (default bank account)
     const bankAccount = accounts.find(a => a.account_number === 1930)
@@ -138,19 +159,23 @@ export default function Invoices() {
       return
     }
 
-    const remainingAmount = totalAmount - paidAmount
+    const remainingAmount = confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount
 
+    setPayingSupplierInvoice(true)
     try {
-      await supplierInvoiceApi.markPaid(invoiceId, {
-        paid_date: paidDate,
+      await supplierInvoiceApi.markPaid(confirmPaySupplierInvoice.id, {
+        paid_date: paymentDate,
         paid_amount: remainingAmount,
         bank_account_id: bankAccount.id
       })
       await loadInvoices()
+      setConfirmPaySupplierInvoice(null)
       alert('Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
     } catch (error) {
       console.error('Failed to mark supplier invoice as paid:', error)
       alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+    } finally {
+      setPayingSupplierInvoice(false)
     }
   }
 
@@ -259,7 +284,7 @@ export default function Invoices() {
                         </button>
                         {invoice.status === 'draft' && (
                           <button
-                            onClick={() => sendInvoice(invoice.id)}
+                            onClick={() => setConfirmSendInvoice(invoice)}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                             title="Skicka och bokför faktura"
                           >
@@ -268,7 +293,10 @@ export default function Invoices() {
                         )}
                         {invoice.status !== 'draft' && invoice.status !== 'paid' && (
                           <button
-                            onClick={() => markInvoicePaid(invoice.id, invoice.total_amount, invoice.paid_amount)}
+                            onClick={() => {
+                              setPaymentDate(new Date().toISOString().split('T')[0])
+                              setConfirmPayInvoice(invoice)
+                            }}
                             className="p-1 text-purple-600 hover:text-purple-800"
                             title="Markera som betald"
                           >
@@ -276,7 +304,7 @@ export default function Invoices() {
                           </button>
                         )}
                         <button
-                          onClick={() => downloadInvoicePdf(invoice.id, invoice.invoice_number.toString(), invoice.invoice_series)}
+                          onClick={() => downloadInvoicePdf(invoice.id, String(invoice.invoice_number), invoice.invoice_series)}
                           className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                           title="Ladda ner PDF"
                         >
@@ -370,7 +398,7 @@ export default function Invoices() {
                         </button>
                         {invoice.status === 'draft' && (
                           <button
-                            onClick={() => registerSupplierInvoice(invoice.id)}
+                            onClick={() => setConfirmRegisterSupplierInvoice(invoice)}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                             title="Bokför faktura"
                           >
@@ -379,7 +407,10 @@ export default function Invoices() {
                         )}
                         {invoice.status !== 'draft' && invoice.status !== 'paid' && (
                           <button
-                            onClick={() => markSupplierInvoicePaid(invoice.id, invoice.total_amount, invoice.paid_amount)}
+                            onClick={() => {
+                              setPaymentDate(new Date().toISOString().split('T')[0])
+                              setConfirmPaySupplierInvoice(invoice)
+                            }}
                             className="p-1 text-purple-600 hover:text-purple-800"
                             title="Markera som betald"
                           >
@@ -422,6 +453,338 @@ export default function Invoices() {
             loadInvoices()
           }}
         />
+      )}
+
+      {/* Send Invoice Confirmation Modal */}
+      {confirmSendInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Skicka faktura
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {confirmSendInvoice.invoice_series}{confirmSendInvoice.invoice_number} - {confirmSendInvoice.customer_name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700">
+                Vill du skicka denna faktura?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                En verifikation kommer att skapas automatiskt och fakturan markeras som skickad.
+              </p>
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Belopp:</span>
+                  <span className="font-semibold">
+                    {confirmSendInvoice.total_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmSendInvoice(null)}
+                disabled={sendingInvoice}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleSendInvoice}
+                disabled={sendingInvoice}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {sendingInvoice ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Skickar...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Skicka faktura</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Register Supplier Invoice Confirmation Modal */}
+      {confirmRegisterSupplierInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Bokför leverantörsfaktura
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {confirmRegisterSupplierInvoice.supplier_invoice_number} - {confirmRegisterSupplierInvoice.supplier_name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700">
+                Vill du bokföra denna leverantörsfaktura?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                En verifikation kommer att skapas automatiskt med kostnad och ingående moms.
+              </p>
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Belopp:</span>
+                  <span className="font-semibold">
+                    {confirmRegisterSupplierInvoice.total_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmRegisterSupplierInvoice(null)}
+                disabled={registeringSupplierInvoice}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleRegisterSupplierInvoice}
+                disabled={registeringSupplierInvoice}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {registeringSupplierInvoice ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Bokför...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    <span>Bokför faktura</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Invoice Confirmation Modal */}
+      {confirmPayInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-purple-50 px-6 py-4 border-b border-purple-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Markera faktura som betald
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {confirmPayInvoice.invoice_series}{confirmPayInvoice.invoice_number} - {confirmPayInvoice.customer_name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700 mb-4">
+                En betalningsverifikation kommer att skapas automatiskt.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Betalningsdatum
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Fakturabelopp:</span>
+                  <span className="font-semibold">
+                    {confirmPayInvoice.total_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Redan betalt:</span>
+                  <span>
+                    {confirmPayInvoice.paid_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
+                  <span className="text-gray-700">Att betala:</span>
+                  <span className="text-purple-600">
+                    {(confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmPayInvoice(null)}
+                disabled={payingInvoice}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handlePayInvoice}
+                disabled={payingInvoice}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {payingInvoice ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Sparar...</span>
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4" />
+                    <span>Markera som betald</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pay Supplier Invoice Confirmation Modal */}
+      {confirmPaySupplierInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-purple-50 px-6 py-4 border-b border-purple-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Markera leverantörsfaktura som betald
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {confirmPaySupplierInvoice.supplier_invoice_number} - {confirmPaySupplierInvoice.supplier_name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700 mb-4">
+                En betalningsverifikation kommer att skapas automatiskt.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Betalningsdatum
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Fakturabelopp:</span>
+                  <span className="font-semibold">
+                    {confirmPaySupplierInvoice.total_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Redan betalt:</span>
+                  <span>
+                    {confirmPaySupplierInvoice.paid_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
+                  <span className="text-gray-700">Att betala:</span>
+                  <span className="text-purple-600">
+                    {(confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmPaySupplierInvoice(null)}
+                disabled={payingSupplierInvoice}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handlePaySupplierInvoice}
+                disabled={payingSupplierInvoice}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {payingSupplierInvoice ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Sparar...</span>
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4" />
+                    <span>Markera som betald</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -647,50 +1010,71 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
               {lines.map((line, index) => (
                 <div key={index} className="space-y-2 p-3 bg-gray-50 rounded">
                   <div className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-12 md:col-span-5">
+                    <div className="col-span-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Beskrivning *
+                      </label>
                       <input
                         type="text"
-                        placeholder="Beskrivning *"
+                        placeholder="Beskrivning av vara/tjänst"
                         value={line.description}
                         onChange={(e) => updateLine(index, 'description', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Antal *
+                      </label>
                       <input
                         type="number"
-                        placeholder="Antal"
-                        value={line.quantity}
-                        onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
-                        step="0.01"
+                        placeholder="1"
+                        value={line.quantity || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'quantity', value)
+                        }}
+                        step="1"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-1">
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Enhet
+                      </label>
                       <input
                         type="text"
-                        placeholder="Enhet"
+                        placeholder="st"
                         value={line.unit}
                         onChange={(e) => updateLine(index, 'unit', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        À-pris *
+                      </label>
                       <input
                         type="number"
-                        placeholder="À-pris"
-                        value={line.unit_price}
-                        onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        placeholder="0,00"
+                        value={line.unit_price || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'unit_price', value)
+                        }}
                         step="0.01"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-2 md:col-span-1">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Moms *
+                      </label>
                       <select
                         value={line.vat_rate}
                         onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
@@ -702,20 +1086,28 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
                         <option value={25}>25%</option>
                       </select>
                     </div>
-                    <div className="col-span-11 md:col-span-1 text-right">
-                      {lines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(index)}
-                          className="text-red-600 hover:text-red-800 p-2"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        &nbsp;
+                      </label>
+                      <div className="flex justify-center">
+                        {lines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeLine(index)}
+                            className="text-red-600 hover:text-red-800 p-2"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-12 md:col-span-5">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Intäktskonto
+                      </label>
                       <select
                         value={line.account_id || ''}
                         onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
@@ -1043,8 +1435,12 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
                       <input
                         type="number"
                         placeholder="Antal"
-                        value={line.quantity}
-                        onChange={(e) => updateLine(index, 'quantity', parseFloat(e.target.value) || 0)}
+                        value={line.quantity || ''} // Show empty string instead of 0 for better UX
+                        onChange={(e) => {
+                          // Handle empty fields as 0, avoid "025000" display issue
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'quantity', value)
+                        }}
                         step="0.01"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
@@ -1054,16 +1450,20 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
                     <div className="col-span-4 md:col-span-2">
                       <input
                         type="number"
-                        placeholder="À-pris"
-                        value={line.unit_price}
-                        onChange={(e) => updateLine(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        placeholder="À-pris (kr per enhet)"
+                        value={line.unit_price || ''}
+                        onChange={(e) => {
+                          // Handle empty fields as 0, avoid "025000" display issue
+                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
+                          updateLine(index, 'unit_price', value)
+                        }}
                         step="0.01"
                         min="0"
                         className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
                         required
                       />
                     </div>
-                    <div className="col-span-3 md:col-span-1">
+                    <div className="col-span-4 md:col-span-2">
                       <select
                         value={line.vat_rate}
                         onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}

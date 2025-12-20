@@ -5,9 +5,33 @@ from sqlalchemy.orm import Session
 
 from app.models.account import Account
 from app.models.default_account import DefaultAccountType
+from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, SupplierInvoice
 from app.models.verification import TransactionLine, Verification
 from app.services import default_account_service
+
+
+def get_fiscal_year_for_date(db: Session, company_id: int, transaction_date: date) -> FiscalYear:
+    """
+    Get the fiscal year for a given transaction date.
+    Raises ValueError if no fiscal year is found.
+    """
+    fiscal_year = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= transaction_date,
+            FiscalYear.end_date >= transaction_date,
+        )
+        .first()
+    )
+
+    if not fiscal_year:
+        raise ValueError(
+            f"No fiscal year found for date {transaction_date}. Please create a fiscal year that includes this date."
+        )
+
+    return fiscal_year
 
 
 def create_invoice_verification(db: Session, invoice: Invoice, description: str | None = None) -> Verification:
@@ -19,6 +43,9 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
     Credit: 26xx VAT accounts (based on VAT rates)
     """
 
+    # Get fiscal year for this invoice date
+    fiscal_year = get_fiscal_year_for_date(db, invoice.company_id, invoice.invoice_date)
+
     # Get next verification number
     from app.routers.verifications import get_next_verification_number
 
@@ -27,6 +54,7 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
     # Create verification
     verification = Verification(
         company_id=invoice.company_id,
+        fiscal_year_id=fiscal_year.id,
         verification_number=ver_number,
         series="A",
         transaction_date=invoice.invoice_date,
@@ -39,7 +67,7 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
 
     # Debit: Customer receivables
     receivables_account = default_account_service.get_default_account(
-        db, invoice.company_id, DefaultAccountType.ACCOUNTS_RECEIVABLE
+        db, invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_RECEIVABLE
     )
 
     if not receivables_account:
@@ -66,7 +94,9 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
             account = db.query(Account).filter(Account.id == line.account_id).first()
         else:
             # Get default revenue account based on VAT rate
-            account = default_account_service.get_revenue_account_for_vat_rate(db, invoice.company_id, line.vat_rate)
+            account = default_account_service.get_revenue_account_for_vat_rate(
+                db, invoice.company_id, fiscal_year.id, line.vat_rate
+            )
 
             if not account:
                 raise ValueError(
@@ -93,7 +123,7 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
     # Credit: VAT accounts
     for vat_rate, vat_amount in vat_by_rate.items():
         vat_account = default_account_service.get_vat_outgoing_account_for_rate(
-            db, invoice.company_id, Decimal(str(vat_rate))
+            db, invoice.company_id, fiscal_year.id, Decimal(str(vat_rate))
         )
 
         if vat_account:
@@ -122,12 +152,16 @@ def create_invoice_payment_verification(
     Credit: 1510 Customer receivables
     """
 
+    # Get fiscal year for payment date
+    fiscal_year = get_fiscal_year_for_date(db, invoice.company_id, paid_date)
+
     from app.routers.verifications import get_next_verification_number
 
     ver_number = get_next_verification_number(db, invoice.company_id, "A")
 
     verification = Verification(
         company_id=invoice.company_id,
+        fiscal_year_id=fiscal_year.id,
         verification_number=ver_number,
         series="A",
         transaction_date=paid_date,
@@ -141,7 +175,13 @@ def create_invoice_payment_verification(
     if not bank_account_id:
         # Default to 1930 (Företagskonto)
         bank_account = (
-            db.query(Account).filter(Account.company_id == invoice.company_id, Account.account_number == 1930).first()
+            db.query(Account)
+            .filter(
+                Account.company_id == invoice.company_id,
+                Account.fiscal_year_id == fiscal_year.id,
+                Account.account_number == 1930,
+            )
+            .first()
         )
     else:
         bank_account = db.query(Account).filter(Account.id == bank_account_id).first()
@@ -161,7 +201,7 @@ def create_invoice_payment_verification(
 
     # Credit: Customer receivables
     receivables_account = default_account_service.get_default_account(
-        db, invoice.company_id, DefaultAccountType.ACCOUNTS_RECEIVABLE
+        db, invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_RECEIVABLE
     )
 
     if not receivables_account:
@@ -193,12 +233,16 @@ def create_supplier_invoice_verification(
     Credit: 2440 Leverantörsskulder (accounts payable)
     """
 
+    # Get fiscal year for this invoice date
+    fiscal_year = get_fiscal_year_for_date(db, supplier_invoice.company_id, supplier_invoice.invoice_date)
+
     from app.routers.verifications import get_next_verification_number
 
     ver_number = get_next_verification_number(db, supplier_invoice.company_id, "A")
 
     verification = Verification(
         company_id=supplier_invoice.company_id,
+        fiscal_year_id=fiscal_year.id,
         verification_number=ver_number,
         series="A",
         transaction_date=supplier_invoice.invoice_date,
@@ -219,7 +263,7 @@ def create_supplier_invoice_verification(
         else:
             # Get default expense account
             account = default_account_service.get_default_account(
-                db, supplier_invoice.company_id, DefaultAccountType.EXPENSE_DEFAULT
+                db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.EXPENSE_DEFAULT
             )
 
             if not account:
@@ -244,7 +288,7 @@ def create_supplier_invoice_verification(
         # Use 25% incoming VAT account as default for now
         # TODO: Track VAT by rate in supplier invoices too
         vat_account = default_account_service.get_default_account(
-            db, supplier_invoice.company_id, DefaultAccountType.VAT_INCOMING_25
+            db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.VAT_INCOMING_25
         )
 
         if vat_account:
@@ -260,7 +304,7 @@ def create_supplier_invoice_verification(
 
     # Credit: Accounts payable
     payables_account = default_account_service.get_default_account(
-        db, supplier_invoice.company_id, DefaultAccountType.ACCOUNTS_PAYABLE
+        db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_PAYABLE
     )
 
     if not payables_account:
@@ -297,12 +341,16 @@ def create_supplier_invoice_payment_verification(
     Credit: 1930 Bank account
     """
 
+    # Get fiscal year for payment date
+    fiscal_year = get_fiscal_year_for_date(db, supplier_invoice.company_id, paid_date)
+
     from app.routers.verifications import get_next_verification_number
 
     ver_number = get_next_verification_number(db, supplier_invoice.company_id, "A")
 
     verification = Verification(
         company_id=supplier_invoice.company_id,
+        fiscal_year_id=fiscal_year.id,
         verification_number=ver_number,
         series="A",
         transaction_date=paid_date,
@@ -314,7 +362,7 @@ def create_supplier_invoice_payment_verification(
 
     # Debit: Accounts payable
     payables_account = default_account_service.get_default_account(
-        db, supplier_invoice.company_id, DefaultAccountType.ACCOUNTS_PAYABLE
+        db, supplier_invoice.company_id, fiscal_year.id, DefaultAccountType.ACCOUNTS_PAYABLE
     )
 
     if not payables_account:
@@ -334,7 +382,11 @@ def create_supplier_invoice_payment_verification(
     if not bank_account_id:
         bank_account = (
             db.query(Account)
-            .filter(Account.company_id == supplier_invoice.company_id, Account.account_number == 1930)
+            .filter(
+                Account.company_id == supplier_invoice.company_id,
+                Account.fiscal_year_id == fiscal_year.id,
+                Account.account_number == 1930,
+            )
             .first()
         )
     else:

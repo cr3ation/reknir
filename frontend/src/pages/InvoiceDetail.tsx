@@ -4,11 +4,13 @@ import { ArrowLeft, FileText, DollarSign, Download } from 'lucide-react'
 import api, { invoiceApi, accountApi, customerApi } from '@/services/api'
 import type { Invoice, Account, Customer } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
 export default function InvoiceDetail() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -39,10 +41,10 @@ export default function InvoiceDetail() {
   }
 
   const loadAccounts = async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)

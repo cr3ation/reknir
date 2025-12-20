@@ -1,0 +1,152 @@
+[
+  {
+    "name": "Inköp med 25% moms",
+    "description": "Inköp av varor/tjänster med 25% moms",
+    "default_series": "A",
+    "default_journal_text": "Inköp varor/tjänster med moms",
+    "sort_order": 1,
+    "lines": [
+      {
+        "account_number": 4000,
+        "formula": "{total} / 1.25",
+        "description": "",
+        "sort_order": 1
+      },
+      {
+        "account_number": 2640,
+        "formula": "{total} * 0.2",
+        "description": "",
+        "sort_order": 2
+      },
+      {
+        "account_number": 2440,
+        "formula": "-{total}",
+        "description": "",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "name": "Försäljning med 25% moms",
+    "description": "Försäljning av varor/tjänster med 25% moms",
+    "default_series": "A",
+    "default_journal_text": "Försäljning varor/tjänster med moms",
+    "sort_order": 2,
+    "lines": [
+      {
+        "account_number": 1510,
+        "formula": "{total}",
+        "description": "",
+        "sort_order": 1
+      },
+      {
+        "account_number": 3001,
+        "formula": "-{total} / 1.25",
+        "description": "",
+        "sort_order": 2
+      },
+      {
+        "account_number": 2611,
+        "formula": "-{total} * 0.2",
+        "description": "",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "name": "Betalning till leverantör",
+    "description": "Betalning till leverantör",
+    "default_series": "A",
+    "default_journal_text": "Betalning leverantörsfaktura",
+    "sort_order": 4,
+    "lines": [
+      {
+        "account_number": 1930,
+        "formula": "-{total}",
+        "description": "",
+        "sort_order": 1
+      },
+      {
+        "account_number": 2440,
+        "formula": "{total}",
+        "description": "",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "name": "Lokalhyra",
+    "description": "Betalning av lokalhyra med 25% moms",
+    "default_series": "A",
+    "default_journal_text": "Lokalhyra",
+    "sort_order": 6,
+    "lines": [
+      {
+        "account_number": 1930,
+        "formula": "-{total}",
+        "description": "",
+        "sort_order": 1
+      },
+      {
+        "account_number": 5010,
+        "formula": "{total} / 1.25",
+        "description": "",
+        "sort_order": 2
+      },
+      {
+        "account_number": 2640,
+        "formula": "{total} * 0.2",
+        "description": "",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "name": "Lön och avgifter",
+    "description": "Utbetalning av löner och arbetsgivaravgifter",
+    "default_series": "A",
+    "default_journal_text": "Lön och arbetsgivaravgifter",
+    "sort_order": 5,
+    "lines": [
+      {
+        "account_number": 1930,
+        "formula": "-{total}",
+        "description": "",
+        "sort_order": 1
+      },
+      {
+        "account_number": 7210,
+        "formula": "{total} * 0.6887",
+        "description": "",
+        "sort_order": 2
+      },
+      {
+        "account_number": 7510,
+        "formula": "{total} * 0.3113",
+        "description": "",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "name": "Betalning från kund",
+    "description": "Inbetalning från kund",
+    "default_series": "A",
+    "default_journal_text": "Betalning från kund",
+    "sort_order": 3,
+    "lines": [
+      {
+        "account_number": 1930,
+        "formula": "{total}",
+        "description": "",
+        "sort_order": 1
+      },
+      {
+        "account_number": 1510,
+        "formula": "-{total}",
+        "description": "",
+        "sort_order": 2
+      }
+    ]
+  }
+]

@@ -4,11 +4,13 @@ import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, 
 import { expenseApi, accountApi } from '@/services/api'
 import type { Expense, ExpenseStatus, Account } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
 
 export default function Expenses() {
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
+  const { selectedFiscalYear } = useFiscalYear()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,15 +57,15 @@ export default function Expenses() {
   }, [selectedCompany, statusFilter, employeeFilter])
 
   const loadAccounts = useCallback(async () => {
-    if (!selectedCompany) return
+    if (!selectedCompany || !selectedFiscalYear) return
 
     try {
-      const accountsRes = await accountApi.list(selectedCompany.id)
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
       setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load accounts:', error)
     }
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   useEffect(() => {
     loadExpenses()
