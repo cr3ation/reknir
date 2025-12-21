@@ -403,7 +403,7 @@ export default function Accounts() {
   const openingBalanceDifference = openingBalanceAssets + openingBalanceLiabilitiesEquity
   const isOpeningBalanceValid = Math.abs(openingBalanceDifference) < 0.01
 
-  // Find account 2091 (Balanserat resultat) for auto-fix
+  // Find account 2091 (Balanserad vinst eller förlust) for auto-fix
   const balanceResultAccount = accounts.find(a => a.account_number === 2091)
 
   const handleAutoFixOpeningBalance = async () => {
@@ -613,18 +613,18 @@ export default function Accounts() {
               <p className="mt-3 text-sm text-yellow-700">
                 För att balansräkningen ska gå ihop behöver du lägga till{' '}
                 <strong>{(-openingBalanceDifference).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</strong>{' '}
-                på ett eget kapital-konto (t.ex. 2091 Balanserat resultat).
+                på ett eget kapital-konto (t.ex. 2091 Balanserad vinst eller förlust).
               </p>
               {balanceResultAccount ? (
                 <button
                   onClick={handleAutoFixOpeningBalance}
                   className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium"
                 >
-                  Lägg automatiskt på konto 2091 (Balanserat resultat)
+                  Lägg automatiskt på konto 2091 (Balanserad vinst eller förlust)
                 </button>
               ) : (
                 <p className="mt-3 text-sm text-yellow-600 italic">
-                  Tips: Lägg till konto 2091 (Balanserat resultat) i kontoplanen för att kunna korrigera automatiskt.
+                  Tips: Lägg till konto 2091 (Balanserad vinst eller förlust) i kontoplanen för att kunna korrigera automatiskt.
                 </p>
               )}
             </div>
