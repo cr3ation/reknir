@@ -52,9 +52,12 @@ docker compose exec backend alembic upgrade head
 | Document | Description |
 |----------|-------------|
 | [Quick Start](docs/QUICKSTART.md) | Setup guide for development and production |
-| [Production Deployment](docs/PRODUCTION.md) | Detailed production deployment with HTTPS |
+| [Deployment](docs/DEPLOYMENT.md) | Production deployment guide |
 | [Architecture](docs/ARCHITECTURE.md) | System design and codebase overview |
 | [Authentication Setup](docs/AUTH_SETUP.md) | Configure user authentication |
+| [Cloudflare Setup](docs/CLOUDFLARE.md) | Cloudflare Tunnel configuration |
+| [Invoice Feature](docs/INVOICE_FEATURE.md) | Customer and supplier invoice system |
+| [Roadmap](docs/ROADMAP.md) | Feature roadmap and future plans |
 | [Contributing](CONTRIBUTING.md) | CI pipeline, code style, and contribution guidelines |
 
 ## Development Setup
@@ -88,6 +91,14 @@ npm install
 npm run dev
 ```
 
+## Utility Scripts
+
+| Script | Description |
+|--------|-------------|
+| `setup-local.sh` | Interactive setup for local development environment |
+| `factory-reset.sh` | Reset database with options: quick reset, full reset, or reset with demo data |
+| `deploy.sh` | Production deployment script |
+
 ## Project Structure
 
 ```
@@ -109,6 +120,9 @@ reknir/
 │   ├── alembic/          # Database migrations
 │   └── requirements.txt
 ├── docs/                 # Documentation
+├── backups/              # Database backup storage
+├── scripts/              # Utility scripts
+├── nginx/                # Nginx reverse proxy config
 ├── docker-compose.yml    # Development containers
 └── docker-compose.prod.yml  # Production containers
 ```
@@ -119,6 +133,14 @@ This software follows Swedish accounting standards:
 - **Bokföringslagen (BFL)**: 7-year retention, chronological recording, audit trails
 - **BAS 2024 Kontoplan**: Standard Swedish chart of accounts
 - **SIE4 Format**: Standard export format for accountants
+
+## Backup
+
+The system includes automatic daily backups with 7-year retention (Swedish Bokföringslagen compliance).
+
+- Backups stored in `backups/` directory
+- Manual backup: `docker compose exec postgres pg_dump -U reknir reknir > backup.sql`
+- Restore: `docker compose exec -T postgres psql -U reknir reknir < backup.sql`
 
 ## Support
 

@@ -22,10 +22,10 @@ OR for local development:
 cd reknir
 
 # Start all services (database, backend, frontend)
-docker-compose up -d
+docker compose up -d
 
 # Check that services are running
-docker-compose ps
+docker compose ps
 ```
 
 This will start:
@@ -37,10 +37,10 @@ This will start:
 
 ```bash
 # Run database migrations
-docker-compose exec backend alembic upgrade head
+docker compose exec backend alembic upgrade head
 
 # Verify migration succeeded
-docker-compose logs backend
+docker compose logs backend
 ```
 
 ### 3. Create Your First Company
@@ -49,29 +49,35 @@ Open your browser and go to http://localhost:5173
 
 You'll be greeted by the **Onboarding Wizard**:
 
-#### Step 1: Company Information
+#### Step 1: Admin User
+- Create your admin account
+- Enter email, name, and password
+- This will be the first user with full access
+
+#### Step 2: Company Information
 - Enter company name
 - Enter organization number (Swedish org.nr format: XXXXXX-XXXX)
+- Enter VAT number (optional)
+- Enter address and contact details
 - Select accounting basis (accrual or cash)
 - Select VAT reporting period (monthly, quarterly, yearly)
-- Add contact details (optional)
 
-#### Step 2: Fiscal Year
+#### Step 3: Fiscal Year
 - Enter start and end date for your fiscal year
 - The system suggests current calendar year by default
 - Must be approximately 12 months
 
-#### Step 3: Chart of Accounts
+#### Step 4: Chart of Accounts
 Choose one option:
 - **"Yes, create chart of accounts"** (Recommended)
-  - Imports BAS 2024 kontoplan (45 accounts)
+  - Imports BAS 2024 kontoplan
   - Initializes default accounts
   - Creates standard posting templates
 - **"No, skip"**
   - Start with empty chart
   - Import BAS later via Settings
 
-#### Step 4: Confirmation
+#### Step 5: Confirmation
 - Review your setup
 - System will redirect to dashboard when complete
 
@@ -198,64 +204,78 @@ npm run dev
 
 ```bash
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (WARNING: deletes database!)
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Backup Your Data
 
 ```bash
 # Manual backup
-docker-compose exec postgres pg_dump -U reknir reknir > backup_$(date +%Y%m%d).sql
+docker compose exec postgres pg_dump -U reknir reknir > backup_$(date +%Y%m%d).sql
 
 # Restore from backup
-docker-compose exec -T postgres psql -U reknir reknir < backup_20241109.sql
+docker compose exec -T postgres psql -U reknir reknir < backup_20241109.sql
 ```
+
+## Factory Reset
+
+If you need to start fresh or want to load demo data:
+
+```bash
+# Run the factory reset script
+./factory-reset.sh
+```
+
+Options:
+1. **Quick reset** - Clears database, reuses Docker images
+2. **Full factory reset** - Rebuilds everything from scratch
+3. **Quick reset with demo data** - Includes sample customers, invoices, and transactions for testing
 
 ## Next Steps
 
 - Explore the API documentation at http://localhost:8000/docs
-- Check the main PLAN.md for the full roadmap
-- Start building out the frontend UI for easier transaction entry
-- Implement SIE4 export for integration with accounting software
+- Check [docs/ROADMAP.md](docs/ROADMAP.md) for planned features
+- Review [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design
+- Use posting templates to speed up common transactions
+- Set up automatic backups for production use
 
 ## Troubleshooting
 
 ### Database connection issues
 ```bash
 # Check if PostgreSQL is running
-docker-compose ps postgres
+docker compose ps postgres
 
 # View PostgreSQL logs
-docker-compose logs postgres
+docker compose logs postgres
 ```
 
 ### Backend not starting
 ```bash
 # Check backend logs
-docker-compose logs backend
+docker compose logs backend
 
 # Common issue: Database not ready
 # Solution: Wait a few seconds and try again
-docker-compose restart backend
+docker compose restart backend
 ```
 
 ### Frontend not loading
 ```bash
 # Check frontend logs
-docker-compose logs frontend
+docker compose logs frontend
 
 # Rebuild frontend if needed
-docker-compose up -d --build frontend
+docker compose up -d --build frontend
 ```
 
 ## Support
 
 For issues or questions:
-- Check the README.md
-- Review the PLAN.md for architecture details
+- Check the [README.md](README.md) for overview
+- Review [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for technical details
+- Check [docs/ROADMAP.md](docs/ROADMAP.md) for planned features
 - Open a GitHub issue
-
-Happy bookkeeping! 📊
