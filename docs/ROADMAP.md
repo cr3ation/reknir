@@ -25,7 +25,7 @@
 **Prioritet: HÖG | Komplexitet: LÅG-MEDEL**
 
 ### 1.1 UX & Användbarhet
-- [ ] **Dashboard med verkliga siffror**
+- [x] **Dashboard med verkliga siffror**
   - Dagens/månadens intäkter och kostnader
   - Förfallna fakturor
   - Väntande utlägg för godkännande
@@ -326,7 +326,7 @@
 ### UI/UX Förbättringar
 - [ ] Loading states för alla API-anrop
 - [ ] Bättre felmeddelanden
-- [ ] Confirmation dialogs innan radering
+- [x] Confirmation dialogs innan radering
 - [ ] Tooltips för alla ikoner
 - [ ] Keyboard shortcuts (Ctrl+S för spara, etc.)
 
@@ -334,13 +334,13 @@
 - [ ] Default värden för nya poster
 - [ ] Validera OCR-nummer
 - [ ] Validera organisationsnummer
-- [ ] Automatisk beräkning av förfallodatum
+- [x] Automatisk beräkning av förfallodatum
 
 ### Rapporter
 - [ ] Årsöversikt på dashboard
 - [ ] Kundreskontra
 - [ ] Leverantörsreskontra
-- [ ] Huvudbok per konto
+- [x] Huvudbok per konto
 
 ### Export
 - [ ] CSV-export för alla listor
@@ -419,6 +419,6 @@
 
 ---
 
-**Senast uppdaterad:** 2025-12-03
+**Senast uppdaterad:** 2025-12-21
 **Version:** 1.2 (under utveckling)
 **Status:** Funktionell MVP - lämplig för testning och utveckling, ej för produktionsdrift ännu
