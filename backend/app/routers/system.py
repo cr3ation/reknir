@@ -5,6 +5,7 @@ System information router - provides public system status and configuration
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app import __version__
 from app.database import get_db
 from app.models.user import User
 
@@ -25,5 +26,5 @@ def get_system_info(db: Session = Depends(get_db)):
 
     return {
         "needs_setup": user_count == 0,
-        "version": "1.0.0",
+        "version": __version__,
     }

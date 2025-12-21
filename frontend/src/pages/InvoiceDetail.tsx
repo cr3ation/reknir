@@ -16,6 +16,11 @@ export default function InvoiceDetail() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
+  const [payingInvoice, setPayingInvoice] = useState(false)
+
   useEffect(() => {
     loadInvoice()
     loadAccounts()
@@ -72,10 +77,12 @@ export default function InvoiceDetail() {
     }
   }
 
-  const handleMarkPaid = async () => {
-    const paidDate = prompt('Ange betalningsdatum (ÅÅÅÅ-MM-DD):', new Date().toISOString().split('T')[0])
-    if (!paidDate) return
+  const openPaymentModal = () => {
+    setPaymentDate(new Date().toISOString().split('T')[0])
+    setShowPaymentModal(true)
+  }
 
+  const handleMarkPaid = async () => {
     // Find bank account 1930 (default bank account)
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
@@ -84,17 +91,21 @@ export default function InvoiceDetail() {
       return
     }
 
+    setPayingInvoice(true)
     try {
       await invoiceApi.markPaid(parseInt(invoiceId!), {
-        paid_date: paidDate,
+        paid_date: paymentDate,
         paid_amount: invoice!.total_amount - invoice!.paid_amount,
         bank_account_id: bankAccount.id
       })
+      setShowPaymentModal(false)
       await loadInvoice()
       alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
     } catch (error: any) {
       console.error('Failed to mark paid:', error)
       alert(`Kunde inte markera som betald: ${error.response?.data?.detail || error.message}`)
+    } finally {
+      setPayingInvoice(false)
     }
   }
 
@@ -332,7 +343,7 @@ export default function InvoiceDetail() {
               )}
               {invoice.status !== 'paid' && invoice.status !== 'draft' && (
                 <button
-                  onClick={handleMarkPaid}
+                  onClick={openPaymentModal}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
                 >
                   <DollarSign className="w-4 h-4" />
@@ -422,6 +433,99 @@ export default function InvoiceDetail() {
           </div>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && invoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-purple-50 px-6 py-4 border-b border-purple-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Markera faktura som betald
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {invoice.invoice_series}{invoice.invoice_number} - {customer?.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700 mb-4">
+                En betalningsverifikation kommer att skapas automatiskt.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Betalningsdatum
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Fakturabelopp:</span>
+                  <span className="font-semibold">
+                    {invoice.total_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">Redan betalt:</span>
+                  <span>
+                    {invoice.paid_amount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
+                  <span className="text-gray-700">Att betala:</span>
+                  <span className="text-purple-600">
+                    {(invoice.total_amount - invoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                disabled={payingInvoice}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleMarkPaid}
+                disabled={payingInvoice}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {payingInvoice ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Sparar...</span>
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4" />
+                    <span>Markera som betald</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

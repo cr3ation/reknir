@@ -17,6 +17,44 @@ from app.models.verification import TransactionLine, Verification
 router = APIRouter()
 
 
+def get_fiscal_year_dates(db: Session, company_id: int, fiscal_year_id: int) -> tuple[date, date]:
+    """
+    Get the date range for a fiscal year.
+    Returns (start_date, end_date) tuple.
+    """
+    fiscal_year = (
+        db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
+    )
+    if not fiscal_year:
+        raise HTTPException(status_code=404, detail="Fiscal year not found")
+    return fiscal_year.start_date, fiscal_year.end_date
+
+
+def calculate_account_balance_from_transactions(
+    db: Session,
+    account_id: int,
+    company_id: int,
+    start_date: date,
+    end_date: date,
+) -> float:
+    """
+    Calculate an account's balance from transactions within a date range.
+    Returns the net balance (sum of debit - credit).
+    """
+    result = (
+        db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
+        .join(Verification, TransactionLine.verification_id == Verification.id)
+        .filter(
+            TransactionLine.account_id == account_id,
+            Verification.company_id == company_id,
+            Verification.transaction_date >= start_date,
+            Verification.transaction_date <= end_date,
+        )
+        .scalar()
+    )
+    return float(result or Decimal(0))
+
+
 @router.get("/general-ledger")
 async def get_general_ledger(
     company_id: int = Query(..., description="Company ID"),
@@ -142,49 +180,94 @@ async def get_general_ledger(
 @router.get("/balance-sheet")
 async def get_balance_sheet(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Generate Balance Sheet (Balansräkning)
-    Assets = Liabilities + Equity
+    Assets = Liabilities + Equity + Current Year Result
     """
     # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
 
-    # Get all accounts with balances
-    accounts = db.query(Account).filter(Account.company_id == company_id, Account.active.is_(True)).all()
+    # Get fiscal year date range
+    date_start, date_end = get_fiscal_year_dates(db, company_id, fiscal_year_id)
 
-    # Group by account type
+    # Get all active accounts for this company
+    accounts = (
+        db.query(Account)
+        .filter(Account.company_id == company_id, Account.fiscal_year_id == fiscal_year_id, Account.active.is_(True))
+        .all()
+    )
+
+    # Group by account type and calculate balances from transactions
     assets = []
     liabilities = []
     equity = []
+    revenue_total = 0.0
+    expenses_total = 0.0
 
     for account in accounts:
-        # Skip accounts with zero balance
-        if account.current_balance == 0:
-            continue
-
-        item = {
-            "account_number": account.account_number,
-            "name": account.name,
-            "balance": float(account.current_balance),
-        }
+        # Calculate transactions within the fiscal year
+        year_transactions = calculate_account_balance_from_transactions(
+            db, account.id, company_id, date_start, date_end
+        )
 
         if account.account_type == AccountType.ASSET:
-            assets.append(item)
+            # Asset accounts: opening_balance + transactions within year
+            balance = float(account.opening_balance) + year_transactions
+            if balance == 0:
+                continue
+            assets.append(
+                {
+                    "account_number": account.account_number,
+                    "name": account.name,
+                    "balance": balance,
+                }
+            )
+
         elif account.account_type == AccountType.EQUITY_LIABILITY:
+            # Equity/Liability accounts have credit balance (negative in debit - credit)
+            # Negate to show as positive in balance sheet
+            balance = -(float(account.opening_balance) + year_transactions)
+            if balance == 0:
+                continue
+            item = {
+                "account_number": account.account_number,
+                "name": account.name,
+                "balance": balance,
+            }
             # Determine if equity or liability based on account number
-            # 2000-2999: Equity (Eget kapital)
+            # 2000-2099: Equity (Eget kapital)
             # 2100-2999: Liabilities (Skulder)
             if 2000 <= account.account_number < 2100:
                 equity.append(item)
             else:
                 liabilities.append(item)
 
+        elif account.account_type == AccountType.REVENUE:
+            # Revenue accounts: only transactions within year (for årets resultat)
+            # Revenue accounts have negative balance (credits), negate to get positive
+            if year_transactions != 0:
+                revenue_total += -year_transactions
+
+        elif account.account_type in [
+            AccountType.COST_GOODS,
+            AccountType.COST_LOCAL,
+            AccountType.COST_OTHER,
+            AccountType.COST_PERSONNEL,
+            AccountType.COST_MISC,
+        ]:
+            # Expense accounts: only transactions within year (for årets resultat)
+            # Expense accounts have positive balance (debits)
+            if year_transactions != 0:
+                expenses_total += year_transactions
+
     total_assets = sum(a["balance"] for a in assets)
     total_liabilities = sum(liab["balance"] for liab in liabilities)
     total_equity = sum(eq["balance"] for eq in equity)
+    current_year_result = revenue_total - expenses_total
 
     return {
         "company_id": company_id,
@@ -192,14 +275,16 @@ async def get_balance_sheet(
         "assets": {"accounts": assets, "total": total_assets},
         "liabilities": {"accounts": liabilities, "total": total_liabilities},
         "equity": {"accounts": equity, "total": total_equity},
-        "total_liabilities_and_equity": total_liabilities + total_equity,
-        "balanced": abs(total_assets - (total_liabilities + total_equity)) < 0.01,
+        "current_year_result": current_year_result,
+        "total_liabilities_and_equity": total_liabilities + total_equity + current_year_result,
+        "balanced": abs(total_assets - (total_liabilities + total_equity + current_year_result)) < 0.01,
     }
 
 
 @router.get("/income-statement")
 async def get_income_statement(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -209,6 +294,9 @@ async def get_income_statement(
     """
     # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
+
+    # Get fiscal year date range
+    date_start, date_end = get_fiscal_year_dates(db, company_id, fiscal_year_id)
 
     # Get all revenue and expense accounts
     accounts = (
@@ -234,14 +322,17 @@ async def get_income_statement(
     expenses = []
 
     for account in accounts:
+        # Calculate balance from transactions within the fiscal year
+        balance = calculate_account_balance_from_transactions(db, account.id, company_id, date_start, date_end)
+
         # Skip accounts with zero balance
-        if account.current_balance == 0:
+        if balance == 0:
             continue
 
         item = {
             "account_number": account.account_number,
             "name": account.name,
-            "balance": float(account.current_balance),
+            "balance": balance,
         }
 
         if account.account_type == AccountType.REVENUE:
@@ -267,15 +358,19 @@ async def get_income_statement(
 @router.get("/trial-balance")
 async def get_trial_balance(
     company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    # Verify user has access to this company
-    await verify_company_access(company_id, current_user, db)
     """
     Generate Trial Balance (Råbalans/RAR)
     Shows all accounts with opening balance, changes, and closing balance
     """
+    # Verify user has access to this company
+    await verify_company_access(company_id, current_user, db)
+
+    # Get fiscal year date range
+    date_start, date_end = get_fiscal_year_dates(db, company_id, fiscal_year_id)
 
     accounts = (
         db.query(Account)
@@ -289,24 +384,40 @@ async def get_trial_balance(
     total_credit = Decimal("0")
 
     for account in accounts:
-        change = account.current_balance - account.opening_balance
+        # Calculate opening balance (transactions before fiscal year start)
+        opening_balance_result = (
+            db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
+            .join(Verification, TransactionLine.verification_id == Verification.id)
+            .filter(
+                TransactionLine.account_id == account.id,
+                Verification.company_id == company_id,
+                Verification.transaction_date < date_start,
+            )
+            .scalar()
+        )
+        opening_balance = float(opening_balance_result or Decimal(0))
+
+        # Calculate change during fiscal year
+        change = calculate_account_balance_from_transactions(db, account.id, company_id, date_start, date_end)
+
+        closing_balance = opening_balance + change
 
         item = {
             "account_number": account.account_number,
             "name": account.name,
             "account_type": account.account_type.value,
-            "opening_balance": float(account.opening_balance),
-            "change": float(change),
-            "closing_balance": float(account.current_balance),
+            "opening_balance": opening_balance,
+            "change": change,
+            "closing_balance": closing_balance,
         }
 
         trial_balance.append(item)
 
         # Sum debits and credits
-        if account.current_balance > 0:
-            total_debit += account.current_balance
+        if closing_balance > 0:
+            total_debit += Decimal(str(closing_balance))
         else:
-            total_credit += abs(account.current_balance)
+            total_credit += Decimal(str(abs(closing_balance)))
 
     return {
         "company_id": company_id,
