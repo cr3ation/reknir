@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { accountApi } from '@/services/api'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
@@ -25,12 +25,18 @@ interface AccountLedger {
 
 export default function AccountLedger() {
   const { accountId } = useParams<{ accountId: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { selectedFiscalYear } = useFiscalYear()
   const [ledger, setLedger] = useState<AccountLedger | null>(null)
   const [loading, setLoading] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+
+  // Get fiscal_year_id from URL query params (priority) or selected fiscal year
+  const fiscalYearId = searchParams.get('fiscal_year_id')
+    ? parseInt(searchParams.get('fiscal_year_id')!)
+    : selectedFiscalYear?.id
 
   // Set default date range to selected fiscal year
   useEffect(() => {
@@ -45,7 +51,8 @@ export default function AccountLedger() {
 
     try {
       setLoading(true)
-      const params: { start_date?: string; end_date?: string } = {}
+      const params: { fiscal_year_id?: number; start_date?: string; end_date?: string } = {}
+      if (fiscalYearId) params.fiscal_year_id = fiscalYearId
       if (startDate) params.start_date = startDate
       if (endDate) params.end_date = endDate
 
@@ -56,7 +63,7 @@ export default function AccountLedger() {
     } finally {
       setLoading(false)
     }
-  }, [accountId, startDate, endDate])
+  }, [accountId, fiscalYearId, startDate, endDate])
 
   useEffect(() => {
     if (accountId) {

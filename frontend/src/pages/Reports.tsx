@@ -430,7 +430,7 @@ export default function Reports() {
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-mono text-gray-900 whitespace-nowrap">
                         <Link
-                          to={`/accounts/${account.account_number}/ledger`}
+                          to={`/accounts/${account.account_id}/ledger?fiscal_year_id=${selectedFiscalYear!.id}`}
                           className="text-blue-600 hover:text-blue-800 hover:underline"
                         >
                           {account.account_number}

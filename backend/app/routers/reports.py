@@ -196,6 +196,7 @@ async def get_general_ledger(
 
         account_summaries.append(
             {
+                "account_id": account.id,
                 "account_number": account.account_number,
                 "account_name": account.name,
                 "opening_balance": opening_balance,

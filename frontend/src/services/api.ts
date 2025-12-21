@@ -126,7 +126,7 @@ export const accountApi = {
     api.post<Account>('/accounts/', data),
   update: (id: number, data: Partial<Account>) => api.patch<Account>(`/accounts/${id}`, data),
   delete: (id: number) => api.delete(`/accounts/${id}`),
-  getLedger: (accountId: number, params?: { start_date?: string; end_date?: string }) =>
+  getLedger: (accountId: number, params?: { fiscal_year_id?: number; start_date?: string; end_date?: string }) =>
     api.get(`/accounts/${accountId}/ledger`, { params }),
 }
 

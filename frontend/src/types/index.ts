@@ -193,6 +193,7 @@ export interface IncomeStatement {
 }
 
 export interface GeneralLedgerAccountSummary {
+  account_id: number
   account_number: number
   account_name: string
   opening_balance: number
