@@ -45,8 +45,8 @@ export default function Invoices() {
     try {
       setLoading(true)
       const [outgoingRes, incomingRes, customersRes, suppliersRes, accountsRes] = await Promise.all([
-        invoiceApi.list(selectedCompany.id),
-        supplierInvoiceApi.list(selectedCompany.id),
+        invoiceApi.list(selectedCompany.id, { fiscal_year_id: selectedFiscalYear.id }),
+        supplierInvoiceApi.list(selectedCompany.id, { fiscal_year_id: selectedFiscalYear.id }),
         customerApi.list(selectedCompany.id),
         supplierApi.list(selectedCompany.id),
         accountApi.list(selectedCompany.id, selectedFiscalYear.id),
