@@ -338,8 +338,9 @@ def get_account_ledger(
 
     # If we have a start_date and it's after fiscal year start, add transactions before start_date
     if start_date and fiscal_year_start and start_date > fiscal_year_start:
-        from sqlalchemy import func
         from decimal import Decimal
+
+        from sqlalchemy import func
 
         pre_period_sum = (
             db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
