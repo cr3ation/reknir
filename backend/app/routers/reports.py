@@ -103,8 +103,20 @@ async def get_general_ledger(
             date_start = date(date.today().year, 1, 1)
             date_end = date(date.today().year, 12, 31)
 
-    # Get all accounts or filtered accounts
-    account_query = db.query(Account).filter(Account.company_id == company_id)
+    # Determine fiscal year start date for proper opening balance calculation
+    # Resultatkonton (class 3-8) reset to 0 at fiscal year start
+    # Balanskonton (class 1-2) carry over from previous year
+    fiscal_year_start = date_start
+    if fiscal_year_id:
+        fy = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+        if fy:
+            fiscal_year_start = fy.start_date
+
+    # Get all accounts or filtered accounts for this fiscal year
+    account_query = db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.fiscal_year_id == fiscal_year_id if fiscal_year_id else True,
+    )
 
     if account_numbers:
         account_nums = [int(num.strip()) for num in account_numbers.split(",")]
@@ -130,23 +142,50 @@ async def get_general_ledger(
             .all()
         )
 
-        # Skip accounts with no transactions
-        if not transactions:
+        # Determine if this is a balance sheet account (class 1-2) or income statement account (class 3-8)
+        is_balance_account = account.account_number < 3000
+
+        # Calculate opening balance based on account type
+        if is_balance_account:
+            # Balanskonton (1xxx-2xxx): Start with stored opening balance
+            opening_balance = float(account.opening_balance or Decimal(0))
+
+            # Add transactions from fiscal year start to period start (if period starts after fiscal year)
+            if date_start > fiscal_year_start:
+                pre_period_query = (
+                    db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
+                    .join(Verification)
+                    .filter(
+                        TransactionLine.account_id == account.id,
+                        Verification.company_id == company_id,
+                        Verification.transaction_date >= fiscal_year_start,
+                        Verification.transaction_date < date_start,
+                    )
+                    .scalar()
+                )
+                opening_balance += float(pre_period_query or Decimal(0))
+        else:
+            # Resultatkonton (3xxx-8xxx): Always start at 0 at fiscal year start
+            opening_balance = 0.0
+
+            # Add transactions from fiscal year start to period start (if period starts after fiscal year)
+            if date_start > fiscal_year_start:
+                pre_period_query = (
+                    db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
+                    .join(Verification)
+                    .filter(
+                        TransactionLine.account_id == account.id,
+                        Verification.company_id == company_id,
+                        Verification.transaction_date >= fiscal_year_start,
+                        Verification.transaction_date < date_start,
+                    )
+                    .scalar()
+                )
+                opening_balance += float(pre_period_query or Decimal(0))
+
+        # Skip accounts with no transactions and no opening balance
+        if not transactions and opening_balance == 0:
             continue
-
-        # Calculate opening balance (transactions before start date)
-        opening_balance_query = (
-            db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
-            .join(Verification)
-            .filter(
-                TransactionLine.account_id == account.id,
-                Verification.company_id == company_id,
-                Verification.transaction_date < date_start,
-            )
-            .scalar()
-        )
-
-        opening_balance = float(opening_balance_query or Decimal(0))
 
         # Calculate period totals
         period_debit = sum(float(t[0].debit or Decimal(0)) for t in transactions)
@@ -157,6 +196,7 @@ async def get_general_ledger(
 
         account_summaries.append(
             {
+                "account_id": account.id,
                 "account_number": account.account_number,
                 "account_name": account.name,
                 "opening_balance": opening_balance,

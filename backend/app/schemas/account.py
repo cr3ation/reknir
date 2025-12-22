@@ -29,6 +29,7 @@ class AccountUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     active: bool | None = None
+    opening_balance: Decimal | None = None
 
 
 class AccountResponse(AccountBase):

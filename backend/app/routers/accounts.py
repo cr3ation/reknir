@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
 from app.models.account import Account, AccountType
+from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
 from app.schemas.account import AccountBalance, AccountCreate, AccountResponse, AccountUpdate
@@ -282,6 +283,7 @@ class AccountLedgerResponse(BaseModel):
 @router.get("/{account_id}/ledger", response_model=AccountLedgerResponse)
 def get_account_ledger(
     account_id: int,
+    fiscal_year_id: int | None = Query(None, description="Fiscal Year ID"),
     start_date: date | None = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: date | None = Query(None, description="End date (YYYY-MM-DD)"),
     current_user: User = Depends(get_current_active_user),
@@ -290,6 +292,10 @@ def get_account_ledger(
     """
     Get account ledger showing all transactions for a specific account.
     Returns chronological list of all debit/credit entries with running balance.
+
+    Opening balance calculation:
+    - Balance accounts (1xxx-2xxx): Uses stored opening_balance from chart of accounts
+    - Income statement accounts (3xxx-8xxx): Always starts at 0 at fiscal year start
     """
     # Get account
     account = db.query(Account).filter(Account.id == account_id).first()
@@ -306,6 +312,48 @@ def get_account_ledger(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this account",
         )
+
+    # Determine fiscal year dates
+    fiscal_year_start = None
+    if fiscal_year_id:
+        fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+        if fiscal_year:
+            fiscal_year_start = fiscal_year.start_date
+            # Use fiscal year dates if start/end not provided
+            if not start_date:
+                start_date = fiscal_year.start_date
+            if not end_date:
+                end_date = fiscal_year.end_date
+
+    # Determine if this is a balance sheet account (class 1-2) or income statement account (class 3-8)
+    is_balance_account = account.account_number < 3000
+
+    # Calculate opening balance based on account type
+    if is_balance_account:
+        # Balanskonton (1xxx-2xxx): Start with stored opening balance
+        opening_balance = float(account.opening_balance or 0)
+    else:
+        # Resultatkonton (3xxx-8xxx): Always start at 0 at fiscal year start
+        opening_balance = 0.0
+
+    # If we have a start_date and it's after fiscal year start, add transactions before start_date
+    if start_date and fiscal_year_start and start_date > fiscal_year_start:
+        from decimal import Decimal
+
+        from sqlalchemy import func
+
+        pre_period_sum = (
+            db.query(func.sum(TransactionLine.debit - TransactionLine.credit))
+            .join(Verification, TransactionLine.verification_id == Verification.id)
+            .filter(
+                TransactionLine.account_id == account_id,
+                Verification.company_id == account.company_id,
+                Verification.transaction_date >= fiscal_year_start,
+                Verification.transaction_date < start_date,
+            )
+            .scalar()
+        )
+        opening_balance += float(pre_period_sum or Decimal(0))
 
     # Get all transaction lines for this account
     query = (
@@ -333,13 +381,13 @@ def get_account_ledger(
     transactions = query.all()
 
     # Calculate running balance
-    running_balance = account.opening_balance
+    running_balance = opening_balance
     entries = []
 
     for trans_line, verification in transactions:
         # Update running balance (debit increases, credit decreases for asset/expense accounts)
         # For liability/revenue accounts, it's opposite, but we show it the same way
-        running_balance += trans_line.debit - trans_line.credit
+        running_balance += float(trans_line.debit) - float(trans_line.credit)
 
         entries.append(
             AccountLedgerEntry(
@@ -358,7 +406,7 @@ def get_account_ledger(
         account_id=account.id,
         account_number=account.account_number,
         account_name=account.name,
-        opening_balance=float(account.opening_balance),
+        opening_balance=opening_balance,
         closing_balance=float(running_balance),
         entries=entries,
     )

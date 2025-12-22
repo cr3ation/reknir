@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import __version__
 from app.config import settings
 from app.routers import (
     accounts,
@@ -26,7 +27,7 @@ from app.routers import (
 app = FastAPI(
     title=settings.app_name,
     description="Modern Swedish bookkeeping system with BAS kontoplan support and invoice management",
-    version="0.2.0",
+    version=__version__,
 )
 
 # Configure CORS
@@ -77,7 +78,7 @@ async def root():
     """Root endpoint"""
     return {
         "message": "Reknir API",
-        "version": "0.2.0",
+        "version": __version__,
         "features": [
             "Swedish BAS kontoplan",
             "Double-entry bookkeeping",
