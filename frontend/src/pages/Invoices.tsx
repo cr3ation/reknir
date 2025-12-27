@@ -45,6 +45,7 @@ export default function Invoices() {
   const [confirmPaySupplierInvoice, setConfirmPaySupplierInvoice] = useState<SupplierInvoiceListItem | null>(null)
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
   const [paymentAmount, setPaymentAmount] = useState<number>(0)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
   const [payingInvoice, setPayingInvoice] = useState(false)
   const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
 
@@ -140,11 +141,11 @@ export default function Invoices() {
     // Validate payment amount
     const remainingAmount = confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount
     if (paymentAmount <= 0) {
-      alert('Belopp måste vara större än 0')
+      setPaymentError('Belopp måste vara större än 0')
       return
     }
     if (paymentAmount > remainingAmount) {
-      alert(`Belopp kan inte överstiga återstående belopp (${remainingAmount.toLocaleString('sv-SE')} kr)`)
+      setPaymentError(`Belopp kan inte överstiga återstående belopp (${remainingAmount.toLocaleString('sv-SE')} kr)`)
       return
     }
 
@@ -152,7 +153,7 @@ export default function Invoices() {
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
     if (!bankAccount) {
-      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      setPaymentError('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
       return
     }
 
@@ -183,11 +184,11 @@ export default function Invoices() {
     // Validate payment amount
     const remainingAmount = confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount
     if (paymentAmount <= 0) {
-      alert('Belopp måste vara större än 0')
+      setPaymentError('Belopp måste vara större än 0')
       return
     }
     if (paymentAmount > remainingAmount) {
-      alert(`Belopp kan inte överstiga återstående belopp (${remainingAmount.toLocaleString('sv-SE')} kr)`)
+      setPaymentError(`Belopp kan inte överstiga återstående belopp (${remainingAmount.toLocaleString('sv-SE')} kr)`)
       return
     }
 
@@ -195,7 +196,7 @@ export default function Invoices() {
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
     if (!bankAccount) {
-      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      setPaymentError('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
       return
     }
 
@@ -361,6 +362,7 @@ export default function Invoices() {
                             onClick={() => {
                               setPaymentDate(new Date().toISOString().split('T')[0])
                               setPaymentAmount(invoice.total_amount - invoice.paid_amount)
+                              setPaymentError(null)
                               setConfirmPayInvoice(invoice)
                             }}
                             className="p-1 text-purple-600 hover:text-purple-800"
@@ -476,6 +478,7 @@ export default function Invoices() {
                             onClick={() => {
                               setPaymentDate(new Date().toISOString().split('T')[0])
                               setPaymentAmount(invoice.total_amount - invoice.paid_amount)
+                              setPaymentError(null)
                               setConfirmPaySupplierInvoice(invoice)
                             }}
                             className="p-1 text-purple-600 hover:text-purple-800"
@@ -697,6 +700,12 @@ export default function Invoices() {
                 En betalningsverifikation kommer att skapas automatiskt.
               </p>
 
+              {paymentError && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                  {paymentError}
+                </div>
+              )}
+
               {/* Invoice summary */}
               <div className="p-3 bg-gray-50 rounded-lg mb-4">
                 <div className="flex justify-between text-sm mb-1">
@@ -742,7 +751,10 @@ export default function Invoices() {
                     type="text"
                     inputMode="decimal"
                     value={formatNumberWithSeparator(paymentAmount)}
-                    onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
+                    onChange={(e) => {
+                      setPaymentAmount(parseFormattedNumber(e.target.value))
+                      setPaymentError(null)
+                    }}
                     className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">SEK</span>
@@ -814,6 +826,12 @@ export default function Invoices() {
                 En betalningsverifikation kommer att skapas automatiskt.
               </p>
 
+              {paymentError && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                  {paymentError}
+                </div>
+              )}
+
               {/* Invoice summary */}
               <div className="p-3 bg-gray-50 rounded-lg mb-4">
                 <div className="flex justify-between text-sm mb-1">
@@ -859,7 +877,10 @@ export default function Invoices() {
                     type="text"
                     inputMode="decimal"
                     value={formatNumberWithSeparator(paymentAmount)}
-                    onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
+                    onChange={(e) => {
+                      setPaymentAmount(parseFormattedNumber(e.target.value))
+                      setPaymentError(null)
+                    }}
                     className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">SEK</span>
