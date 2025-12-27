@@ -3,6 +3,7 @@ import { Download, Plus, X, Eye, DollarSign, Send, FileText } from 'lucide-react
 import { useNavigate } from 'react-router-dom'
 import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
+import { InvoiceStatus, PaymentStatus } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -180,19 +181,40 @@ export default function Invoices() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    const colors = {
-      draft: 'bg-gray-200 text-gray-800',
-      sent: 'bg-blue-200 text-blue-800',
-      paid: 'bg-green-200 text-green-800',
-      partial: 'bg-yellow-200 text-yellow-800',
-      overdue: 'bg-red-200 text-red-800',
-      cancelled: 'bg-gray-400 text-gray-900',
+  const getStatusBadge = (status: InvoiceStatus, paymentStatus: PaymentStatus, dueDate: string) => {
+    // Check if overdue: issued + not paid + due_date < today
+    const isOverdue = status === InvoiceStatus.ISSUED &&
+                      paymentStatus !== PaymentStatus.PAID &&
+                      new Date(dueDate) < new Date()
+
+    // Document status styling
+    const statusConfig = {
+      [InvoiceStatus.DRAFT]: { color: 'bg-gray-200 text-gray-800', label: 'UTKAST' },
+      [InvoiceStatus.ISSUED]: { color: 'bg-blue-200 text-blue-800', label: 'SKICKAD' },
+      [InvoiceStatus.CANCELLED]: { color: 'bg-gray-400 text-gray-900', label: 'MAKULERAD' },
     }
+
+    // Payment status styling
+    const paymentConfig = {
+      [PaymentStatus.UNPAID]: { color: 'bg-yellow-100 text-yellow-800', label: 'OBETALD' },
+      [PaymentStatus.PARTIALLY_PAID]: { color: 'bg-orange-200 text-orange-800', label: 'DELBETALD' },
+      [PaymentStatus.PAID]: { color: 'bg-green-200 text-green-800', label: 'BETALD' },
+    }
+
+    const statusStyle = statusConfig[status] || { color: 'bg-gray-200', label: status }
+    const paymentStyle = paymentConfig[paymentStatus] || { color: 'bg-gray-200', label: paymentStatus }
+
     return (
-      <span className={`px-2 py-1 text-xs rounded ${colors[status as keyof typeof colors] || 'bg-gray-200'}`}>
-        {status.toUpperCase()}
-      </span>
+      <div className="flex gap-1 flex-wrap">
+        <span className={`px-2 py-1 text-xs rounded ${statusStyle.color}`}>
+          {statusStyle.label}
+        </span>
+        {status !== InvoiceStatus.DRAFT && status !== InvoiceStatus.CANCELLED && (
+          <span className={`px-2 py-1 text-xs rounded ${isOverdue ? 'bg-red-200 text-red-800' : paymentStyle.color}`}>
+            {isOverdue ? 'FÖRFALLEN' : paymentStyle.label}
+          </span>
+        )}
+      </div>
     )
   }
 
@@ -264,7 +286,7 @@ export default function Invoices() {
                     </td>
                     <td className="px-4 py-3 text-sm">{invoice.invoice_date}</td>
                     <td className="px-4 py-3 text-sm">{invoice.customer_name}</td>
-                    <td className="px-4 py-3 text-sm">{getStatusBadge(invoice.status)}</td>
+                    <td className="px-4 py-3 text-sm">{getStatusBadge(invoice.status, invoice.payment_status, invoice.due_date)}</td>
                     <td className="px-4 py-3 text-sm text-right font-mono">
                       {invoice.total_amount.toLocaleString('sv-SE', {
                         style: 'currency',
@@ -286,7 +308,7 @@ export default function Invoices() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {invoice.status === 'draft' && (
+                        {invoice.status === InvoiceStatus.DRAFT && (
                           <button
                             onClick={() => setConfirmSendInvoice(invoice)}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
@@ -295,7 +317,7 @@ export default function Invoices() {
                             Skicka
                           </button>
                         )}
-                        {invoice.status !== 'draft' && invoice.status !== 'paid' && (
+                        {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                           <button
                             onClick={() => {
                               setPaymentDate(new Date().toISOString().split('T')[0])
@@ -378,7 +400,7 @@ export default function Invoices() {
                     </td>
                     <td className="px-4 py-3 text-sm">{invoice.invoice_date}</td>
                     <td className="px-4 py-3 text-sm">{invoice.supplier_name}</td>
-                    <td className="px-4 py-3 text-sm">{getStatusBadge(invoice.status)}</td>
+                    <td className="px-4 py-3 text-sm">{getStatusBadge(invoice.status, invoice.payment_status, invoice.due_date)}</td>
                     <td className="px-4 py-3 text-sm text-right font-mono">
                       {invoice.total_amount.toLocaleString('sv-SE', {
                         style: 'currency',
@@ -400,7 +422,7 @@ export default function Invoices() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {invoice.status === 'draft' && (
+                        {invoice.status === InvoiceStatus.DRAFT && (
                           <button
                             onClick={() => setConfirmRegisterSupplierInvoice(invoice)}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
@@ -409,7 +431,7 @@ export default function Invoices() {
                             Bokför
                           </button>
                         )}
-                        {invoice.status !== 'draft' && invoice.status !== 'paid' && (
+                        {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                           <button
                             onClick={() => {
                               setPaymentDate(new Date().toISOString().split('T')[0])

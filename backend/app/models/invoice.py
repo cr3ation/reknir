@@ -9,14 +9,19 @@ from app.database import Base
 
 
 class InvoiceStatus(str, enum.Enum):
+    """Invoice document lifecycle status"""
+
+    DRAFT = "draft"  # Not sent/issued yet
+    ISSUED = "issued"  # Sent/issued to customer (or registered for supplier invoices)
+    CANCELLED = "cancelled"  # Cancelled/credited
+
+
+class PaymentStatus(str, enum.Enum):
     """Invoice payment status"""
 
-    DRAFT = "draft"  # Not sent yet
-    SENT = "sent"  # Sent to customer
+    UNPAID = "unpaid"  # No payment received
+    PARTIALLY_PAID = "partially_paid"  # Partially paid
     PAID = "paid"  # Fully paid
-    PARTIAL = "partial"  # Partially paid
-    OVERDUE = "overdue"  # Past due date
-    CANCELLED = "cancelled"  # Cancelled/credited
 
 
 class Invoice(Base):
@@ -49,10 +54,16 @@ class Invoice(Base):
     vat_amount = Column(Numeric(15, 2), nullable=False)
     net_amount = Column(Numeric(15, 2), nullable=False)  # Excluding VAT
 
-    # Payment
+    # Status
     status = Column(
         SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]),
         default=InvoiceStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
+    payment_status = Column(
+        SQLEnum(PaymentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=PaymentStatus.UNPAID,
         nullable=False,
         index=True,
     )
@@ -146,10 +157,16 @@ class SupplierInvoice(Base):
     vat_amount = Column(Numeric(15, 2), nullable=False)
     net_amount = Column(Numeric(15, 2), nullable=False)
 
-    # Payment
+    # Status
     status = Column(
         SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]),
         default=InvoiceStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
+    payment_status = Column(
+        SQLEnum(PaymentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=PaymentStatus.UNPAID,
         nullable=False,
         index=True,
     )

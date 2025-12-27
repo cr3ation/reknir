@@ -216,11 +216,14 @@ export interface GeneralLedger {
 
 export enum InvoiceStatus {
   DRAFT = 'draft',
-  SENT = 'sent',
-  PAID = 'paid',
-  PARTIAL = 'partial',
-  OVERDUE = 'overdue',
+  ISSUED = 'issued',
   CANCELLED = 'cancelled',
+}
+
+export enum PaymentStatus {
+  UNPAID = 'unpaid',
+  PARTIALLY_PAID = 'partially_paid',
+  PAID = 'paid',
 }
 
 export interface Customer {
@@ -322,6 +325,7 @@ export interface Invoice {
   vat_amount: number
   net_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
   notes?: string
   message?: string
@@ -344,6 +348,7 @@ export interface InvoiceListItem {
   customer_name: string
   total_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
 }
 
@@ -360,6 +365,7 @@ export interface SupplierInvoice {
   vat_amount: number
   net_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
   ocr_number?: string
   reference?: string
@@ -382,6 +388,7 @@ export interface SupplierInvoiceListItem {
   supplier_name: string
   total_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
 }
 

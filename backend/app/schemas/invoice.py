@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.invoice import InvoiceStatus
+from app.models.invoice import InvoiceStatus, PaymentStatus
 
 
 class InvoiceLineBase(BaseModel):
@@ -87,6 +87,7 @@ class InvoiceResponse(InvoiceBase):
     vat_amount: Decimal
     net_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
     paid_date: date | None
     invoice_verification_id: int | None
@@ -114,6 +115,7 @@ class InvoiceListItem(BaseModel):
     customer_name: str = ""  # Populated from join
     total_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
 
     class Config:
@@ -199,6 +201,7 @@ class SupplierInvoiceResponse(SupplierInvoiceBase):
     vat_amount: Decimal
     net_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
     paid_date: date | None
     invoice_verification_id: int | None
@@ -225,6 +228,7 @@ class SupplierInvoiceListItem(BaseModel):
     supplier_name: str = ""  # Populated from join
     total_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
 
     class Config:
