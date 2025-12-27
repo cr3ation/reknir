@@ -11,7 +11,7 @@ from app.dependencies import get_current_active_user, verify_company_access
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
 from app.models.fiscal_year import FiscalYear
-from app.models.invoice import Invoice, InvoiceLine, InvoiceStatus, PaymentStatus
+from app.models.invoice import Invoice, InvoiceLine, InvoicePayment, InvoiceStatus, PaymentStatus
 from app.models.user import User
 from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse, InvoiceUpdate, MarkPaidRequest
 from app.services.invoice_service import create_invoice_payment_verification, create_invoice_verification
@@ -285,7 +285,19 @@ async def mark_invoice_paid(
         db, invoice, payment.paid_date, paid_amount, payment.bank_account_id, company.accounting_basis
     )
 
-    # Update invoice
+    # Create payment record for history
+    invoice_payment = InvoicePayment(
+        invoice_id=invoice.id,
+        payment_date=payment.paid_date,
+        amount=paid_amount,
+        verification_id=payment_verification.id,
+        bank_account_id=payment.bank_account_id,
+        reference=payment.reference,
+        notes=payment.notes,
+    )
+    db.add(invoice_payment)
+
+    # Update invoice (cached values for backwards compatibility)
     invoice.paid_amount += paid_amount
     invoice.paid_date = payment.paid_date
     invoice.payment_verification_id = payment_verification.id

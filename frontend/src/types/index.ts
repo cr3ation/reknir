@@ -310,6 +310,30 @@ export interface ExpenseCreateData {
   vat_account_id?: number | null
 }
 
+export interface InvoicePayment {
+  id: number
+  invoice_id: number
+  payment_date: string
+  amount: number
+  verification_id?: number
+  bank_account_id?: number
+  reference?: string
+  notes?: string
+  created_at: string
+}
+
+export interface SupplierInvoicePayment {
+  id: number
+  supplier_invoice_id: number
+  payment_date: string
+  amount: number
+  verification_id?: number
+  bank_account_id?: number
+  reference?: string
+  notes?: string
+  created_at: string
+}
+
 export interface Invoice {
   id: number
   company_id: number
@@ -336,6 +360,7 @@ export interface Invoice {
   updated_at: string
   sent_at?: string
   invoice_lines: InvoiceLine[]
+  payments?: InvoicePayment[]
 }
 
 export interface InvoiceListItem {
@@ -376,6 +401,7 @@ export interface SupplierInvoice {
   created_at: string
   updated_at: string
   supplier_invoice_lines: InvoiceLine[]
+  payments?: SupplierInvoicePayment[]
 }
 
 export interface SupplierInvoiceListItem {

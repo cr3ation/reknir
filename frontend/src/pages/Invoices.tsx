@@ -9,6 +9,20 @@ import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
+// Format number with Swedish thousand separators (space)
+const formatNumberWithSeparator = (value: number): string => {
+  if (isNaN(value)) return ''
+  return value.toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+// Parse formatted string back to number
+const parseFormattedNumber = (value: string): number => {
+  // Remove spaces and replace comma with dot for decimal
+  const cleaned = value.replace(/\s/g, '').replace(',', '.')
+  const parsed = parseFloat(cleaned)
+  return isNaN(parsed) ? 0 : parsed
+}
+
 export default function Invoices() {
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
@@ -30,6 +44,7 @@ export default function Invoices() {
   const [confirmPayInvoice, setConfirmPayInvoice] = useState<InvoiceListItem | null>(null)
   const [confirmPaySupplierInvoice, setConfirmPaySupplierInvoice] = useState<SupplierInvoiceListItem | null>(null)
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
+  const [paymentAmount, setPaymentAmount] = useState<number>(0)
   const [payingInvoice, setPayingInvoice] = useState(false)
   const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
 
@@ -122,6 +137,17 @@ export default function Invoices() {
   const handlePayInvoice = async () => {
     if (!confirmPayInvoice) return
 
+    // Validate payment amount
+    const remainingAmount = confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount
+    if (paymentAmount <= 0) {
+      alert('Belopp måste vara större än 0')
+      return
+    }
+    if (paymentAmount > remainingAmount) {
+      alert(`Belopp kan inte överstiga återstående belopp (${remainingAmount.toLocaleString('sv-SE')} kr)`)
+      return
+    }
+
     // Find bank account 1930 (default bank account)
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
@@ -130,18 +156,19 @@ export default function Invoices() {
       return
     }
 
-    const remainingAmount = confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount
-
     setPayingInvoice(true)
     try {
       await invoiceApi.markPaid(confirmPayInvoice.id, {
         paid_date: paymentDate,
-        paid_amount: remainingAmount,
+        paid_amount: paymentAmount,
         bank_account_id: bankAccount.id
       })
       await loadInvoices()
       setConfirmPayInvoice(null)
-      alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
+      const isPartialPayment = paymentAmount < remainingAmount
+      alert(isPartialPayment
+        ? `Delbetalning på ${paymentAmount.toLocaleString('sv-SE')} kr har registrerats`
+        : 'Fakturan har markerats som betald och en betalningsverifikation har skapats')
     } catch (error) {
       console.error('Failed to mark invoice as paid:', error)
       alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
@@ -153,6 +180,17 @@ export default function Invoices() {
   const handlePaySupplierInvoice = async () => {
     if (!confirmPaySupplierInvoice) return
 
+    // Validate payment amount
+    const remainingAmount = confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount
+    if (paymentAmount <= 0) {
+      alert('Belopp måste vara större än 0')
+      return
+    }
+    if (paymentAmount > remainingAmount) {
+      alert(`Belopp kan inte överstiga återstående belopp (${remainingAmount.toLocaleString('sv-SE')} kr)`)
+      return
+    }
+
     // Find bank account 1930 (default bank account)
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
@@ -161,18 +199,19 @@ export default function Invoices() {
       return
     }
 
-    const remainingAmount = confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount
-
     setPayingSupplierInvoice(true)
     try {
       await supplierInvoiceApi.markPaid(confirmPaySupplierInvoice.id, {
         paid_date: paymentDate,
-        paid_amount: remainingAmount,
+        paid_amount: paymentAmount,
         bank_account_id: bankAccount.id
       })
       await loadInvoices()
       setConfirmPaySupplierInvoice(null)
-      alert('Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
+      const isPartialPayment = paymentAmount < remainingAmount
+      alert(isPartialPayment
+        ? `Delbetalning på ${paymentAmount.toLocaleString('sv-SE')} kr har registrerats`
+        : 'Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
     } catch (error) {
       console.error('Failed to mark supplier invoice as paid:', error)
       alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
@@ -321,6 +360,7 @@ export default function Invoices() {
                           <button
                             onClick={() => {
                               setPaymentDate(new Date().toISOString().split('T')[0])
+                              setPaymentAmount(invoice.total_amount - invoice.paid_amount)
                               setConfirmPayInvoice(invoice)
                             }}
                             className="p-1 text-purple-600 hover:text-purple-800"
@@ -435,6 +475,7 @@ export default function Invoices() {
                           <button
                             onClick={() => {
                               setPaymentDate(new Date().toISOString().split('T')[0])
+                              setPaymentAmount(invoice.total_amount - invoice.paid_amount)
                               setConfirmPaySupplierInvoice(invoice)
                             }}
                             className="p-1 text-purple-600 hover:text-purple-800"
@@ -655,18 +696,9 @@ export default function Invoices() {
               <p className="text-gray-700 mb-4">
                 En betalningsverifikation kommer att skapas automatiskt.
               </p>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Betalningsdatum
-                </label>
-                <input
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                />
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
+
+              {/* Invoice summary */}
+              <div className="p-3 bg-gray-50 rounded-lg mb-4">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-600">Fakturabelopp:</span>
                   <span className="font-semibold">
@@ -680,11 +712,44 @@ export default function Invoices() {
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
-                  <span className="text-gray-700">Att betala:</span>
+                  <span className="text-gray-700">Återstår:</span>
                   <span className="text-purple-600">
                     {(confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
                   </span>
                 </div>
+              </div>
+
+              {/* Payment date */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Betalningsdatum
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Payment amount */}
+              <div className="mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Belopp att registrera
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formatNumberWithSeparator(paymentAmount)}
+                    onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
+                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">SEK</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Ändra beloppet för att registrera en delbetalning
+                </p>
               </div>
             </div>
 
@@ -748,18 +813,9 @@ export default function Invoices() {
               <p className="text-gray-700 mb-4">
                 En betalningsverifikation kommer att skapas automatiskt.
               </p>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Betalningsdatum
-                </label>
-                <input
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                />
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
+
+              {/* Invoice summary */}
+              <div className="p-3 bg-gray-50 rounded-lg mb-4">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-600">Fakturabelopp:</span>
                   <span className="font-semibold">
@@ -773,11 +829,44 @@ export default function Invoices() {
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
-                  <span className="text-gray-700">Att betala:</span>
+                  <span className="text-gray-700">Återstår:</span>
                   <span className="text-purple-600">
                     {(confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
                   </span>
                 </div>
+              </div>
+
+              {/* Payment date */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Betalningsdatum
+                </label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+              </div>
+
+              {/* Payment amount */}
+              <div className="mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Belopp att registrera
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formatNumberWithSeparator(paymentAmount)}
+                    onChange={(e) => setPaymentAmount(parseFormattedNumber(e.target.value))}
+                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">SEK</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Ändra beloppet för att registrera en delbetalning
+                </p>
               </div>
             </div>
 
