@@ -14,7 +14,13 @@ from app.dependencies import get_current_active_user, verify_company_access
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Supplier
 from app.models.fiscal_year import FiscalYear
-from app.models.invoice import InvoiceStatus, SupplierInvoice, SupplierInvoiceLine
+from app.models.invoice import (
+    InvoiceStatus,
+    PaymentStatus,
+    SupplierInvoice,
+    SupplierInvoiceLine,
+    SupplierInvoicePayment,
+)
 from app.models.user import User
 from app.schemas.invoice import (
     MarkPaidRequest,
@@ -159,6 +165,7 @@ async def list_supplier_invoices(
             supplier_name=supplier_name,
             total_amount=inv.total_amount,
             status=inv.status,
+            payment_status=inv.payment_status,
             paid_amount=inv.paid_amount,
         )
         for inv, supplier_name in results
@@ -195,8 +202,11 @@ async def update_supplier_invoice(
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    if invoice.status == InvoiceStatus.PAID:
+    if invoice.payment_status == PaymentStatus.PAID:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify paid invoice")
+
+    if invoice.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify cancelled invoice")
 
     update_data = invoice_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -240,7 +250,7 @@ async def register_supplier_invoice(
         invoice.invoice_verification_id = verification.id
 
     # Update invoice status
-    invoice.status = InvoiceStatus.SENT  # Registered/posted
+    invoice.status = InvoiceStatus.ISSUED  # Registered/posted
 
     db.commit()
     db.refresh(invoice)
@@ -274,8 +284,11 @@ async def mark_supplier_invoice_paid(
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    if invoice.status == InvoiceStatus.PAID:
+    if invoice.payment_status == PaymentStatus.PAID:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is already paid")
+
+    if invoice.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot pay cancelled invoice")
 
     # Get company accounting basis
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
@@ -287,7 +300,7 @@ async def mark_supplier_invoice_paid(
             verification = create_supplier_invoice_verification(db, invoice)
             invoice.invoice_verification_id = verification.id
         # Cash method: Just update status, no verification needed
-        invoice.status = InvoiceStatus.SENT
+        invoice.status = InvoiceStatus.ISSUED
 
     # Determine payment amount
     paid_amount = payment.paid_amount if payment.paid_amount else (invoice.total_amount - invoice.paid_amount)
@@ -297,15 +310,67 @@ async def mark_supplier_invoice_paid(
         db, invoice, payment.paid_date, paid_amount, payment.bank_account_id, company.accounting_basis
     )
 
-    # Update invoice
+    # Create payment record for history
+    supplier_payment = SupplierInvoicePayment(
+        supplier_invoice_id=invoice.id,
+        payment_date=payment.paid_date,
+        amount=paid_amount,
+        verification_id=payment_verification.id,
+        bank_account_id=payment.bank_account_id,
+        reference=payment.reference,
+        notes=payment.notes,
+    )
+    db.add(supplier_payment)
+
+    # Update invoice (cached values for backwards compatibility)
     invoice.paid_amount += paid_amount
     invoice.paid_date = payment.paid_date
     invoice.payment_verification_id = payment_verification.id
 
+    # Update payment status (status stays as ISSUED)
     if invoice.paid_amount >= invoice.total_amount:
-        invoice.status = InvoiceStatus.PAID
+        invoice.payment_status = PaymentStatus.PAID
     else:
-        invoice.status = InvoiceStatus.PARTIAL
+        invoice.payment_status = PaymentStatus.PARTIALLY_PAID
+
+    db.commit()
+    db.refresh(invoice)
+
+    return invoice
+
+
+@router.post("/{invoice_id}/cancel", response_model=SupplierInvoiceResponse)
+async def cancel_supplier_invoice(
+    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
+):
+    """
+    Cancel a supplier invoice.
+
+    Can only cancel invoices that are:
+    - In DRAFT status (no accounting impact)
+    - In ISSUED status with UNPAID payment status
+
+    Cannot cancel invoices that have received payments.
+    """
+    invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Supplier invoice {invoice_id} not found")
+
+    # Verify user has access to this company
+    await verify_company_access(invoice.company_id, current_user, db)
+
+    if invoice.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is already cancelled")
+
+    if invoice.payment_status != PaymentStatus.UNPAID:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot cancel invoice with payments.",
+        )
+
+    # TODO: If invoice was ISSUED with accounting entries (accrual method),
+    # we should create reversing entries. For now, just mark as cancelled.
+    invoice.status = InvoiceStatus.CANCELLED
 
     db.commit()
     db.refresh(invoice)
@@ -317,7 +382,7 @@ async def mark_supplier_invoice_paid(
 async def delete_supplier_invoice(
     invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
-    """Delete a supplier invoice (only if not registered/paid)"""
+    """Delete a supplier invoice (only if draft or cancelled)"""
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Supplier invoice {invoice_id} not found")

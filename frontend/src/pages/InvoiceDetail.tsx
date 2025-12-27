@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, DollarSign, Download } from 'lucide-react'
 import api, { invoiceApi, accountApi, customerApi } from '@/services/api'
 import type { Invoice, Account, Customer } from '@/types'
+import { InvoiceStatus, PaymentStatus } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 
@@ -254,6 +255,111 @@ export default function InvoiceDetail() {
             )}
           </div>
 
+          {/* Verifications & Payment History */}
+          {(invoice.invoice_verification_id || (invoice.payments && invoice.payments.length > 0)) && (
+            <div className="card">
+              <h2 className="text-xl font-bold mb-4">Verifikationer & Betalningshistorik</h2>
+
+              {/* Invoice Verification */}
+              {invoice.invoice_verification_id && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">Fakturaverifikation</h3>
+                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <FileText className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          Bokföringsverifikation
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Skapad vid utskick av faktura
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      to={`/verifications/${invoice.invoice_verification_id}`}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Visa verifikation →
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment History */}
+              {invoice.payments && invoice.payments.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">Betalningar</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                            Datum
+                          </th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                            Belopp
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                            Referens
+                          </th>
+                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">
+                            Verifikation
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {invoice.payments.map((payment) => (
+                          <tr key={payment.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm">
+                              {formatDate(payment.payment_date)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right font-mono">
+                              {formatCurrency(payment.amount)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {payment.reference || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-center">
+                              {payment.verification_id ? (
+                                <Link
+                                  to={`/verifications/${payment.verification_id}`}
+                                  className="text-purple-600 hover:text-purple-800 font-medium"
+                                >
+                                  Visa →
+                                </Link>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50">
+                        <tr>
+                          <td className="px-4 py-2 text-sm font-semibold">
+                            Totalt betalt
+                          </td>
+                          <td className="px-4 py-2 text-sm text-right font-mono font-semibold">
+                            {formatCurrency(invoice.paid_amount)}
+                          </td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* No payments yet */}
+              {(!invoice.payments || invoice.payments.length === 0) && !invoice.invoice_verification_id && (
+                <p className="text-sm text-gray-500">Inga verifikationer kopplade till denna faktura ännu.</p>
+              )}
+            </div>
+          )}
+
           {/* Invoice Lines */}
           <div className="card">
             <h2 className="text-xl font-bold mb-4">Fakturarader</h2>
@@ -332,7 +438,7 @@ export default function InvoiceDetail() {
           <div className="card">
             <h2 className="text-xl font-bold mb-4">Åtgärder</h2>
             <div className="space-y-2">
-              {invoice.status === 'draft' && (
+              {invoice.status === InvoiceStatus.DRAFT && (
                 <button
                   onClick={handleSendInvoice}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
@@ -341,7 +447,7 @@ export default function InvoiceDetail() {
                   {selectedCompany?.accounting_basis === 'accrual' ? 'Skicka och bokför' : 'Skicka'}
                 </button>
               )}
-              {invoice.status !== 'paid' && invoice.status !== 'draft' && (
+              {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                 <button
                   onClick={openPaymentModal}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"

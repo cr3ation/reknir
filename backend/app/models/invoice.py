@@ -9,14 +9,19 @@ from app.database import Base
 
 
 class InvoiceStatus(str, enum.Enum):
+    """Invoice document lifecycle status"""
+
+    DRAFT = "draft"  # Not sent/issued yet
+    ISSUED = "issued"  # Sent/issued to customer (or registered for supplier invoices)
+    CANCELLED = "cancelled"  # Cancelled/credited
+
+
+class PaymentStatus(str, enum.Enum):
     """Invoice payment status"""
 
-    DRAFT = "draft"  # Not sent yet
-    SENT = "sent"  # Sent to customer
+    UNPAID = "unpaid"  # No payment received
+    PARTIALLY_PAID = "partially_paid"  # Partially paid
     PAID = "paid"  # Fully paid
-    PARTIAL = "partial"  # Partially paid
-    OVERDUE = "overdue"  # Past due date
-    CANCELLED = "cancelled"  # Cancelled/credited
 
 
 class Invoice(Base):
@@ -49,10 +54,16 @@ class Invoice(Base):
     vat_amount = Column(Numeric(15, 2), nullable=False)
     net_amount = Column(Numeric(15, 2), nullable=False)  # Excluding VAT
 
-    # Payment
+    # Status
     status = Column(
         SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]),
         default=InvoiceStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
+    payment_status = Column(
+        SQLEnum(PaymentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=PaymentStatus.UNPAID,
         nullable=False,
         index=True,
     )
@@ -80,6 +91,7 @@ class Invoice(Base):
     invoice_lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
     invoice_verification = relationship("Verification", foreign_keys=[invoice_verification_id])
     payment_verification = relationship("Verification", foreign_keys=[payment_verification_id])
+    payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Invoice {self.invoice_series}{self.invoice_number}>"
@@ -146,10 +158,16 @@ class SupplierInvoice(Base):
     vat_amount = Column(Numeric(15, 2), nullable=False)
     net_amount = Column(Numeric(15, 2), nullable=False)
 
-    # Payment
+    # Status
     status = Column(
         SQLEnum(InvoiceStatus, values_callable=lambda x: [e.value for e in x]),
         default=InvoiceStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
+    payment_status = Column(
+        SQLEnum(PaymentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=PaymentStatus.UNPAID,
         nullable=False,
         index=True,
     )
@@ -181,6 +199,7 @@ class SupplierInvoice(Base):
     )
     invoice_verification = relationship("Verification", foreign_keys=[invoice_verification_id])
     payment_verification = relationship("Verification", foreign_keys=[payment_verification_id])
+    payments = relationship("SupplierInvoicePayment", back_populates="supplier_invoice", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<SupplierInvoice {self.supplier_invoice_number}>"
@@ -218,3 +237,81 @@ class SupplierInvoiceLine(Base):
 
     def __repr__(self):
         return f"<SupplierInvoiceLine {self.description[:30]}>"
+
+
+class InvoicePayment(Base):
+    """
+    Individual payment record for an outgoing invoice (Kundfaktura).
+    Tracks each payment separately for full payment history.
+    """
+
+    __tablename__ = "invoice_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+
+    # Payment details
+    payment_date = Column(Date, nullable=False)
+    amount = Column(Numeric(15, 2), nullable=False)
+
+    # Related verification (created for this payment)
+    verification_id = Column(Integer, ForeignKey("verifications.id"), nullable=True)
+
+    # Bank account used for payment
+    bank_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+
+    # Optional reference (OCR, Swish reference, etc.)
+    reference = Column(String, nullable=True)
+
+    # Notes
+    notes = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    # Relationships
+    invoice = relationship("Invoice", back_populates="payments")
+    verification = relationship("Verification")
+    bank_account = relationship("Account")
+
+    def __repr__(self):
+        return f"<InvoicePayment {self.amount} on {self.payment_date}>"
+
+
+class SupplierInvoicePayment(Base):
+    """
+    Individual payment record for an incoming supplier invoice (Leverantörsfaktura).
+    Tracks each payment separately for full payment history.
+    """
+
+    __tablename__ = "supplier_invoice_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    supplier_invoice_id = Column(Integer, ForeignKey("supplier_invoices.id"), nullable=False, index=True)
+
+    # Payment details
+    payment_date = Column(Date, nullable=False)
+    amount = Column(Numeric(15, 2), nullable=False)
+
+    # Related verification (created for this payment)
+    verification_id = Column(Integer, ForeignKey("verifications.id"), nullable=True)
+
+    # Bank account used for payment
+    bank_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+
+    # Optional reference (OCR, payment reference, etc.)
+    reference = Column(String, nullable=True)
+
+    # Notes
+    notes = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    # Relationships
+    supplier_invoice = relationship("SupplierInvoice", back_populates="payments")
+    verification = relationship("Verification")
+    bank_account = relationship("Account")
+
+    def __repr__(self):
+        return f"<SupplierInvoicePayment {self.amount} on {self.payment_date}>"

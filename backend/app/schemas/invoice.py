@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.invoice import InvoiceStatus
+from app.models.invoice import InvoiceStatus, PaymentStatus
 
 
 class InvoiceLineBase(BaseModel):
@@ -76,6 +76,38 @@ class InvoiceUpdate(BaseModel):
     status: InvoiceStatus | None = None
 
 
+# Payment history schemas (defined before Response schemas to avoid forward reference issues)
+
+
+class InvoicePaymentBase(BaseModel):
+    """Base payment schema"""
+
+    payment_date: date
+    amount: Decimal
+    bank_account_id: int | None = None
+    reference: str | None = None
+    notes: str | None = None
+
+
+class InvoicePaymentCreate(InvoicePaymentBase):
+    """Schema for creating a payment"""
+
+    pass
+
+
+class InvoicePaymentResponse(InvoicePaymentBase):
+    """Schema for payment response"""
+
+    id: int
+    invoice_id: int
+    verification_id: int | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {Decimal: float}
+
+
 class InvoiceResponse(InvoiceBase):
     """Schema for invoice response"""
 
@@ -87,6 +119,7 @@ class InvoiceResponse(InvoiceBase):
     vat_amount: Decimal
     net_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
     paid_date: date | None
     invoice_verification_id: int | None
@@ -96,6 +129,7 @@ class InvoiceResponse(InvoiceBase):
     updated_at: datetime
     sent_at: datetime | None
     invoice_lines: list[InvoiceLineResponse]
+    payments: list[InvoicePaymentResponse] = []
 
     class Config:
         from_attributes = True
@@ -114,6 +148,7 @@ class InvoiceListItem(BaseModel):
     customer_name: str = ""  # Populated from join
     total_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
 
     class Config:
@@ -188,6 +223,19 @@ class SupplierInvoiceUpdate(BaseModel):
     status: InvoiceStatus | None = None
 
 
+class SupplierInvoicePaymentResponse(InvoicePaymentBase):
+    """Schema for supplier invoice payment response"""
+
+    id: int
+    supplier_invoice_id: int
+    verification_id: int | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {Decimal: float}
+
+
 class SupplierInvoiceResponse(SupplierInvoiceBase):
     """Schema for supplier invoice response"""
 
@@ -199,6 +247,7 @@ class SupplierInvoiceResponse(SupplierInvoiceBase):
     vat_amount: Decimal
     net_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
     paid_date: date | None
     invoice_verification_id: int | None
@@ -207,6 +256,7 @@ class SupplierInvoiceResponse(SupplierInvoiceBase):
     created_at: datetime
     updated_at: datetime
     supplier_invoice_lines: list[SupplierInvoiceLineResponse]
+    payments: list[SupplierInvoicePaymentResponse] = []
 
     class Config:
         from_attributes = True
@@ -225,6 +275,7 @@ class SupplierInvoiceListItem(BaseModel):
     supplier_name: str = ""  # Populated from join
     total_amount: Decimal
     status: InvoiceStatus
+    payment_status: PaymentStatus
     paid_amount: Decimal
 
     class Config:
@@ -238,3 +289,5 @@ class MarkPaidRequest(BaseModel):
     paid_date: date
     paid_amount: Decimal | None = None  # If not provided, uses remaining amount
     bank_account_id: int | None = None  # Which bank account (default: 1930)
+    reference: str | None = None  # Optional payment reference (OCR, Swish, etc.)
+    notes: str | None = None  # Optional notes

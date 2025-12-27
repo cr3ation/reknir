@@ -14,7 +14,7 @@ from app.dependencies import get_current_active_user, verify_company_access
 from app.models.account import Account
 from app.models.expense import Expense, ExpenseStatus
 from app.models.fiscal_year import FiscalYear
-from app.models.invoice import Invoice, InvoiceStatus
+from app.models.invoice import Invoice, InvoiceStatus, PaymentStatus
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
 
@@ -240,19 +240,22 @@ async def get_dashboard_overview(
     liquidity = float(bank_account.balance) if bank_account else 0.0
 
     # === OVERDUE INVOICES ===
+    # Overdue = ISSUED + not PAID + due_date < today
 
     overdue_invoices = (
         db.query(Invoice)
         .filter(
             Invoice.company_id == company_id,
-            Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PARTIAL]),
+            Invoice.status == InvoiceStatus.ISSUED,
+            Invoice.payment_status != PaymentStatus.PAID,
             Invoice.due_date < today,
         )
         .all()
     )
 
     overdue_count = len(overdue_invoices)
-    overdue_amount = sum(float(inv.total_amount) for inv in overdue_invoices)
+    # Show remaining amount (total - paid) for partially paid invoices
+    overdue_amount = sum(float(inv.total_amount - inv.paid_amount) for inv in overdue_invoices)
 
     # === PENDING EXPENSES ===
 

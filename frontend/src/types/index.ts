@@ -216,11 +216,14 @@ export interface GeneralLedger {
 
 export enum InvoiceStatus {
   DRAFT = 'draft',
-  SENT = 'sent',
-  PAID = 'paid',
-  PARTIAL = 'partial',
-  OVERDUE = 'overdue',
+  ISSUED = 'issued',
   CANCELLED = 'cancelled',
+}
+
+export enum PaymentStatus {
+  UNPAID = 'unpaid',
+  PARTIALLY_PAID = 'partially_paid',
+  PAID = 'paid',
 }
 
 export interface Customer {
@@ -307,6 +310,30 @@ export interface ExpenseCreateData {
   vat_account_id?: number | null
 }
 
+export interface InvoicePayment {
+  id: number
+  invoice_id: number
+  payment_date: string
+  amount: number
+  verification_id?: number
+  bank_account_id?: number
+  reference?: string
+  notes?: string
+  created_at: string
+}
+
+export interface SupplierInvoicePayment {
+  id: number
+  supplier_invoice_id: number
+  payment_date: string
+  amount: number
+  verification_id?: number
+  bank_account_id?: number
+  reference?: string
+  notes?: string
+  created_at: string
+}
+
 export interface Invoice {
   id: number
   company_id: number
@@ -322,6 +349,7 @@ export interface Invoice {
   vat_amount: number
   net_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
   notes?: string
   message?: string
@@ -332,6 +360,7 @@ export interface Invoice {
   updated_at: string
   sent_at?: string
   invoice_lines: InvoiceLine[]
+  payments?: InvoicePayment[]
 }
 
 export interface InvoiceListItem {
@@ -344,6 +373,7 @@ export interface InvoiceListItem {
   customer_name: string
   total_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
 }
 
@@ -360,6 +390,7 @@ export interface SupplierInvoice {
   vat_amount: number
   net_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
   ocr_number?: string
   reference?: string
@@ -370,6 +401,7 @@ export interface SupplierInvoice {
   created_at: string
   updated_at: string
   supplier_invoice_lines: InvoiceLine[]
+  payments?: SupplierInvoicePayment[]
 }
 
 export interface SupplierInvoiceListItem {
@@ -382,6 +414,7 @@ export interface SupplierInvoiceListItem {
   supplier_name: string
   total_amount: number
   status: InvoiceStatus
+  payment_status: PaymentStatus
   paid_amount: number
 }
 
