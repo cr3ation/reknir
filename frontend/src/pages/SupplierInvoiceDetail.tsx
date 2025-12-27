@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
 import { supplierInvoiceApi, accountApi, supplierApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier } from '@/types'
+import { InvoiceStatus, PaymentStatus } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
@@ -403,7 +404,7 @@ export default function SupplierInvoiceDetail() {
           <div className="card">
             <h2 className="text-xl font-bold mb-4">Åtgärder</h2>
             <div className="space-y-2">
-              {invoice.status === 'draft' && (
+              {invoice.status === InvoiceStatus.DRAFT && (
                 <button
                   onClick={handleRegister}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
@@ -412,7 +413,7 @@ export default function SupplierInvoiceDetail() {
                   {selectedCompany?.accounting_basis === 'accrual' ? 'Registrera och bokför' : 'Registrera'}
                 </button>
               )}
-              {invoice.status !== 'paid' && invoice.status !== 'draft' && (
+              {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                 <button
                   onClick={handleMarkPaid}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"

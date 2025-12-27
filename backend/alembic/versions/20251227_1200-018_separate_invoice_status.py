@@ -31,9 +31,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Create the new payment_status enum type
-    payment_status_enum = postgresql.ENUM(
-        "unpaid", "partially_paid", "paid", name="paymentstatus", create_type=False
-    )
+    payment_status_enum = postgresql.ENUM("unpaid", "partially_paid", "paid", name="paymentstatus", create_type=False)
     payment_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Add payment_status column to invoices table
@@ -57,9 +55,7 @@ def upgrade() -> None:
     )
 
     # Create index on payment_status for invoices
-    op.create_index(
-        op.f("ix_invoices_payment_status"), "invoices", ["payment_status"], unique=False
-    )
+    op.create_index(op.f("ix_invoices_payment_status"), "invoices", ["payment_status"], unique=False)
 
     # Create index on payment_status for supplier_invoices
     op.create_index(
@@ -154,9 +150,7 @@ def upgrade() -> None:
     op.execute("DROP TYPE invoicestatus")
 
     # Create new enum type with correct values
-    new_invoice_status_enum = postgresql.ENUM(
-        "draft", "issued", "cancelled", name="invoicestatus", create_type=False
-    )
+    new_invoice_status_enum = postgresql.ENUM("draft", "issued", "cancelled", name="invoicestatus", create_type=False)
     new_invoice_status_enum.create(op.get_bind(), checkfirst=True)
 
     # Update columns to use new enum
@@ -239,9 +233,7 @@ def downgrade() -> None:
 
     # Drop payment_status indexes
     op.drop_index(op.f("ix_invoices_payment_status"), table_name="invoices")
-    op.drop_index(
-        op.f("ix_supplier_invoices_payment_status"), table_name="supplier_invoices"
-    )
+    op.drop_index(op.f("ix_supplier_invoices_payment_status"), table_name="supplier_invoices")
 
     # Drop payment_status columns
     op.drop_column("invoices", "payment_status")

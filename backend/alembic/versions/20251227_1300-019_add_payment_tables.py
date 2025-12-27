@@ -64,9 +64,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["bank_account_id"], ["accounts.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_supplier_invoice_payments_id"), "supplier_invoice_payments", ["id"], unique=False
-    )
+    op.create_index(op.f("ix_supplier_invoice_payments_id"), "supplier_invoice_payments", ["id"], unique=False)
     op.create_index(
         op.f("ix_supplier_invoice_payments_supplier_invoice_id"),
         "supplier_invoice_payments",
@@ -97,9 +95,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop supplier_invoice_payments table
-    op.drop_index(
-        op.f("ix_supplier_invoice_payments_supplier_invoice_id"), table_name="supplier_invoice_payments"
-    )
+    op.drop_index(op.f("ix_supplier_invoice_payments_supplier_invoice_id"), table_name="supplier_invoice_payments")
     op.drop_index(op.f("ix_supplier_invoice_payments_id"), table_name="supplier_invoice_payments")
     op.drop_table("supplier_invoice_payments")
 
