@@ -421,8 +421,8 @@ export default function ExpenseDetail() {
           <AttachmentManager
             attachments={attachments}
             config={{
-              allowUpload: canEdit ?? false,
-              allowDelete: canEdit ?? false,
+              allowUpload: !(selectedFiscalYear?.is_closed ?? true),
+              allowDelete: !(selectedFiscalYear?.is_closed ?? true),
             }}
             labels={{
               title: 'Kvitto',

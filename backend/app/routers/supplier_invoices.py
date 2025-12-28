@@ -413,6 +413,22 @@ async def link_attachment(
     # Verify user has access to invoice's company
     await verify_company_access(invoice.company_id, current_user, db)
 
+    # Check that fiscal year is open
+    fiscal_year = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == invoice.company_id,
+            FiscalYear.start_date <= invoice.invoice_date,
+            FiscalYear.end_date >= invoice.invoice_date,
+        )
+        .first()
+    )
+    if not fiscal_year or fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify attachments when fiscal year is closed",
+        )
+
     # Get attachment
     attachment = db.query(Attachment).filter(Attachment.id == link_data.attachment_id).first()
     if not attachment:
@@ -535,6 +551,22 @@ async def unlink_attachment(
 
     # Verify user has access to invoice's company
     await verify_company_access(invoice.company_id, current_user, db)
+
+    # Check that fiscal year is open
+    fiscal_year = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == invoice.company_id,
+            FiscalYear.start_date <= invoice.invoice_date,
+            FiscalYear.end_date >= invoice.invoice_date,
+        )
+        .first()
+    )
+    if not fiscal_year or fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify attachments when fiscal year is closed",
+        )
 
     # Find and delete link
     link = (

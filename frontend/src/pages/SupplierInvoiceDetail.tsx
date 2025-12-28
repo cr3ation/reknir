@@ -327,8 +327,8 @@ export default function SupplierInvoiceDetail() {
           <AttachmentManager
             attachments={attachments}
             config={{
-              allowUpload: true,
-              allowDelete: true,
+              allowUpload: !(selectedFiscalYear?.is_closed ?? true),
+              allowDelete: !(selectedFiscalYear?.is_closed ?? true),
             }}
             labels={{
               title: 'Bilagor',

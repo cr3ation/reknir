@@ -10,6 +10,7 @@ from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
 from app.models.account import Account
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
+from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, SupplierInvoice
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
@@ -291,6 +292,14 @@ async def link_attachment(
 
     await verify_company_access(verification.company_id, current_user, db)
 
+    # Check that fiscal year is open
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == verification.fiscal_year_id).first()
+    if not fiscal_year or fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify attachments when fiscal year is closed",
+        )
+
     # Verify attachment exists and belongs to same company
     attachment = db.query(Attachment).filter(Attachment.id == link_data.attachment_id).first()
     if not attachment:
@@ -395,6 +404,14 @@ async def unlink_attachment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Verification {verification_id} not found")
 
     await verify_company_access(verification.company_id, current_user, db)
+
+    # Check that fiscal year is open
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == verification.fiscal_year_id).first()
+    if not fiscal_year or fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify attachments when fiscal year is closed",
+        )
 
     link = (
         db.query(AttachmentLink)

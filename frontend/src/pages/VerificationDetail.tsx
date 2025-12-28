@@ -310,8 +310,8 @@ export default function VerificationDetail() {
           <AttachmentManager
             attachments={attachments}
             config={{
-              allowUpload: !verification.locked,
-              allowDelete: !verification.locked,
+              allowUpload: !(selectedFiscalYear?.is_closed ?? true),
+              allowDelete: !(selectedFiscalYear?.is_closed ?? true),
             }}
             labels={{
               title: 'Bokföringsunderlag',
