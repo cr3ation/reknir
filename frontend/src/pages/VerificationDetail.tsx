@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-react'
 import { verificationApi, accountApi, attachmentApi } from '@/services/api'
 import type { Verification, Account, EntityAttachment } from '@/types'
+import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import AttachmentManager from '@/components/AttachmentManager'
@@ -78,6 +79,11 @@ export default function VerificationDetail() {
     link.remove()
     window.URL.revokeObjectURL(url)
   }
+
+  const loadAttachments = useCallback(async () => {
+    const attachmentsRes = await verificationApi.listAttachments(parseInt(verificationId!))
+    setAttachments(attachmentsRes.data)
+  }, [verificationId])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -327,6 +333,10 @@ export default function VerificationDetail() {
             onUpload={handleUploadAttachment}
             onDelete={handleDeleteAttachment}
             onDownload={handleDownloadAttachment}
+            companyId={selectedCompany?.id}
+            entityType={EntityType.VERIFICATION}
+            entityId={parseInt(verificationId!)}
+            onAttachmentsChange={loadAttachments}
           />
         </div>
 

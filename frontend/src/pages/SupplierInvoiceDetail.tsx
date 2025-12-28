@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, DollarSign, BookOpen } from 'lucide-react'
 import { supplierInvoiceApi, accountApi, supplierApi, attachmentApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier, EntityAttachment } from '@/types'
-import { InvoiceStatus, PaymentStatus } from '@/types'
+import { InvoiceStatus, PaymentStatus, EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
@@ -135,6 +135,11 @@ export default function SupplierInvoiceDetail() {
     link.remove()
     window.URL.revokeObjectURL(url)
   }
+
+  const loadAttachments = useCallback(async () => {
+    const attachmentsRes = await supplierInvoiceApi.listAttachments(parseInt(invoiceId!))
+    setAttachments(attachmentsRes.data)
+  }, [invoiceId])
 
   const formatCurrency = (amount: number | undefined) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -344,6 +349,10 @@ export default function SupplierInvoiceDetail() {
             onUpload={handleUploadAttachment}
             onDelete={handleDeleteAttachment}
             onDownload={handleDownloadAttachment}
+            companyId={selectedCompany?.id}
+            entityType={EntityType.SUPPLIER_INVOICE}
+            entityId={parseInt(invoiceId!)}
+            onAttachmentsChange={loadAttachments}
           />
         </div>
 

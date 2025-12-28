@@ -7,6 +7,90 @@ import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
+import { useDropZone } from '@/hooks/useDropZone'
+
+// Receipt drop zone component for inline table cell
+function ReceiptDropZone({
+  hasAttachment,
+  attachment,
+  onUpload,
+  onDownload,
+  onDelete,
+  disabled,
+}: {
+  hasAttachment: boolean
+  attachment?: EntityAttachment
+  onUpload: (file: File) => void
+  onDownload: () => void
+  onDelete: () => void
+  disabled: boolean
+}) {
+  const { isDraggedOver, dropZoneProps } = useDropZone({
+    onFilesDropped: (files) => {
+      if (files.length > 0) {
+        onUpload(files[0])
+      }
+    },
+    acceptedFileTypes: '.jpg,.jpeg,.png,.pdf,.gif',
+    maxFileSizeMB: 10,
+    disabled,
+    onError: (message) => alert(message),
+  })
+
+  if (hasAttachment && attachment) {
+    return (
+      <div className="flex items-center justify-center gap-1">
+        <button
+          onClick={onDownload}
+          className="p-1 text-blue-600 hover:text-blue-800"
+          title="Ladda ner kvitto"
+        >
+          <Download className="w-4 h-4" />
+        </button>
+        {!disabled && (
+          <button
+            onClick={onDelete}
+            className="p-1 text-red-600 hover:text-red-800"
+            title="Ta bort kvitto"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      {...dropZoneProps}
+      className={`flex items-center justify-center transition-all rounded ${
+        isDraggedOver
+          ? disabled
+            ? 'bg-red-100 ring-1 ring-red-300'
+            : 'bg-blue-100 ring-1 ring-blue-400'
+          : ''
+      }`}
+    >
+      {disabled ? (
+        <span className="text-gray-300">-</span>
+      ) : (
+        <label className="cursor-pointer p-1">
+          <input
+            type="file"
+            className="hidden"
+            accept=".jpg,.jpeg,.png,.pdf,.gif"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) onUpload(file)
+              e.target.value = ''
+            }}
+          />
+          <Upload className={`w-4 h-4 ${isDraggedOver ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`} />
+        </label>
+      )}
+    </div>
+  )
+}
 
 export default function Expenses() {
   const navigate = useNavigate()
@@ -466,39 +550,14 @@ export default function Expenses() {
                       {formatCurrency(expense.vat_amount)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        {expenseAttachments[expense.id]?.length > 0 ? (
-                          <>
-                            <button
-                              onClick={() => handleDownloadReceipt(expenseAttachments[expense.id][0])}
-                              className="p-1 text-blue-600 hover:text-blue-800"
-                              title="Ladda ner kvitto"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteReceipt(expense.id, expenseAttachments[expense.id][0])}
-                              className="p-1 text-red-600 hover:text-red-800"
-                              title="Ta bort kvitto"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              className="hidden"
-                              accept=".jpg,.jpeg,.png,.pdf,.gif"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file) handleFileUpload(expense.id, file)
-                              }}
-                            />
-                            <Upload className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                          </label>
-                        )}
-                      </div>
+                      <ReceiptDropZone
+                        hasAttachment={expenseAttachments[expense.id]?.length > 0}
+                        attachment={expenseAttachments[expense.id]?.[0]}
+                        onUpload={(file) => handleFileUpload(expense.id, file)}
+                        onDownload={() => handleDownloadReceipt(expenseAttachments[expense.id][0])}
+                        onDelete={() => handleDeleteReceipt(expense.id, expenseAttachments[expense.id][0])}
+                        disabled={selectedFiscalYear?.is_closed ?? true}
+                      />
                     </td>
                     <td className="px-4 py-3 text-center">{getStatusBadge(expense.status)}</td>
                     <td className="px-4 py-3">

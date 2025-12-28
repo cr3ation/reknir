@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen } from 'lucide-react'
 import { expenseApi, accountApi, attachmentApi } from '@/services/api'
 import type { Expense, Account, EntityAttachment } from '@/types'
+import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import AttachmentManager from '@/components/AttachmentManager'
@@ -196,6 +197,11 @@ export default function ExpenseDetail() {
     link.remove()
     window.URL.revokeObjectURL(url)
   }
+
+  const loadAttachments = useCallback(async () => {
+    const attachmentsRes = await expenseApi.listAttachments(parseInt(expenseId!))
+    setAttachments(attachmentsRes.data)
+  }, [expenseId])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -438,6 +444,10 @@ export default function ExpenseDetail() {
             onUpload={handleUploadAttachment}
             onDelete={handleDeleteAttachment}
             onDownload={handleDownloadAttachment}
+            companyId={selectedCompany?.id}
+            entityType={EntityType.EXPENSE}
+            entityId={parseInt(expenseId!)}
+            onAttachmentsChange={loadAttachments}
           />
         </div>
 
