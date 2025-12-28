@@ -85,7 +85,7 @@ npm run dev
 
 ## Production Deployment
 
-For detailed production setup with HTTPS and Cloudflare Tunnel, see [PRODUCTION.md](PRODUCTION.md).
+For detailed production setup with HTTPS and Cloudflare Tunnel, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ### Quick Production Start
 

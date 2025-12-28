@@ -147,8 +147,9 @@ GET    /api/supplier-invoices/{id}                 Get supplier invoice
 PATCH  /api/supplier-invoices/{id}                 Update supplier invoice
 POST   /api/supplier-invoices/{id}/register        Register (create verification)
 POST   /api/supplier-invoices/{id}/mark-paid       Mark as paid (create payment)
-POST   /api/supplier-invoices/{id}/upload-attachment Upload attachment
-GET    /api/supplier-invoices/{id}/attachment      Download attachment
+POST   /api/supplier-invoices/{id}/attachments     Link existing attachment to invoice
+GET    /api/supplier-invoices/{id}/attachments     List linked attachments
+DELETE /api/supplier-invoices/{id}/attachments/{attachment_id} Unlink attachment
 DELETE /api/supplier-invoices/{id}                 Delete draft invoice
 ```
 
