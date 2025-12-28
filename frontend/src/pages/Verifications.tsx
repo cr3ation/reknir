@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Edit, Trash2, Lock, CheckCircle, AlertCircle, FileText } from 'lucide-react'
 import { verificationApi, accountApi, postingTemplateApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification, PostingTemplate } from '@/types'
@@ -8,6 +9,7 @@ import { getErrorMessage } from '@/utils/errors'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function Verifications() {
+  const navigate = useNavigate()
   const { selectedCompany } = useCompany()
   const [allVerifications, setAllVerifications] = useState<VerificationListItem[]>([])
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
@@ -144,7 +146,11 @@ export default function Verifications() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {verifications.map((verification) => (
-                <tr key={verification.id} className="hover:bg-gray-50">
+                <tr
+                  key={verification.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/verifications/${verification.id}`)}
+                >
                   <td className="px-4 py-3 text-sm font-medium">
                     {verification.verification_number}
                   </td>
@@ -175,7 +181,8 @@ export default function Verifications() {
                       {!verification.locked && (
                         <>
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation()
                               // Load full verification and edit
                               verificationApi.get(verification.id).then((res) => {
                                 setEditingVerification(res.data)
@@ -188,7 +195,10 @@ export default function Verifications() {
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(verification.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(verification.id)
+                            }}
                             className="p-1 text-red-600 hover:text-red-800"
                             title="Radera"
                           >
