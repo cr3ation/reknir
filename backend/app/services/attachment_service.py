@@ -1,13 +1,12 @@
 import hashlib
-import shutil
 import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 
 # Storage configuration
-ATTACHMENTS_DIR = Path("/app/attachments")
-ATTACHMENTS_DIR.mkdir(exist_ok=True)
+ATTACHMENTS_DIR = Path("/app/uploads/attachments")
+ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {

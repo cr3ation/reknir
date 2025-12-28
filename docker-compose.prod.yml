@@ -35,8 +35,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./receipts:/app/receipts
-      - ./invoices:/app/invoices
+      - ./uploads:/app/uploads
     restart: unless-stopped
     networks:
       - reknir-internal
