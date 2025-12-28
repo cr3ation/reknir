@@ -42,9 +42,6 @@ class Expense(Base):
     expense_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # Expense account (e.g., 6540)
     vat_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)  # VAT account (usually 2641)
 
-    # Receipt file
-    receipt_filename = Column(String(500), nullable=True)
-
     # Status and workflow
     status = Column(
         SQLEnum(ExpenseStatus, values_callable=lambda x: [e.value for e in x]),

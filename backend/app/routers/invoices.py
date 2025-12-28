@@ -8,11 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
+from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
 from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, InvoiceLine, InvoicePayment, InvoiceStatus, PaymentStatus
 from app.models.user import User
+from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
 from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse, InvoiceUpdate, MarkPaidRequest
 from app.services.invoice_service import create_invoice_payment_verification, create_invoice_verification
 from app.services.pdf_service import generate_invoice_pdf
@@ -409,5 +411,146 @@ async def delete_invoice(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Can only delete draft or cancelled invoices")
 
     db.delete(invoice)
+    db.commit()
+    return None
+
+
+# =============================================================================
+# Attachment link endpoints
+# =============================================================================
+
+
+@router.post("/{invoice_id}/attachments", response_model=EntityAttachmentItem, status_code=status.HTTP_201_CREATED)
+async def link_attachment(
+    invoice_id: int,
+    link_data: AttachmentLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Link an attachment to an invoice"""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
+
+    await verify_company_access(invoice.company_id, current_user, db)
+
+    # Verify attachment exists and belongs to same company
+    attachment = db.query(Attachment).filter(Attachment.id == link_data.attachment_id).first()
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Attachment {link_data.attachment_id} not found"
+        )
+
+    if attachment.company_id != invoice.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company"
+        )
+
+    # Check if link already exists
+    existing_link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == link_data.attachment_id,
+            AttachmentLink.entity_type == EntityType.INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+        )
+        .first()
+    )
+    if existing_link:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment already linked to this invoice")
+
+    # Create link
+    link = AttachmentLink(
+        attachment_id=link_data.attachment_id,
+        entity_type=EntityType.INVOICE,
+        entity_id=invoice_id,
+        role=link_data.role or AttachmentRole.ORIGINAL,
+        sort_order=link_data.sort_order or 0,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+
+    return EntityAttachmentItem(
+        link_id=link.id,
+        attachment_id=attachment.id,
+        original_filename=attachment.original_filename,
+        mime_type=attachment.mime_type,
+        size_bytes=attachment.size_bytes,
+        status=attachment.status,
+        role=link.role,
+        sort_order=link.sort_order,
+        created_at=attachment.created_at,
+    )
+
+
+@router.get("/{invoice_id}/attachments", response_model=list[EntityAttachmentItem])
+async def list_invoice_attachments(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all attachments linked to an invoice"""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
+
+    await verify_company_access(invoice.company_id, current_user, db)
+
+    links = (
+        db.query(AttachmentLink)
+        .filter(AttachmentLink.entity_type == EntityType.INVOICE, AttachmentLink.entity_id == invoice_id)
+        .order_by(AttachmentLink.sort_order)
+        .all()
+    )
+
+    result = []
+    for link in links:
+        attachment = db.query(Attachment).filter(Attachment.id == link.attachment_id).first()
+        if attachment:
+            result.append(
+                EntityAttachmentItem(
+                    link_id=link.id,
+                    attachment_id=attachment.id,
+                    original_filename=attachment.original_filename,
+                    mime_type=attachment.mime_type,
+                    size_bytes=attachment.size_bytes,
+                    status=attachment.status,
+                    role=link.role,
+                    sort_order=link.sort_order,
+                    created_at=attachment.created_at,
+                )
+            )
+
+    return result
+
+
+@router.delete("/{invoice_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_attachment(
+    invoice_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Unlink an attachment from an invoice"""
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Invoice {invoice_id} not found")
+
+    await verify_company_access(invoice.company_id, current_user, db)
+
+    link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == attachment_id,
+            AttachmentLink.entity_type == EntityType.INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+        )
+        .first()
+    )
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not linked to this invoice")
+
+    db.delete(link)
     db.commit()
     return None

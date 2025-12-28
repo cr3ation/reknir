@@ -397,7 +397,6 @@ export interface SupplierInvoice {
   notes?: string
   invoice_verification_id?: number
   payment_verification_id?: number
-  attachment_path?: string
   created_at: string
   updated_at: string
   supplier_invoice_lines: InvoiceLine[]
@@ -561,7 +560,6 @@ export interface Expense {
   vat_amount: number
   expense_account_id?: number | null
   vat_account_id?: number | null
-  receipt_filename?: string
   status: ExpenseStatus
   approved_date?: string
   paid_date?: string
@@ -589,4 +587,54 @@ export interface YTDTotals {
 export interface MonthlyStatistics {
   monthly_data: MonthlyData[]
   ytd_totals: YTDTotals
+}
+
+// Attachments
+
+export enum AttachmentStatus {
+  CREATED = 'created',
+  UPLOADED = 'uploaded',
+  PROCESSING = 'processing',
+  READY = 'ready',
+  REJECTED = 'rejected',
+}
+
+export enum AttachmentRole {
+  ORIGINAL = 'original',
+  RECEIPT = 'receipt',
+  SUPPORTING = 'supporting',
+  CONTRACT = 'contract',
+}
+
+export enum EntityType {
+  SUPPLIER_INVOICE = 'supplier_invoice',
+  INVOICE = 'invoice',
+  EXPENSE = 'expense',
+  VERIFICATION = 'verification',
+}
+
+export interface Attachment {
+  id: number
+  company_id: number
+  original_filename: string
+  storage_filename: string
+  mime_type: string
+  size_bytes: number
+  checksum_sha256?: string
+  status: AttachmentStatus
+  rejection_reason?: string
+  created_at: string
+  created_by: number
+}
+
+export interface EntityAttachment {
+  link_id: number
+  attachment_id: number
+  role: AttachmentRole
+  sort_order: number
+  created_at: string
+  original_filename: string
+  mime_type: string
+  size_bytes: number
+  status: AttachmentStatus
 }

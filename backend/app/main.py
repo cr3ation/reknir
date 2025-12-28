@@ -5,6 +5,7 @@ from app import __version__
 from app.config import settings
 from app.routers import (
     accounts,
+    attachments,
     auth,
     companies,
     customers,
@@ -67,6 +68,9 @@ app.include_router(supplier_invoices.router, prefix="/api/supplier-invoices", ta
 
 # Expense management
 app.include_router(expenses.router, prefix="/api/expenses", tags=["expenses"])
+
+# Attachment management
+app.include_router(attachments.router, prefix="/api/attachments", tags=["attachments"])
 
 # SIE4 import/export and default accounts
 app.include_router(sie4.router)

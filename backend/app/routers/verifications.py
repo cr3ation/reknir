@@ -9,9 +9,11 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
 from app.models.account import Account
+from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
 from app.models.invoice import Invoice, SupplierInvoice
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
+from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
 from app.schemas.verification import (
     VerificationCreate,
     VerificationListItem,
@@ -266,5 +268,146 @@ async def delete_verification(
 
     # Delete verification (cascade will delete lines)
     db.delete(verification)
+    db.commit()
+    return None
+
+
+# =============================================================================
+# Attachment link endpoints
+# =============================================================================
+
+
+@router.post("/{verification_id}/attachments", response_model=EntityAttachmentItem, status_code=status.HTTP_201_CREATED)
+async def link_attachment(
+    verification_id: int,
+    link_data: AttachmentLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Link an attachment to a verification"""
+    verification = db.query(Verification).filter(Verification.id == verification_id).first()
+    if not verification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Verification {verification_id} not found")
+
+    await verify_company_access(verification.company_id, current_user, db)
+
+    # Verify attachment exists and belongs to same company
+    attachment = db.query(Attachment).filter(Attachment.id == link_data.attachment_id).first()
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Attachment {link_data.attachment_id} not found"
+        )
+
+    if attachment.company_id != verification.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company"
+        )
+
+    # Check if link already exists
+    existing_link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == link_data.attachment_id,
+            AttachmentLink.entity_type == EntityType.VERIFICATION,
+            AttachmentLink.entity_id == verification_id,
+        )
+        .first()
+    )
+    if existing_link:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment already linked to this verification")
+
+    # Create link
+    link = AttachmentLink(
+        attachment_id=link_data.attachment_id,
+        entity_type=EntityType.VERIFICATION,
+        entity_id=verification_id,
+        role=link_data.role or AttachmentRole.SUPPORTING,
+        sort_order=link_data.sort_order or 0,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+
+    return EntityAttachmentItem(
+        link_id=link.id,
+        attachment_id=attachment.id,
+        original_filename=attachment.original_filename,
+        mime_type=attachment.mime_type,
+        size_bytes=attachment.size_bytes,
+        status=attachment.status,
+        role=link.role,
+        sort_order=link.sort_order,
+        created_at=attachment.created_at,
+    )
+
+
+@router.get("/{verification_id}/attachments", response_model=list[EntityAttachmentItem])
+async def list_verification_attachments(
+    verification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all attachments linked to a verification"""
+    verification = db.query(Verification).filter(Verification.id == verification_id).first()
+    if not verification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Verification {verification_id} not found")
+
+    await verify_company_access(verification.company_id, current_user, db)
+
+    links = (
+        db.query(AttachmentLink)
+        .filter(AttachmentLink.entity_type == EntityType.VERIFICATION, AttachmentLink.entity_id == verification_id)
+        .order_by(AttachmentLink.sort_order)
+        .all()
+    )
+
+    result = []
+    for link in links:
+        attachment = db.query(Attachment).filter(Attachment.id == link.attachment_id).first()
+        if attachment:
+            result.append(
+                EntityAttachmentItem(
+                    link_id=link.id,
+                    attachment_id=attachment.id,
+                    original_filename=attachment.original_filename,
+                    mime_type=attachment.mime_type,
+                    size_bytes=attachment.size_bytes,
+                    status=attachment.status,
+                    role=link.role,
+                    sort_order=link.sort_order,
+                    created_at=attachment.created_at,
+                )
+            )
+
+    return result
+
+
+@router.delete("/{verification_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_attachment(
+    verification_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Unlink an attachment from a verification"""
+    verification = db.query(Verification).filter(Verification.id == verification_id).first()
+    if not verification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Verification {verification_id} not found")
+
+    await verify_company_access(verification.company_id, current_user, db)
+
+    link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == attachment_id,
+            AttachmentLink.entity_type == EntityType.VERIFICATION,
+            AttachmentLink.entity_id == verification_id,
+        )
+        .first()
+    )
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not linked to this verification")
+
+    db.delete(link)
     db.commit()
     return None

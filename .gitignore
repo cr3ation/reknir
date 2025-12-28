@@ -96,3 +96,4 @@ cloudflared-config.yml
 # OS
 Thumbs.db
 cloudflared-credentials.json
+backend/attachments/

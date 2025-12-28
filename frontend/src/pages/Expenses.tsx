@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Edit2, Trash2, Check, X, FileText, DollarSign, Upload, Download, Eye, BookOpen } from 'lucide-react'
-import { expenseApi, accountApi } from '@/services/api'
-import type { Expense, ExpenseStatus, Account } from '@/types'
+import { expenseApi, accountApi, attachmentApi } from '@/services/api'
+import type { Expense, ExpenseStatus, Account, EntityAttachment } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
@@ -14,6 +14,7 @@ export default function Expenses() {
   const { selectedFiscalYear } = useFiscalYear()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [expenseAttachments, setExpenseAttachments] = useState<Record<number, EntityAttachment[]>>({})
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
@@ -50,6 +51,18 @@ export default function Expenses() {
 
       const expensesRes = await expenseApi.list(selectedCompany.id, params)
       setExpenses(expensesRes.data)
+
+      // Load attachments for each expense
+      const attachmentsMap: Record<number, EntityAttachment[]> = {}
+      for (const expense of expensesRes.data) {
+        try {
+          const attachmentsRes = await expenseApi.listAttachments(expense.id)
+          attachmentsMap[expense.id] = attachmentsRes.data
+        } catch {
+          attachmentsMap[expense.id] = []
+        }
+      }
+      setExpenseAttachments(attachmentsMap)
     } catch (error) {
       console.error('Failed to load expenses:', error)
     } finally {
@@ -130,7 +143,8 @@ export default function Expenses() {
 
       // Upload file if selected
       if (selectedFile) {
-        await expenseApi.uploadReceipt(expenseId, selectedFile)
+        const uploadRes = await attachmentApi.upload(selectedCompany.id, selectedFile)
+        await expenseApi.linkAttachment(expenseId, uploadRes.data.id)
       }
 
       setShowModal(false)
@@ -246,8 +260,10 @@ export default function Expenses() {
   }
 
   const handleFileUpload = async (expenseId: number, file: File) => {
+    if (!selectedCompany) return
     try {
-      await expenseApi.uploadReceipt(expenseId, file)
+      const uploadRes = await attachmentApi.upload(selectedCompany.id, file)
+      await expenseApi.linkAttachment(expenseId, uploadRes.data.id)
       await loadExpenses()
     } catch (error) {
       console.error('Failed to upload receipt:', error)
@@ -255,13 +271,13 @@ export default function Expenses() {
     }
   }
 
-  const handleDownloadReceipt = async (expenseId: number, filename: string) => {
+  const handleDownloadReceipt = async (attachment: EntityAttachment) => {
     try {
-      const response = await expenseApi.downloadReceipt(expenseId)
+      const response = await attachmentApi.download(attachment.attachment_id)
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', filename)
+      link.setAttribute('download', attachment.original_filename)
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -272,11 +288,11 @@ export default function Expenses() {
     }
   }
 
-  const handleDeleteReceipt = async (expenseId: number) => {
+  const handleDeleteReceipt = async (expenseId: number, attachment: EntityAttachment) => {
     if (!confirm('Är du säker på att du vill ta bort kvittot?')) return
 
     try {
-      await expenseApi.deleteReceipt(expenseId)
+      await expenseApi.unlinkAttachment(expenseId, attachment.attachment_id)
       await loadExpenses()
     } catch (error) {
       console.error('Failed to delete receipt:', error)
@@ -451,17 +467,17 @@ export default function Expenses() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        {expense.receipt_filename ? (
+                        {expenseAttachments[expense.id]?.length > 0 ? (
                           <>
                             <button
-                              onClick={() => handleDownloadReceipt(expense.id, expense.receipt_filename!)}
+                              onClick={() => handleDownloadReceipt(expenseAttachments[expense.id][0])}
                               className="p-1 text-blue-600 hover:text-blue-800"
                               title="Ladda ner kvitto"
                             >
                               <Download className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteReceipt(expense.id)}
+                              onClick={() => handleDeleteReceipt(expense.id, expenseAttachments[expense.id][0])}
                               className="p-1 text-red-600 hover:text-red-800"
                               title="Ta bort kvitto"
                             >
@@ -722,7 +738,7 @@ export default function Expenses() {
                           Ta bort
                         </button>
                       )}
-                      {editingExpense?.receipt_filename && !selectedFile && (
+                      {editingExpense && expenseAttachments[editingExpense.id]?.length > 0 && !selectedFile && (
                         <span className="text-sm text-green-600">
                           ✓ Kvitto uppladdat
                         </span>

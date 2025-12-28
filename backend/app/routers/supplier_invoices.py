@@ -1,16 +1,13 @@
-import shutil
-import uuid
 from datetime import date
 from decimal import Decimal
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
+from app.models.attachment import Attachment, AttachmentLink, EntityType
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Supplier
 from app.models.fiscal_year import FiscalYear
@@ -22,6 +19,7 @@ from app.models.invoice import (
     SupplierInvoicePayment,
 )
 from app.models.user import User
+from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
 from app.schemas.invoice import (
     MarkPaidRequest,
     SupplierInvoiceCreate,
@@ -35,10 +33,6 @@ from app.services.invoice_service import (
 )
 
 router = APIRouter()
-
-# Create invoices directory if it doesn't exist
-INVOICES_DIR = Path("/app/invoices")
-INVOICES_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/", response_model=SupplierInvoiceResponse, status_code=status.HTTP_201_CREATED)
@@ -398,97 +392,168 @@ async def delete_supplier_invoice(
     return None
 
 
-@router.post("/{invoice_id}/upload-attachment", response_model=SupplierInvoiceResponse)
-async def upload_attachment(
+# ============================================
+# Attachment Link Endpoints
+# ============================================
+
+
+@router.post("/{invoice_id}/attachments", response_model=EntityAttachmentItem, status_code=status.HTTP_201_CREATED)
+async def link_attachment(
     invoice_id: int,
-    file: UploadFile = File(...),
+    link_data: AttachmentLinkCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Upload an attachment file for a supplier invoice"""
+    """Link an existing attachment to a supplier invoice"""
+    # Get invoice
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Supplier invoice {invoice_id} not found")
 
-    # Verify user has access to this company
+    # Verify user has access to invoice's company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    # Validate file type (images and PDFs)
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".pdf", ".gif"}
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in allowed_extensions:
+    # Get attachment
+    attachment = db.query(Attachment).filter(Attachment.id == link_data.attachment_id).first()
+    if not attachment:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type {file_ext} not allowed. Allowed types: {', '.join(allowed_extensions)}",
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Attachment {link_data.attachment_id} not found"
         )
 
-    # Delete old attachment if exists
-    if invoice.attachment_path:
-        old_path = INVOICES_DIR / invoice.attachment_path
-        if old_path.exists():
-            old_path.unlink()
+    # Verify user has access to attachment's company
+    await verify_company_access(attachment.company_id, current_user, db)
 
-    # Generate unique filename
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = INVOICES_DIR / unique_filename
+    # Check if link already exists (idempotent)
+    existing_link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == link_data.attachment_id,
+            AttachmentLink.entity_type == EntityType.SUPPLIER_INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+        )
+        .first()
+    )
 
-    # Save file
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    if existing_link:
+        # Update existing link
+        existing_link.role = link_data.role
+        existing_link.sort_order = link_data.sort_order
+        db.commit()
+        db.refresh(existing_link)
+        return EntityAttachmentItem(
+            id=existing_link.id,
+            attachment_id=existing_link.attachment_id,
+            role=existing_link.role,
+            sort_order=existing_link.sort_order,
+            created_at=existing_link.created_at,
+            original_filename=attachment.original_filename,
+            mime_type=attachment.mime_type,
+            size_bytes=attachment.size_bytes,
+            status=attachment.status,
+        )
 
-    # Update invoice record
-    invoice.attachment_path = unique_filename
+    # Create new link
+    link = AttachmentLink(
+        attachment_id=link_data.attachment_id,
+        entity_type=EntityType.SUPPLIER_INVOICE,
+        entity_id=invoice_id,
+        role=link_data.role,
+        sort_order=link_data.sort_order,
+    )
+    db.add(link)
     db.commit()
-    db.refresh(invoice)
+    db.refresh(link)
 
-    return invoice
+    return EntityAttachmentItem(
+        link_id=link.id,
+        attachment_id=link.attachment_id,
+        role=link.role,
+        sort_order=link.sort_order,
+        created_at=link.created_at,
+        original_filename=attachment.original_filename,
+        mime_type=attachment.mime_type,
+        size_bytes=attachment.size_bytes,
+        status=attachment.status,
+    )
 
 
-@router.get("/{invoice_id}/attachment")
-async def download_attachment(
-    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
+@router.get("/{invoice_id}/attachments", response_model=list[EntityAttachmentItem])
+async def list_invoice_attachments(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Download the attachment file for a supplier invoice"""
+    """List all attachments linked to a supplier invoice"""
+    # Get invoice
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Supplier invoice {invoice_id} not found")
 
-    # Verify user has access to this company
+    # Verify user has access to invoice's company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    if not invoice.attachment_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No attachment file found for this invoice")
+    # Get links with attachment details
+    links = (
+        db.query(AttachmentLink, Attachment)
+        .join(Attachment, AttachmentLink.attachment_id == Attachment.id)
+        .filter(
+            AttachmentLink.entity_type == EntityType.SUPPLIER_INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+        )
+        .order_by(AttachmentLink.sort_order, AttachmentLink.created_at)
+        .all()
+    )
 
-    file_path = INVOICES_DIR / invoice.attachment_path
-    if not file_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found on disk")
+    return [
+        EntityAttachmentItem(
+            link_id=link.id,
+            attachment_id=link.attachment_id,
+            role=link.role,
+            sort_order=link.sort_order,
+            created_at=link.created_at,
+            original_filename=attachment.original_filename,
+            mime_type=attachment.mime_type,
+            size_bytes=attachment.size_bytes,
+            status=attachment.status,
+        )
+        for link, attachment in links
+    ]
 
-    return FileResponse(path=str(file_path), filename=invoice.attachment_path, media_type="application/octet-stream")
 
-
-@router.delete("/{invoice_id}/attachment", response_model=SupplierInvoiceResponse)
-async def delete_attachment(
-    invoice_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
+@router.delete("/{invoice_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_attachment(
+    invoice_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Delete the attachment file for a supplier invoice"""
+    """Unlink an attachment from a supplier invoice"""
+    # Get invoice
     invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Supplier invoice {invoice_id} not found")
 
-    # Verify user has access to this company
+    # Verify user has access to invoice's company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    if not invoice.attachment_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No attachment file found for this invoice")
+    # Find and delete link
+    link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == attachment_id,
+            AttachmentLink.entity_type == EntityType.SUPPLIER_INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+        )
+        .first()
+    )
 
-    # Delete file from disk
-    file_path = INVOICES_DIR / invoice.attachment_path
-    if file_path.exists():
-        file_path.unlink()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Attachment {attachment_id} is not linked to supplier invoice {invoice_id}",
+        )
 
-    # Clear filename from database
-    invoice.attachment_path = None
+    db.delete(link)
     db.commit()
-    db.refresh(invoice)
 
-    return invoice
+    return None
