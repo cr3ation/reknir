@@ -17,8 +17,8 @@ ALLOWED_MIME_TYPES = {
     "image/gif",
 }
 
-# Maximum file size (10 MB)
-MAX_FILE_SIZE = 10 * 1024 * 1024
+# Maximum file size (30 MB)
+MAX_FILE_SIZE = 30 * 1024 * 1024
 
 
 def validate_file_type(mime_type: str) -> bool:

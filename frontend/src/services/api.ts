@@ -149,6 +149,15 @@ export const verificationApi = {
   update: (id: number, data: Partial<Verification>) =>
     api.patch<Verification>(`/verifications/${id}`, data),
   delete: (id: number) => api.delete(`/verifications/${id}`),
+  // Attachment link methods
+  listAttachments: (id: number) => api.get<EntityAttachment[]>(`/verifications/${id}/attachments`),
+  linkAttachment: (id: number, attachmentId: number, role?: AttachmentRole) =>
+    api.post<EntityAttachment>(`/verifications/${id}/attachments`, {
+      attachment_id: attachmentId,
+      role: role || 'supporting',
+    }),
+  unlinkAttachment: (id: number, attachmentId: number) =>
+    api.delete(`/verifications/${id}/attachments/${attachmentId}`),
 }
 
 // Posting Templates

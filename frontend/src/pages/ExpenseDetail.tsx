@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen, Download, Upload, Trash2 } from 'lucide-react'
+import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen } from 'lucide-react'
 import { expenseApi, accountApi, attachmentApi } from '@/services/api'
 import type { Expense, Account, EntityAttachment } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import AttachmentManager from '@/components/AttachmentManager'
 
 export default function ExpenseDetail() {
   const { expenseId } = useParams<{ expenseId: string }>()
@@ -16,8 +17,6 @@ export default function ExpenseDetail() {
   const [attachments, setAttachments] = useState<EntityAttachment[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
 
   const [formData, setFormData] = useState({
     employee_name: '',
@@ -84,16 +83,8 @@ export default function ExpenseDetail() {
       }
 
       const response = await expenseApi.update(parseInt(expenseId!), payload)
-
-      if (selectedFile && selectedCompany) {
-        // Upload file and link to expense
-        const uploadRes = await attachmentApi.upload(selectedCompany.id, selectedFile)
-        await expenseApi.linkAttachment(parseInt(expenseId!), uploadRes.data.id)
-      }
-
       setExpense(response.data)
       setEditing(false)
-      setSelectedFile(null)
       await loadExpense()
     } catch (error) {
       console.error('Failed to save expense:', error)
@@ -178,52 +169,32 @@ export default function ExpenseDetail() {
     }
   }
 
-  const handleDownloadAttachment = async (attachment: EntityAttachment) => {
-    try {
-      const response = await attachmentApi.download(attachment.attachment_id)
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', attachment.original_filename)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Failed to download attachment:', error)
-      alert('Kunde inte ladda ner kvittot')
-    }
+  // Attachment handlers for AttachmentManager
+  const handleUploadAttachment = async (file: File) => {
+    if (!selectedCompany) throw new Error('No company selected')
+
+    const uploadRes = await attachmentApi.upload(selectedCompany.id, file)
+    await expenseApi.linkAttachment(parseInt(expenseId!), uploadRes.data.id)
+
+    const attachmentsRes = await expenseApi.listAttachments(parseInt(expenseId!))
+    setAttachments(attachmentsRes.data)
   }
 
   const handleDeleteAttachment = async (attachment: EntityAttachment) => {
-    if (!confirm(`Ta bort kvittot "${attachment.original_filename}"?`)) return
-    try {
-      await expenseApi.unlinkAttachment(parseInt(expenseId!), attachment.attachment_id)
-      setAttachments(attachments.filter(a => a.attachment_id !== attachment.attachment_id))
-    } catch (error) {
-      console.error('Failed to delete attachment:', error)
-      alert('Kunde inte ta bort kvittot')
-    }
+    await expenseApi.unlinkAttachment(parseInt(expenseId!), attachment.attachment_id)
+    setAttachments(attachments.filter(a => a.attachment_id !== attachment.attachment_id))
   }
 
-  const handleUploadAttachment = async () => {
-    if (!selectedFile || !selectedCompany) return
-
-    try {
-      setUploading(true)
-      const uploadRes = await attachmentApi.upload(selectedCompany.id, selectedFile)
-      await expenseApi.linkAttachment(parseInt(expenseId!), uploadRes.data.id)
-
-      setSelectedFile(null)
-      const attachmentsRes = await expenseApi.listAttachments(parseInt(expenseId!))
-      setAttachments(attachmentsRes.data)
-      alert('Kvittot har laddats upp')
-    } catch (error) {
-      console.error('Failed to upload attachment:', error)
-      alert('Kunde inte ladda upp kvittot')
-    } finally {
-      setUploading(false)
-    }
+  const handleDownloadAttachment = async (attachment: EntityAttachment) => {
+    const response = await attachmentApi.download(attachment.attachment_id)
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', attachment.original_filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   }
 
   const formatCurrency = (amount: number) => {
@@ -395,10 +366,7 @@ export default function ExpenseDetail() {
                     Spara ändringar
                   </button>
                   <button
-                    onClick={() => {
-                      setEditing(false)
-                      setSelectedFile(null)
-                    }}
+                    onClick={() => setEditing(false)}
                     className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
                   >
                     Avbryt
@@ -450,87 +418,27 @@ export default function ExpenseDetail() {
           </div>
 
           {/* Receipt/Attachments */}
-          <div className="card">
-            <h2 className="text-xl font-bold mb-4">Kvitto</h2>
-
-            {/* Existing attachments */}
-            {attachments.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {attachments.map((attachment) => (
-                  <div key={attachment.link_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <FileText className="w-6 h-6 text-gray-400" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{attachment.original_filename}</p>
-                      <p className="text-xs text-gray-500">
-                        {(attachment.size_bytes / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleDownloadAttachment(attachment)}
-                      className="p-2 text-blue-600 hover:text-blue-800"
-                      title="Ladda ner"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAttachment(attachment)}
-                      className="p-2 text-red-600 hover:text-red-800"
-                      title="Ta bort"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Upload new attachment */}
-            {selectedFile ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                  <FileText className="w-6 h-6 text-blue-600" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-blue-900">{selectedFile.name}</p>
-                    <p className="text-xs text-blue-700">
-                      {(selectedFile.size / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSelectedFile(null)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-                <button
-                  onClick={handleUploadAttachment}
-                  disabled={uploading}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {uploading ? 'Laddar upp...' : 'Ladda upp kvitto'}
-                </button>
-              </div>
-            ) : (
-              <div>
-                {attachments.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Upload className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                    <p className="mb-4">Inget kvitto uppladdat</p>
-                  </div>
-                )}
-                <label className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  {attachments.length > 0 ? 'Lägg till kvitto' : 'Välj fil att ladda upp'}
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.gif"
-                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            )}
-          </div>
+          <AttachmentManager
+            attachments={attachments}
+            config={{
+              allowUpload: canEdit ?? false,
+              allowDelete: canEdit ?? false,
+            }}
+            labels={{
+              title: 'Kvitto',
+              emptyState: 'Inget kvitto uppladdat',
+              uploadButton: 'Välj fil att ladda upp',
+              addMoreButton: 'Lägg till kvitto',
+              deleteConfirm: (f) => `Ta bort kvittot "${f}"?`,
+              uploadSuccess: 'Kvittot har laddats upp',
+              uploadError: 'Kunde inte ladda upp kvittot',
+              deleteError: 'Kunde inte ta bort kvittot',
+              downloadError: 'Kunde inte ladda ner kvittot',
+            }}
+            onUpload={handleUploadAttachment}
+            onDelete={handleDeleteAttachment}
+            onDownload={handleDownloadAttachment}
+          />
         </div>
 
         {/* Sidebar */}
