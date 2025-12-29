@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Download, Plus, X, Eye, DollarSign, Send, FileText } from 'lucide-react'
+import { Download, Plus, X, Eye, DollarSign, Send, FileText, Maximize2, Minimize2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
+import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi, attachmentApi } from '@/services/api'
+import AttachmentManager from '@/components/AttachmentManager'
 import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
 import { InvoiceStatus, PaymentStatus } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
+import { useModalMaximized } from '@/contexts/LayoutSettingsContext'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
@@ -938,6 +940,7 @@ interface CreateInvoiceModalProps {
 }
 
 function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess }: CreateInvoiceModalProps) {
+  const { isMaximized, toggleMaximized } = useModalMaximized('invoice')
   const [customerId, setCustomerId] = useState<number>(0)
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState('')
@@ -1043,13 +1046,28 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
   const totals = calculateTotals()
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+    <div className={`fixed inset-0 bg-black bg-opacity-50 flex z-50 ${isMaximized ? 'items-stretch p-2' : 'items-center justify-center p-4'}`}>
+      <div className={`bg-white rounded-lg w-full overflow-y-auto ${isMaximized ? 'h-full max-h-full' : 'max-w-4xl max-h-[90vh]'}`}>
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold">Ny kundfaktura</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleMaximized}
+              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title={isMaximized ? 'Återställ' : 'Maximera'}
+            >
+              {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Stäng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6">
@@ -1331,6 +1349,7 @@ interface CreateSupplierInvoiceModalProps {
 }
 
 function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, onSuccess }: CreateSupplierInvoiceModalProps) {
+  const { isMaximized, toggleMaximized } = useModalMaximized('supplierInvoice')
   const [supplierId, setSupplierId] = useState<number>(0)
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
@@ -1342,6 +1361,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingAttachmentIds, setPendingAttachmentIds] = useState<number[]>([])
 
   // Update due date when supplier changes
   useEffect(() => {
@@ -1411,7 +1431,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
     setError(null)
 
     try {
-      await supplierInvoiceApi.create({
+      const response = await supplierInvoiceApi.create({
         company_id: companyId,
         supplier_id: supplierId,
         supplier_invoice_number: supplierInvoiceNumber,
@@ -1428,6 +1448,13 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
           account_id: line.account_id,
         })),
       })
+      const newInvoiceId = response.data.id!
+
+      // Link pending attachments to the new supplier invoice
+      for (const attachmentId of pendingAttachmentIds) {
+        await supplierInvoiceApi.linkAttachment(newInvoiceId, attachmentId)
+      }
+
       onSuccess()
     } catch (err) {
       console.error('Failed to create supplier invoice:', err)
@@ -1440,13 +1467,28 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   const totals = calculateTotals()
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+    <div className={`fixed inset-0 bg-black bg-opacity-50 flex z-50 ${isMaximized ? 'items-stretch p-2' : 'items-center justify-center p-4'}`}>
+      <div className={`bg-white rounded-lg w-full overflow-y-auto ${isMaximized ? 'h-full max-h-full' : 'max-w-4xl max-h-[90vh]'}`}>
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold">Registrera leverantörsfaktura</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleMaximized}
+              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title={isMaximized ? 'Återställ' : 'Maximera'}
+            >
+              {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Stäng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6">
@@ -1663,6 +1705,33 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
               <span>Totalt:</span>
               <span className="font-mono">{totals.totalAmount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
             </div>
+          </div>
+
+          {/* Attachments */}
+          <div className="mb-6">
+            <AttachmentManager
+              attachments={[]}
+              config={{
+                allowUpload: true,
+                allowDelete: true,
+              }}
+              labels={{
+                title: 'Bilagor',
+                emptyState: 'Inga bilagor',
+                uploadButton: 'Ladda upp',
+                deleteConfirm: (f) => `Ta bort ${f}?`,
+              }}
+              onUpload={async (file) => {
+                const res = await attachmentApi.upload(companyId, file)
+                setPendingAttachmentIds(prev => [...prev, res.data.id])
+              }}
+              onDelete={async () => {}}
+              onDownload={async () => {}}
+              companyId={companyId}
+              pendingMode={true}
+              pendingAttachmentIds={pendingAttachmentIds}
+              onPendingSelectionChange={setPendingAttachmentIds}
+            />
           </div>
 
           {/* Actions */}

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, Download, Trash2, Upload, Lock, X, FolderOpen, Maximize2, Minus } from 'lucide-react'
 import type { EntityAttachment, Attachment } from '@/types'
-import { EntityType } from '@/types'
+import { EntityType, AttachmentRole } from '@/types'
 import { attachmentApi, supplierInvoiceApi, expenseApi, verificationApi } from '@/services/api'
 import { useDropZone } from '@/hooks/useDropZone'
 import { useLayoutSettings, PREVIEW_SIZE_PRESETS, type PreviewPosition } from '@/contexts/LayoutSettingsContext'
@@ -49,6 +49,10 @@ export interface AttachmentManagerProps {
   entityId?: number
   onAttachmentsChange?: () => void
   isLoading?: boolean
+  // Pending mode props (for use before entity is created)
+  pendingMode?: boolean
+  pendingAttachmentIds?: number[]
+  onPendingSelectionChange?: (ids: number[]) => void
 }
 
 interface Position { x: number; y: number }
@@ -104,6 +108,9 @@ export default function AttachmentManager({
   entityId,
   onAttachmentsChange,
   isLoading = false,
+  pendingMode = false,
+  pendingAttachmentIds = [],
+  onPendingSelectionChange,
 }: AttachmentManagerProps) {
   const { settings: layoutSettings } = useLayoutSettings()
 
@@ -141,8 +148,40 @@ export default function AttachmentManager({
     maxFileSizeMB = 30,
   } = config
 
-  const canUploadMore = allowUpload && (maxAttachments === undefined || attachments.length < maxAttachments)
+  const effectiveAttachmentCount = pendingMode ? pendingAttachmentIds.length : attachments.length
+  const canUploadMore = allowUpload && (maxAttachments === undefined || effectiveAttachmentCount < maxAttachments)
   const isLocked = !allowUpload && !allowDelete
+
+  // In pending mode, load available attachments on mount and compute selected ones
+  useEffect(() => {
+    if (pendingMode && companyId) {
+      setLoadingAvailable(true)
+      attachmentApi.list(companyId)
+        .then(response => setAvailableAttachments(response.data))
+        .catch(error => console.error('Failed to load attachments:', error))
+        .finally(() => setLoadingAvailable(false))
+    }
+  }, [pendingMode, companyId])
+
+  // Attachments to display in the UI.
+  // - Normal mode: use `attachments` prop (already linked to the entity)
+  // - Pending mode: convert `pendingAttachmentIds` to EntityAttachment format
+  //   (these are selected but not yet linked - linking happens after entity creation)
+  const visibleAttachments: EntityAttachment[] = pendingMode
+    ? availableAttachments
+        .filter(a => pendingAttachmentIds.includes(a.id))
+        .map(a => ({
+          link_id: a.id,
+          attachment_id: a.id,
+          original_filename: a.original_filename,
+          mime_type: a.mime_type,
+          size_bytes: a.size_bytes,
+          role: AttachmentRole.ORIGINAL,
+          sort_order: 0,
+          created_at: a.created_at,
+          status: a.status,
+        }))
+    : attachments
 
   // Check if position is visible on screen
   const isPositionVisible = (pos: Position, size: Size): boolean => {
@@ -432,8 +471,14 @@ export default function AttachmentManager({
     setLoadingAvailable(true)
     try {
       const response = await attachmentApi.list(companyId)
-      const linkedIds = new Set(attachments.map(a => a.attachment_id))
-      setAvailableAttachments(response.data.filter(a => !linkedIds.has(a.id)))
+      // In pending mode, filter out already selected IDs; otherwise filter out already linked attachments
+      if (pendingMode) {
+        const selectedIds = new Set(pendingAttachmentIds)
+        setAvailableAttachments(response.data.filter(a => !selectedIds.has(a.id)))
+      } else {
+        const linkedIds = new Set(attachments.map(a => a.attachment_id))
+        setAvailableAttachments(response.data.filter(a => !linkedIds.has(a.id)))
+      }
     } catch (error) {
       console.error('Failed to load attachments:', error)
     } finally {
@@ -464,6 +509,23 @@ export default function AttachmentManager({
   }
 
   const handleSelectExisting = async (attachment: Attachment) => {
+    // In pending mode, just add to pendingAttachmentIds
+    if (pendingMode) {
+      if (pendingAttachmentIds.includes(attachment.id)) {
+        // Already selected, remove it
+        onPendingSelectionChange?.(pendingAttachmentIds.filter(id => id !== attachment.id))
+      } else {
+        // Check max attachments
+        if (maxAttachments && pendingAttachmentIds.length >= maxAttachments) {
+          alert(`Max ${maxAttachments} bilaga${maxAttachments > 1 ? 'or' : ''} tillåtna`)
+          return
+        }
+        onPendingSelectionChange?.([...pendingAttachmentIds, attachment.id])
+      }
+      setShowSelectModal(false)
+      return
+    }
+
     if (!entityType || !entityId) return
 
     if (maxAttachments === 1 && attachments.length > 0) {
@@ -488,7 +550,9 @@ export default function AttachmentManager({
     }
   }
 
-  const canSelectExisting = allowUpload && companyId !== undefined && entityType !== undefined && entityId !== undefined
+  const canSelectExisting = allowUpload && companyId !== undefined && (
+    pendingMode || (entityType !== undefined && entityId !== undefined)
+  )
   const formatFileSize = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`
 
   if (isLoading) {
@@ -545,17 +609,17 @@ export default function AttachmentManager({
       <h2 className="text-xl font-bold mb-4">{labels.title}</h2>
 
       {/* Existing attachments list */}
-      {attachments.length > 0 && (
+      {visibleAttachments.length > 0 && (
         <div className="space-y-2 mb-4">
-          {attachments.map((attachment) => (
+          {visibleAttachments.map((attachment) => (
             <div
               key={attachment.link_id}
-              className={`flex items-center gap-3 p-3 bg-gray-50 rounded-lg ${
+              className={`flex items-center gap-3 p-3 ${pendingMode ? 'bg-indigo-50' : 'bg-gray-50'} rounded-lg ${
                 isPreviewable(attachment.mime_type) ? 'cursor-pointer hover:bg-gray-100' : ''
               }`}
               onClick={() => isPreviewable(attachment.mime_type) && handlePreview(attachment)}
             >
-              <FileText className="w-6 h-6 text-gray-400" />
+              <FileText className={`w-6 h-6 ${pendingMode ? 'text-indigo-600' : 'text-gray-400'}`} />
               <div className="flex-1">
                 <p className="text-sm font-medium">{attachment.original_filename}</p>
                 <p className="text-xs text-gray-500">{formatFileSize(attachment.size_bytes)}</p>
@@ -567,9 +631,16 @@ export default function AttachmentManager({
               >
                 <Download className="w-4 h-4" />
               </button>
-              {allowDelete && (
+              {(allowDelete || pendingMode) && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(attachment) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (pendingMode) {
+                      onPendingSelectionChange?.(pendingAttachmentIds.filter(id => id !== attachment.attachment_id))
+                    } else {
+                      handleDelete(attachment)
+                    }
+                  }}
                   className="p-2 text-red-600 hover:text-red-800"
                   title="Ta bort"
                 >
@@ -605,7 +676,7 @@ export default function AttachmentManager({
       )}
 
       {/* Empty state */}
-      {attachments.length === 0 && !selectedFile && (
+      {visibleAttachments.length === 0 && !selectedFile && (
         <div className="text-center py-8 text-gray-500">
           <Upload className="w-12 h-12 mx-auto mb-2 text-gray-300" />
           <p className="mb-4">{labels.emptyState}</p>
@@ -617,7 +688,7 @@ export default function AttachmentManager({
         <div className="flex gap-2">
           <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
             <Upload className="w-4 h-4" />
-            {attachments.length > 0 ? (labels.addMoreButton || labels.uploadButton) : labels.uploadButton}
+            {visibleAttachments.length > 0 ? (labels.addMoreButton || labels.uploadButton) : labels.uploadButton}
             <input type="file" accept={acceptedFileTypes} onChange={handleFileSelect} className="hidden" />
           </label>
           {canSelectExisting && (
@@ -633,7 +704,7 @@ export default function AttachmentManager({
       )}
 
       {/* Locked indicator */}
-      {isLocked && attachments.length > 0 && (
+      {isLocked && visibleAttachments.length > 0 && (
         <div className="flex items-center justify-end gap-1 text-sm text-gray-400 mt-2">
           <Lock className="w-3 h-3" />
           <span>Låst</span>
@@ -650,7 +721,7 @@ export default function AttachmentManager({
       {/* Floating Preview Panel */}
       {previewAttachment && previewMode === 'floating' && !isMinimized && createPortal(
         <div
-          className="fixed z-40 bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+          className="fixed z-[60] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
           style={{
             left: panelPosition.x,
             top: panelPosition.y,
@@ -754,7 +825,7 @@ export default function AttachmentManager({
 
       {/* Minimized Preview Bar */}
       {previewAttachment && isMinimized && createPortal(
-        <div className="fixed bottom-4 right-4 z-40 bg-white rounded-lg shadow-lg border border-gray-200 flex items-center gap-3 px-4 py-2 max-w-xs">
+        <div className="fixed bottom-4 right-4 z-[60] bg-white rounded-lg shadow-lg border border-gray-200 flex items-center gap-3 px-4 py-2 max-w-xs">
           <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
           <span className="text-sm text-gray-900 truncate flex-1" title={previewAttachment.original_filename}>
             {previewAttachment.original_filename}

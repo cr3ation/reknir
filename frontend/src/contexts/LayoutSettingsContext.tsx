@@ -2,10 +2,18 @@ import { createContext, useContext, useState, ReactNode, useCallback } from 'rea
 
 export type PreviewPosition = 'right' | 'bottom-right' | 'left' | 'bottom-left'
 export type PreviewSize = 'compact' | 'standard' | 'large'
+export type ModalType = 'verification' | 'invoice' | 'supplierInvoice'
+
+export interface ModalMaximizedSettings {
+  verification: boolean
+  invoice: boolean
+  supplierInvoice: boolean
+}
 
 export interface LayoutSettings {
   previewPosition: PreviewPosition
   previewSize: PreviewSize
+  modalMaximized: ModalMaximizedSettings
 }
 
 // Predefined size presets (vertical/portrait format for PDFs and receipts)
@@ -18,6 +26,11 @@ export const PREVIEW_SIZE_PRESETS: Record<PreviewSize, { width: number; height: 
 const DEFAULT_SETTINGS: LayoutSettings = {
   previewPosition: 'right',
   previewSize: 'standard',
+  modalMaximized: {
+    verification: false,
+    invoice: false,
+    supplierInvoice: false,
+  },
 }
 
 const STORAGE_KEY = 'reknir_layout_settings'
@@ -86,4 +99,20 @@ export function useLayoutSettings() {
     throw new Error('useLayoutSettings must be used within a LayoutSettingsProvider')
   }
   return context
+}
+
+export function useModalMaximized(modalType: ModalType) {
+  const { settings, updateSettings } = useLayoutSettings()
+  const isMaximized = settings.modalMaximized?.[modalType] ?? false
+
+  const toggleMaximized = useCallback(() => {
+    updateSettings({
+      modalMaximized: {
+        ...settings.modalMaximized,
+        [modalType]: !isMaximized,
+      },
+    })
+  }, [settings.modalMaximized, modalType, isMaximized, updateSettings])
+
+  return { isMaximized, toggleMaximized }
 }
