@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
 import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine } from '@/types'
 import { VATReportingPeriod, AccountingBasis } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import { useLayoutSettings, PREVIEW_SIZE_PRESETS, PreviewSize } from '@/contexts/LayoutSettingsContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function SettingsPage() {
   const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
+  const { settings: layoutSettings, updateSettings: updateLayoutSettings } = useLayoutSettings()
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [accountCountsByFiscalYear, setAccountCountsByFiscalYear] = useState<Record<number, number>>({})
@@ -27,7 +29,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
-  const [activeTab, setActiveTab] = useState<'company' | 'fiscal' | 'templates' | 'import'>('company')
+  const [activeTab, setActiveTab] = useState<'company' | 'fiscal' | 'templates' | 'import' | 'layout'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -725,6 +727,16 @@ export default function SettingsPage() {
             }`}
           >
             Import/Export
+          </button>
+          <button
+            onClick={() => setActiveTab('layout')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'layout'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Utseende
           </button>
         </nav>
       </div>
@@ -1830,6 +1842,187 @@ export default function SettingsPage() {
                   {loading ? 'Sparar...' : (editingTemplate ? 'Uppdatera' : 'Skapa')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Layout Tab */}
+      {activeTab === 'layout' && (
+        <div>
+          <div className="card mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Layout className="w-5 h-5 text-gray-600" />
+              <h2 className="text-xl font-semibold">Utseende</h2>
+            </div>
+
+            {/* Preview Position Settings */}
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Förhandsvisning av bilagor</h3>
+              <p className="text-gray-600 mb-4">
+                Välj var förhandsvisningspanelen ska öppnas som standard när du klickar på en bilaga.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  layoutSettings.previewPosition === 'left'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="previewPosition"
+                    value="left"
+                    checked={layoutSettings.previewPosition === 'left'}
+                    onChange={() => updateLayoutSettings({ previewPosition: 'left' })}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Vänster sida</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Panelen öppnas till vänster på skärmen
+                    </div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  layoutSettings.previewPosition === 'right'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="previewPosition"
+                    value="right"
+                    checked={layoutSettings.previewPosition === 'right'}
+                    onChange={() => updateLayoutSettings({ previewPosition: 'right' })}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Höger sida</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Panelen öppnas till höger på skärmen
+                    </div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  layoutSettings.previewPosition === 'bottom-left'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="previewPosition"
+                    value="bottom-left"
+                    checked={layoutSettings.previewPosition === 'bottom-left'}
+                    onChange={() => updateLayoutSettings({ previewPosition: 'bottom-left' })}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Nedre vänstra hörnet</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Panelen öppnas i nedre vänstra hörnet
+                    </div>
+                  </div>
+                </label>
+
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  layoutSettings.previewPosition === 'bottom-right'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="previewPosition"
+                    value="bottom-right"
+                    checked={layoutSettings.previewPosition === 'bottom-right'}
+                    onChange={() => updateLayoutSettings({ previewPosition: 'bottom-right' })}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Nedre högra hörnet</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Panelen öppnas i nedre högra hörnet
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Default Size Settings */}
+            <div className="mb-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Standardstorlek</h3>
+              <p className="text-gray-600 mb-4">
+                Välj standardstorleken för förhandsvisningspanelen.
+              </p>
+
+              <div className="grid grid-cols-3 gap-4 max-w-2xl">
+                {(Object.entries(PREVIEW_SIZE_PRESETS) as [PreviewSize, typeof PREVIEW_SIZE_PRESETS[PreviewSize]][]).map(([sizeKey, preset]) => (
+                  <label
+                    key={sizeKey}
+                    className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                      layoutSettings.previewSize === sizeKey
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="previewSize"
+                      value={sizeKey}
+                      checked={layoutSettings.previewSize === sizeKey}
+                      onChange={() => updateLayoutSettings({ previewSize: sizeKey })}
+                      className="sr-only"
+                    />
+                    {/* Visual size representation */}
+                    <div className="relative w-full h-28 mb-3 flex items-end justify-center">
+                      <div
+                        className={`rounded transition-all ${
+                          layoutSettings.previewSize === sizeKey ? 'bg-blue-400' : 'bg-gray-300'
+                        }`}
+                        style={{
+                          width: `${(preset.width / 520) * 70}%`,
+                          height: `${(preset.height / 760) * 100}%`,
+                          minWidth: '35px',
+                          minHeight: '60px',
+                        }}
+                      />
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-gray-900">{preset.label}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {preset.width} × {preset.height} px
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-6">
+              <p className="text-sm text-blue-800">
+                <strong>Tips:</strong> Du kan alltid flytta och ändra storlek på förhandsvisningspanelen
+                när den är öppen. Positionen sparas automatiskt under din session.
+              </p>
+            </div>
+
+            {/* Reset Position Button */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Återställ position</h3>
+              <p className="text-gray-600 mb-4">
+                Om förhandsvisningspanelen har hamnat utanför skärmen kan du återställa dess position.
+              </p>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem('reknir_preview_panel_state')
+                  setMessage('Panelens position har återställts. Öppna en bilaga för att se den på standardpositionen.')
+                  setMessageType('success')
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Återställ panelposition
+              </button>
             </div>
           </div>
         </div>

@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react'
-import { FileText, Download, Trash2, Upload, Lock, X, FolderOpen } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { FileText, Download, Trash2, Upload, Lock, X, FolderOpen, Maximize2, Minus } from 'lucide-react'
 import type { EntityAttachment, Attachment } from '@/types'
 import { EntityType } from '@/types'
 import { attachmentApi, supplierInvoiceApi, expenseApi, verificationApi } from '@/services/api'
 import { useDropZone } from '@/hooks/useDropZone'
+import { useLayoutSettings, PREVIEW_SIZE_PRESETS, type PreviewPosition } from '@/contexts/LayoutSettingsContext'
+
+// ============================================================================
+// Types & Interfaces
+// ============================================================================
 
 export interface AttachmentManagerConfig {
   maxAttachments?: number       // undefined = unlimited
@@ -23,42 +29,68 @@ export interface AttachmentManagerLabels {
   uploadError?: string          // Error message on upload failure
   deleteError?: string          // Error message on delete failure
   downloadError?: string        // Error message on download failure
-  // Drag-and-drop labels
-  dropZoneText?: string         // "Släpp filer här för att ladda upp"
-  dropZoneLockedText?: string   // "Uppladdning ej tillåtet"
-  // Select existing file labels
-  selectExistingButton?: string // "Välj befintlig fil"
-  selectExistingTitle?: string  // "Välj fil"
-  selectExistingEmpty?: string  // "Inga tillgängliga filer"
-  // Replace confirmation
-  replaceConfirm?: string       // "Det finns redan en bilaga. Vill du ersätta den?"
+  dropZoneText?: string
+  dropZoneLockedText?: string
+  selectExistingButton?: string
+  selectExistingTitle?: string
+  selectExistingEmpty?: string
+  replaceConfirm?: string
 }
 
 export interface AttachmentManagerProps {
-  // Data
   attachments: EntityAttachment[]
-
-  // Configuration
   config: AttachmentManagerConfig
-
-  // Labels (all user-facing text)
   labels: AttachmentManagerLabels
-
-  // Callbacks
   onUpload: (file: File) => Promise<void>
   onDelete: (attachment: EntityAttachment) => Promise<void>
   onDownload: (attachment: EntityAttachment) => Promise<void>
-
-  // Optional: For "select existing file" feature
-  // When provided, enables the "select existing" button
   companyId?: number
   entityType?: EntityType
   entityId?: number
-  onAttachmentsChange?: () => void  // Called after linking to refresh attachments list
-
-  // External loading state
+  onAttachmentsChange?: () => void
   isLoading?: boolean
 }
+
+interface Position { x: number; y: number }
+interface Size { width: number; height: number }
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+const SESSION_STORAGE_KEY = 'reknir_preview_panel_state'
+
+function getInitialPosition(previewPosition: PreviewPosition, width: number, height: number): Position {
+  const padding = 20
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  switch (previewPosition) {
+    case 'right': return { x: vw - width - padding, y: padding + 60 }
+    case 'left': return { x: padding, y: padding + 60 }
+    case 'bottom-right': return { x: vw - width - padding, y: vh - height - padding }
+    case 'bottom-left': return { x: padding, y: vh - height - padding }
+    default: return { x: vw - width - padding, y: padding + 60 }
+  }
+}
+
+function loadPanelState(): { position: Position; size: Size } | null {
+  try {
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    if (stored) return JSON.parse(stored)
+  } catch { /* ignore */ }
+  return null
+}
+
+function savePanelState(position: Position, size: Size): void {
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ position, size }))
+  } catch { /* ignore */ }
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
 
 export default function AttachmentManager({
   attachments,
@@ -73,11 +105,28 @@ export default function AttachmentManager({
   onAttachmentsChange,
   isLoading = false,
 }: AttachmentManagerProps) {
+  const { settings: layoutSettings } = useLayoutSettings()
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<EntityAttachment | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+
+  // Floating panel state
+  const [previewMode, setPreviewMode] = useState<'floating' | 'modal'>('floating')
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [panelPosition, setPanelPosition] = useState<Position>({ x: 0, y: 0 })
+  const [panelSize, setPanelSize] = useState<Size>({ width: 420, height: 620 })
+  const panelInitialized = useRef(false)
+
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null)
+
+  // Resize state
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number; posX: number; posY: number; dir: string } | null>(null)
 
   // Select existing file modal state
   const [showSelectModal, setShowSelectModal] = useState(false)
@@ -92,36 +141,178 @@ export default function AttachmentManager({
     maxFileSizeMB = 30,
   } = config
 
-  // Check if more uploads are allowed
   const canUploadMore = allowUpload && (maxAttachments === undefined || attachments.length < maxAttachments)
-
-  // Check if component is fully locked (read-only)
   const isLocked = !allowUpload && !allowDelete
 
+  // Check if position is visible on screen
+  const isPositionVisible = (pos: Position, size: Size): boolean => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    // At least 100px of the panel should be visible
+    const minVisible = 100
+    return (
+      pos.x > -size.width + minVisible &&
+      pos.x < vw - minVisible &&
+      pos.y > 0 &&
+      pos.y < vh - minVisible
+    )
+  }
+
+  // Initialize panel position/size from session storage or settings
+  useEffect(() => {
+    if (!panelInitialized.current && previewAttachment) {
+      const saved = loadPanelState()
+      if (saved && isPositionVisible(saved.position, saved.size)) {
+        setPanelPosition(saved.position)
+        setPanelSize(saved.size)
+      } else {
+        // Reset to default if saved position is off-screen or doesn't exist
+        const preset = PREVIEW_SIZE_PRESETS[layoutSettings.previewSize]
+        setPanelSize({ width: preset.width, height: preset.height })
+        setPanelPosition(getInitialPosition(layoutSettings.previewPosition, preset.width, preset.height))
+        // Clear invalid saved state
+        if (saved) {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY)
+        }
+      }
+      panelInitialized.current = true
+    }
+  }, [previewAttachment, layoutSettings])
+
+  // Drag handlers
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    dragStartRef.current = { x: e.clientX, y: e.clientY, posX: panelPosition.x, posY: panelPosition.y }
+    setIsDragging(true)
+  }, [panelPosition])
+
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartRef.current) return
+      const dx = e.clientX - dragStartRef.current.x
+      const dy = e.clientY - dragStartRef.current.y
+      const newX = Math.max(50 - panelSize.width, Math.min(window.innerWidth - 50, dragStartRef.current.posX + dx))
+      const newY = Math.max(0, Math.min(window.innerHeight - 50, dragStartRef.current.posY + dy))
+      setPanelPosition({ x: newX, y: newY })
+    }
+
+    const handleMouseUp = () => {
+      if (dragStartRef.current) {
+        dragStartRef.current = null
+        setIsDragging(false)
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    document.body.style.userSelect = 'none'
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.userSelect = ''
+    }
+  }, [isDragging, panelPosition, panelSize])
+
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent, direction: string) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    resizeStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      w: panelSize.width,
+      h: panelSize.height,
+      posX: panelPosition.x,
+      posY: panelPosition.y,
+      dir: direction
+    }
+    setIsResizing(true)
+  }, [panelSize, panelPosition])
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeStartRef.current) return
+      const { x, y, w, h, posX, posY, dir } = resizeStartRef.current
+      const dx = e.clientX - x
+      const dy = e.clientY - y
+
+      let newW = w, newH = h, newX = posX, newY = posY
+
+      if (dir.includes('e')) {
+        newW = Math.max(300, Math.min(window.innerWidth * 0.9, w + dx))
+      }
+      if (dir.includes('w')) {
+        const proposedW = w - dx
+        newW = Math.max(300, Math.min(window.innerWidth * 0.9, proposedW))
+        // Adjust position based on actual width change
+        newX = posX + (w - newW)
+      }
+      if (dir.includes('s')) {
+        newH = Math.max(200, Math.min(window.innerHeight * 0.9, h + dy))
+      }
+      if (dir.includes('n')) {
+        const proposedH = h - dy
+        newH = Math.max(200, Math.min(window.innerHeight * 0.9, proposedH))
+        // Adjust position based on actual height change
+        newY = posY + (h - newH)
+      }
+
+      setPanelSize({ width: newW, height: newH })
+      setPanelPosition({ x: newX, y: newY })
+    }
+
+    const handleMouseUp = () => {
+      if (resizeStartRef.current) {
+        resizeStartRef.current = null
+        setIsResizing(false)
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    document.body.style.userSelect = 'none'
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing])
+
+  // Save panel state when drag/resize ends
+  useEffect(() => {
+    if (!isDragging && !isResizing && panelInitialized.current) {
+      savePanelState(panelPosition, panelSize)
+    }
+  }, [isDragging, isResizing, panelPosition, panelSize])
+
+  // File handlers
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      // Client-side file size validation
       if (file.size > maxFileSizeMB * 1024 * 1024) {
         alert(`Filen är för stor. Max ${maxFileSizeMB} MB.`)
         return
       }
       setSelectedFile(file)
     }
-    // Clear input to allow selecting the same file again
     event.target.value = ''
   }
 
   const handleUpload = async () => {
     if (!selectedFile) return
-
     try {
       setUploading(true)
       await onUpload(selectedFile)
       setSelectedFile(null)
-      if (labels.uploadSuccess) {
-        alert(labels.uploadSuccess)
-      }
+      if (labels.uploadSuccess) alert(labels.uploadSuccess)
     } catch (error) {
       console.error('Failed to upload attachment:', error)
       alert(labels.uploadError || 'Kunde inte ladda upp bilagan')
@@ -132,7 +323,6 @@ export default function AttachmentManager({
 
   const handleDelete = async (attachment: EntityAttachment) => {
     if (!confirm(labels.deleteConfirm(attachment.original_filename))) return
-
     try {
       await onDelete(attachment)
     } catch (error) {
@@ -150,11 +340,13 @@ export default function AttachmentManager({
     }
   }
 
-  // Preview handlers - uses attachmentApi directly since download endpoint is universal
+  // Preview handlers
   const handlePreview = async (attachment: EntityAttachment) => {
     try {
       setPreviewLoading(true)
       setPreviewAttachment(attachment)
+      setPreviewMode('floating')
+      setIsMinimized(false)
       const response = await attachmentApi.download(attachment.attachment_id)
       const blob = new Blob([response.data], { type: attachment.mime_type })
       const url = window.URL.createObjectURL(blob)
@@ -169,38 +361,36 @@ export default function AttachmentManager({
   }
 
   const closePreview = () => {
-    if (previewUrl) {
-      window.URL.revokeObjectURL(previewUrl)
-    }
+    if (previewUrl) window.URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
     setPreviewAttachment(null)
+    panelInitialized.current = false
   }
 
-  // Cleanup preview URL on unmount
   useEffect(() => {
     return () => {
-      if (previewUrl) {
-        window.URL.revokeObjectURL(previewUrl)
-      }
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl)
     }
   }, [previewUrl])
 
-  // Check if file type is previewable
-  const isPreviewable = (mimeType: string) => {
-    return mimeType.startsWith('image/') || mimeType === 'application/pdf'
-  }
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewAttachment) closePreview()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [previewAttachment])
 
-  // Handle files dropped via drag-and-drop
+  const isPreviewable = (mimeType: string) => mimeType.startsWith('image/') || mimeType === 'application/pdf'
+
+  // Drag and drop handlers
   const handleFilesDropped = async (files: File[]) => {
     if (!allowUpload) return
 
-    // Check if we need to replace (single attachment mode with existing attachment)
     if (maxAttachments === 1 && attachments.length > 0) {
       const confirmMessage = labels.replaceConfirm || 'Det finns redan en bilaga. Vill du ersätta den?'
-      if (!confirm(confirmMessage)) {
-        return
-      }
-      // Delete existing attachment before uploading new one
+      if (!confirm(confirmMessage)) return
       try {
         await onDelete(attachments[0])
       } catch (error) {
@@ -210,22 +400,16 @@ export default function AttachmentManager({
       }
     }
 
-    // Calculate remaining slots
-    const remainingSlots = maxAttachments !== undefined
-      ? maxAttachments - attachments.length
-      : files.length
+    const remainingSlots = maxAttachments !== undefined ? maxAttachments - attachments.length : files.length
     const filesToUpload = files.slice(0, Math.max(0, remainingSlots))
 
     if (filesToUpload.length < files.length) {
       alert(`Endast ${filesToUpload.length} av ${files.length} filer kunde laddas upp (max ${maxAttachments} bilagor).`)
     }
 
-    // Upload each file
     setUploading(true)
     try {
-      for (const file of filesToUpload) {
-        await onUpload(file)
-      }
+      for (const file of filesToUpload) await onUpload(file)
     } catch (error) {
       console.error('Failed to upload:', error)
       alert(labels.uploadError || 'Kunde inte ladda upp bilagan')
@@ -234,7 +418,6 @@ export default function AttachmentManager({
     }
   }
 
-  // Drop zone hook
   const { isDraggedOver, dropZoneProps } = useDropZone({
     onFilesDropped: handleFilesDropped,
     acceptedFileTypes,
@@ -243,17 +426,14 @@ export default function AttachmentManager({
     onError: (message) => alert(message),
   })
 
-  // Load available attachments for "select existing" modal
+  // Select existing file handlers
   const loadAvailableAttachments = async () => {
     if (!companyId) return
-
     setLoadingAvailable(true)
     try {
       const response = await attachmentApi.list(companyId)
-      // Filter out attachments that are already linked to this entity
       const linkedIds = new Set(attachments.map(a => a.attachment_id))
-      const available = response.data.filter(a => !linkedIds.has(a.id))
-      setAvailableAttachments(available)
+      setAvailableAttachments(response.data.filter(a => !linkedIds.has(a.id)))
     } catch (error) {
       console.error('Failed to load attachments:', error)
     } finally {
@@ -261,18 +441,13 @@ export default function AttachmentManager({
     }
   }
 
-  // Open select existing modal
   const handleOpenSelectModal = () => {
     setShowSelectModal(true)
     loadAvailableAttachments()
   }
 
-  // Link attachment to entity based on entity type
   const linkAttachmentToEntity = async (attachmentId: number): Promise<void> => {
-    if (!entityType || !entityId) {
-      throw new Error('Entity type and ID required for linking')
-    }
-
+    if (!entityType || !entityId) throw new Error('Entity type and ID required for linking')
     switch (entityType) {
       case EntityType.SUPPLIER_INVOICE:
         await supplierInvoiceApi.linkAttachment(entityId, attachmentId)
@@ -288,17 +463,12 @@ export default function AttachmentManager({
     }
   }
 
-  // Handle selecting an existing attachment
   const handleSelectExisting = async (attachment: Attachment) => {
     if (!entityType || !entityId) return
 
-    // Check if we need to replace (single attachment mode with existing attachment)
     if (maxAttachments === 1 && attachments.length > 0) {
       const confirmMessage = labels.replaceConfirm || 'Det finns redan en bilaga. Vill du ersätta den?'
-      if (!confirm(confirmMessage)) {
-        return
-      }
-      // Delete existing attachment before linking new one
+      if (!confirm(confirmMessage)) return
       try {
         await onDelete(attachments[0])
       } catch (error) {
@@ -311,7 +481,6 @@ export default function AttachmentManager({
     try {
       await linkAttachmentToEntity(attachment.id)
       setShowSelectModal(false)
-      // Notify parent to refresh attachments
       onAttachmentsChange?.()
     } catch (error) {
       console.error('Failed to link attachment:', error)
@@ -319,23 +488,25 @@ export default function AttachmentManager({
     }
   }
 
-  // Check if "select existing" feature is available
   const canSelectExisting = allowUpload && companyId !== undefined && entityType !== undefined && entityId !== undefined
-
-  const formatFileSize = (bytes: number) => {
-    return `${(bytes / 1024).toFixed(1)} KB`
-  }
+  const formatFileSize = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`
 
   if (isLoading) {
     return (
       <div className="card">
         <h2 className="text-xl font-bold mb-4">{labels.title}</h2>
-        <div className="text-center py-8 text-gray-500">
-          <p>Laddar...</p>
-        </div>
+        <div className="text-center py-8 text-gray-500"><p>Laddar...</p></div>
       </div>
     )
   }
+
+  // Render resize handle
+  const ResizeHandle = ({ direction, className }: { direction: string; className: string }) => (
+    <div
+      onMouseDown={(e) => handleResizeStart(e, direction)}
+      className={`absolute ${className} z-10`}
+    />
+  )
 
   return (
     <div
@@ -359,16 +530,12 @@ export default function AttachmentManager({
             {allowUpload ? (
               <>
                 <Upload className="w-12 h-12 mx-auto mb-2 text-blue-500" />
-                <p className="text-blue-700 font-medium">
-                  {labels.dropZoneText || 'Släpp filer här för att ladda upp'}
-                </p>
+                <p className="text-blue-700 font-medium">{labels.dropZoneText || 'Släpp filer här för att ladda upp'}</p>
               </>
             ) : (
               <>
                 <Lock className="w-12 h-12 mx-auto mb-2 text-red-400" />
-                <p className="text-red-700 font-medium">
-                  {labels.dropZoneLockedText || 'Uppladdning ej tillåtet'}
-                </p>
+                <p className="text-red-700 font-medium">{labels.dropZoneLockedText || 'Uppladdning ej tillåtet'}</p>
               </>
             )}
           </div>
@@ -391,9 +558,7 @@ export default function AttachmentManager({
               <FileText className="w-6 h-6 text-gray-400" />
               <div className="flex-1">
                 <p className="text-sm font-medium">{attachment.original_filename}</p>
-                <p className="text-xs text-gray-500">
-                  {formatFileSize(attachment.size_bytes)}
-                </p>
+                <p className="text-xs text-gray-500">{formatFileSize(attachment.size_bytes)}</p>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); handleDownload(attachment) }}
@@ -423,15 +588,9 @@ export default function AttachmentManager({
             <FileText className="w-6 h-6 text-blue-600" />
             <div className="flex-1">
               <p className="text-sm font-medium text-blue-900">{selectedFile.name}</p>
-              <p className="text-xs text-blue-700">
-                {formatFileSize(selectedFile.size)}
-              </p>
+              <p className="text-xs text-blue-700">{formatFileSize(selectedFile.size)}</p>
             </div>
-            <button
-              onClick={() => setSelectedFile(null)}
-              className="text-blue-600 hover:text-blue-800"
-              title="Avbryt"
-            >
+            <button onClick={() => setSelectedFile(null)} className="text-blue-600 hover:text-blue-800" title="Avbryt">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -458,15 +617,8 @@ export default function AttachmentManager({
         <div className="flex gap-2">
           <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
             <Upload className="w-4 h-4" />
-            {attachments.length > 0
-              ? (labels.addMoreButton || labels.uploadButton)
-              : labels.uploadButton}
-            <input
-              type="file"
-              accept={acceptedFileTypes}
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+            {attachments.length > 0 ? (labels.addMoreButton || labels.uploadButton) : labels.uploadButton}
+            <input type="file" accept={acceptedFileTypes} onChange={handleFileSelect} className="hidden" />
           </label>
           {canSelectExisting && (
             <button
@@ -495,31 +647,165 @@ export default function AttachmentManager({
         </p>
       )}
 
-      {/* Preview modal */}
-      {previewAttachment && (
+      {/* Floating Preview Panel */}
+      {previewAttachment && previewMode === 'floating' && !isMinimized && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-          onClick={closePreview}
+          className="fixed z-40 bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+          style={{
+            left: panelPosition.x,
+            top: panelPosition.y,
+            width: panelSize.width,
+            height: panelSize.height,
+            transition: isDragging || isResizing ? 'none' : 'box-shadow 0.2s',
+          }}
         >
+          {/* Header - Draggable */}
+          <div
+            onMouseDown={handleDragStart}
+            className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200 select-none"
+            style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+              <span className="text-sm font-medium text-gray-900 truncate">
+                {previewAttachment.original_filename}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 ml-2">
+              <button
+                onClick={() => setIsMinimized(true)}
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                title="Minimera"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPreviewMode('modal')}
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                title="Maximera"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={closePreview}
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                title="Stäng"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-auto bg-gray-100 p-2">
+            {previewLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">Laddar...</p>
+              </div>
+            ) : previewUrl ? (
+              <>
+                {previewAttachment.mime_type.startsWith('image/') && (
+                  <img
+                    src={previewUrl}
+                    alt={previewAttachment.original_filename}
+                    className="max-w-full h-auto mx-auto bg-white shadow-sm rounded"
+                  />
+                )}
+                {previewAttachment.mime_type === 'application/pdf' && (
+                  <iframe
+                    src={previewUrl}
+                    title={previewAttachment.original_filename}
+                    className="w-full h-full bg-white rounded"
+                    style={{ minHeight: '100%' }}
+                  />
+                )}
+                {!previewAttachment.mime_type.startsWith('image/') && previewAttachment.mime_type !== 'application/pdf' && (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500 text-center">Förhandsvisning stöds inte för denna filtyp</p>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end px-4 py-2 bg-gray-50 border-t border-gray-200">
+            <button
+              onClick={() => handleDownload(previewAttachment)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Ladda ner
+            </button>
+          </div>
+
+          {/* Resize Handles */}
+          <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" />
+          <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" />
+          <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" />
+          <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" />
+          <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" />
+          <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" />
+          <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" />
+          <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" />
+        </div>,
+        document.body
+      )}
+
+      {/* Minimized Preview Bar */}
+      {previewAttachment && isMinimized && createPortal(
+        <div className="fixed bottom-4 right-4 z-40 bg-white rounded-lg shadow-lg border border-gray-200 flex items-center gap-3 px-4 py-2 max-w-xs">
+          <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <span className="text-sm text-gray-900 truncate flex-1" title={previewAttachment.original_filename}>
+            {previewAttachment.original_filename}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsMinimized(false)}
+              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Återställ"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={closePreview}
+              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="Stäng"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Full-screen Modal (maximized mode) */}
+      {previewAttachment && previewMode === 'modal' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={closePreview}>
           <div
             className="relative bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header */}
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold truncate pr-4">
-                {previewAttachment.original_filename}
-              </h3>
-              <button
-                onClick={closePreview}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
-                title="Stäng"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <h3 className="text-lg font-semibold truncate pr-4">{previewAttachment.original_filename}</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPreviewMode('floating')}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                  title="Flytande panel"
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={closePreview}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                  title="Stäng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Modal content */}
             <div className="p-4 overflow-auto max-h-[calc(90vh-8rem)]">
               {previewLoading ? (
                 <div className="flex items-center justify-center py-16">
@@ -527,42 +813,28 @@ export default function AttachmentManager({
                 </div>
               ) : previewUrl ? (
                 <>
-                  {previewAttachment.mime_type.startsWith('image/') ? (
-                    <img
-                      src={previewUrl}
-                      alt={previewAttachment.original_filename}
-                      className="max-w-full h-auto mx-auto"
-                    />
-                  ) : previewAttachment.mime_type === 'application/pdf' ? (
-                    <iframe
-                      src={previewUrl}
-                      title={previewAttachment.original_filename}
-                      className="w-full h-[70vh]"
-                    />
-                  ) : (
-                    <p className="text-gray-500 text-center py-8">
-                      Förhandsvisning stöds inte för denna filtyp
-                    </p>
+                  {previewAttachment.mime_type.startsWith('image/') && (
+                    <img src={previewUrl} alt={previewAttachment.original_filename} className="max-w-full h-auto mx-auto" />
+                  )}
+                  {previewAttachment.mime_type === 'application/pdf' && (
+                    <iframe src={previewUrl} title={previewAttachment.original_filename} className="w-full h-[70vh]" />
+                  )}
+                  {!previewAttachment.mime_type.startsWith('image/') && previewAttachment.mime_type !== 'application/pdf' && (
+                    <p className="text-gray-500 text-center py-8">Förhandsvisning stöds inte för denna filtyp</p>
                   )}
                 </>
               ) : null}
             </div>
 
-            {/* Modal footer */}
             <div className="flex items-center justify-end gap-2 p-4 border-t">
               <button
-                onClick={() => {
-                  handleDownload(previewAttachment)
-                }}
+                onClick={() => handleDownload(previewAttachment)}
                 className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-md"
               >
                 <Download className="w-4 h-4" />
                 Ladda ner
               </button>
-              <button
-                onClick={closePreview}
-                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md"
-              >
+              <button onClick={closePreview} className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md">
                 Stäng
               </button>
             </div>
@@ -572,19 +844,10 @@ export default function AttachmentManager({
 
       {/* Select existing file modal */}
       {showSelectModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-          onClick={() => setShowSelectModal(false)}
-        >
-          <div
-            className="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal header */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowSelectModal(false)}>
+          <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">
-                {labels.selectExistingTitle || 'Välj fil'}
-              </h3>
+              <h3 className="text-lg font-semibold">{labels.selectExistingTitle || 'Välj fil'}</h3>
               <button
                 onClick={() => setShowSelectModal(false)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
@@ -594,7 +857,6 @@ export default function AttachmentManager({
               </button>
             </div>
 
-            {/* Modal content */}
             <div className="p-4 max-h-[60vh] overflow-auto">
               {loadingAvailable ? (
                 <div className="flex items-center justify-center py-8">
@@ -616,9 +878,7 @@ export default function AttachmentManager({
                       <FileText className="w-6 h-6 text-gray-400" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{attachment.original_filename}</p>
-                        <p className="text-xs text-gray-500">
-                          {formatFileSize(attachment.size_bytes)}
-                        </p>
+                        <p className="text-xs text-gray-500">{formatFileSize(attachment.size_bytes)}</p>
                       </div>
                     </button>
                   ))}
@@ -626,12 +886,8 @@ export default function AttachmentManager({
               )}
             </div>
 
-            {/* Modal footer */}
             <div className="flex items-center justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setShowSelectModal(false)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md"
-              >
+              <button onClick={() => setShowSelectModal(false)} className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md">
                 Avbryt
               </button>
             </div>
