@@ -146,6 +146,9 @@ export default function DraggableModal({
 }: DraggableModalProps) {
   const { isMaximized, toggleMaximized } = useModalMaximized(modalType)
 
+  // Compute split-view mode (pinned with right panel)
+  const isSplitView = isPinned && !!rightPanel
+
   // Position null means centered (default state)
   const [position, setPosition] = useState<Position | null>(null)
   const [size, setSize] = useState<Size>({ width: defaultWidth, height: defaultHeight })
@@ -337,11 +340,15 @@ export default function DraggableModal({
     }
   }, [pinnedSide])
 
-  // Get modal style
-  const getModalStyle = useCallback((): React.CSSProperties => {
-    if (isPinned) {
-      return getPinnedStyle()
-    }
+  // Get modal panel style (handles all modes)
+  const getModalPanelStyle = useCallback((): React.CSSProperties | undefined => {
+    // Maximized mode (not in split-view) - CSS handles via fixed inset-2
+    if (isMaximized && !isSplitView) return undefined
+    // Split-view mode - CSS handles via w-1/2 h-full
+    if (isSplitView) return undefined
+    // Pinned mode (without right panel) - dock to side
+    if (isPinned) return getPinnedStyle()
+    // Floating mode - use position/size
     const effectivePos = getEffectivePosition()
     return {
       position: 'fixed',
@@ -351,183 +358,134 @@ export default function DraggableModal({
       height: size.height,
       transition: isDragging || isResizing ? 'none' : 'box-shadow 0.2s',
     }
-  }, [isPinned, getPinnedStyle, getEffectivePosition, size, isDragging, isResizing])
+  }, [isMaximized, isSplitView, isPinned, getPinnedStyle, getEffectivePosition, size, isDragging, isResizing])
 
   // Render minimized bar (if minimized)
   if (allowMinimize && isMinimized && minimizedContent) {
     return createPortal(minimizedContent, document.body)
   }
 
-  const modalContent = (
+  // Unified return - single JSX tree for all modes
+  // Layout changes via CSS, children always in same position
+  return createPortal(
     <div
-      className={`bg-white rounded-lg shadow-xl flex flex-col overflow-hidden ${
-        isMaximized ? 'fixed inset-2' : ''
+      className={`fixed z-50 ${
+        isSplitView || showBackdrop ? 'inset-0' : ''
       }`}
-      style={isMaximized ? undefined : getModalStyle()}
+      style={!isSplitView && !showBackdrop && isMaximized ? { inset: 0 } : undefined}
     >
-      {/* Draggable header */}
+      {/* Backdrop */}
+      {(showBackdrop || isSplitView) && (
+        <div className="absolute inset-0 bg-black bg-opacity-50" />
+      )}
+
+      {/* Split-view container - layout changes via CSS */}
       <div
-        className="px-6 py-4 border-b border-gray-200 bg-white flex justify-between items-center select-none flex-shrink-0"
-        onMouseDown={isMaximized || isPinned ? undefined : handleDragStart}
-        style={isMaximized || isPinned ? undefined : { cursor: isDragging ? 'grabbing' : 'grab' }}
+        className={isSplitView ? 'absolute inset-2 flex gap-2' : ''}
       >
-        <h2 className="text-2xl font-bold truncate flex-1">{title}</h2>
-        <div className="flex items-center gap-2 ml-4">
-          {/* Pin button (before other actions) */}
-          {onTogglePinned && (
-            <button
-              type="button"
-              onClick={onTogglePinned}
-              disabled={!canPin && !isPinned}
-              className={`p-1.5 rounded transition-colors ${
-                isPinned
-                  ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
-                  : canPin
-                    ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                    : 'text-gray-300 cursor-not-allowed'
-              }`}
-              title={isPinned ? 'Avsluta delad vy' : canPin ? 'Visa med bilaga (delad vy)' : 'Lägg till bilaga för delad vy'}
-            >
-              {isPinned ? <PanelRightClose className="w-5 h-5" /> : <PanelRight className="w-5 h-5" />}
-            </button>
-          )}
-          {headerActions}
-          {allowMinimize && onMinimize && (
-            <button
-              type="button"
-              onClick={onMinimize}
-              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title="Minimera"
-            >
-              <Minus className="w-5 h-5" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={toggleMaximized}
-            className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-            title={isMaximized ? 'Återställ' : 'Maximera'}
-          >
-            {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-            title="Stäng"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Content area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {children}
-      </div>
-
-      {/* Footer (if provided) */}
-      {footer && (
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-white flex-shrink-0">
-          {footer}
-        </div>
-      )}
-
-      {/* Resize handles (only when not maximized or pinned) */}
-      {!isMaximized && !isPinned && (
-        <>
-          <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
-          <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
-        </>
-      )}
-    </div>
-  )
-
-  // Split-view mode: when pinned with rightPanel, render side-by-side layout
-  if (isPinned && rightPanel) {
-    const margin = 8
-    return createPortal(
-      <div className="fixed inset-0 z-50">
-        {/* Backdrop */}
-        {showBackdrop && <div className="absolute inset-0 bg-black bg-opacity-50" />}
-        {/* Split-view container */}
+        {/* Modal panel - ALWAYS same position in tree */}
         <div
-          className="absolute flex gap-2"
-          style={{
-            top: margin,
-            left: margin,
-            right: margin,
-            bottom: margin,
-          }}
+          className={`bg-white rounded-lg shadow-xl flex flex-col overflow-hidden ${
+            isMaximized && !isSplitView ? 'fixed inset-2' : ''
+          } ${
+            isSplitView ? 'w-1/2 h-full' : ''
+          }`}
+          style={getModalPanelStyle()}
         >
-          {/* Left panel: modal content */}
-          <div className="w-1/2 h-full bg-white rounded-lg shadow-xl flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-white flex justify-between items-center select-none flex-shrink-0">
-              <h2 className="text-2xl font-bold truncate flex-1">{title}</h2>
-              <div className="flex items-center gap-2 ml-4">
-                {onTogglePinned && (
-                  <button
-                    type="button"
-                    onClick={onTogglePinned}
-                    className="p-1.5 rounded transition-colors text-blue-600 bg-blue-50 hover:bg-blue-100"
-                    title="Avsluta delad vy"
-                  >
-                    <PanelRightClose className="w-5 h-5" />
-                  </button>
-                )}
-                {headerActions}
+          {/* Draggable header */}
+          <div
+            className="px-6 py-4 border-b border-gray-200 bg-white flex justify-between items-center select-none flex-shrink-0"
+            onMouseDown={isMaximized || isPinned ? undefined : handleDragStart}
+            style={isMaximized || isPinned ? undefined : { cursor: isDragging ? 'grabbing' : 'grab' }}
+          >
+            <h2 className="text-2xl font-bold truncate flex-1">{title}</h2>
+            <div className="flex items-center gap-2 ml-4">
+              {/* Pin button (before other actions) */}
+              {onTogglePinned && (
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                  title="Stäng"
+                  onClick={onTogglePinned}
+                  disabled={!canPin && !isPinned}
+                  className={`p-1.5 rounded transition-colors ${
+                    isPinned
+                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                      : canPin
+                        ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        : 'text-gray-300 cursor-not-allowed'
+                  }`}
+                  title={isPinned ? 'Avsluta delad vy' : canPin ? 'Visa med bilaga (delad vy)' : 'Lägg till bilaga för delad vy'}
                 >
-                  <X className="w-5 h-5" />
+                  {isPinned ? <PanelRightClose className="w-5 h-5" /> : <PanelRight className="w-5 h-5" />}
                 </button>
-              </div>
+              )}
+              {headerActions}
+              {/* Minimize button - hide in split-view */}
+              {allowMinimize && onMinimize && !isSplitView && (
+                <button
+                  type="button"
+                  onClick={onMinimize}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                  title="Minimera"
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+              )}
+              {/* Maximize button - hide in split-view */}
+              {!isSplitView && (
+                <button
+                  type="button"
+                  onClick={toggleMaximized}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                  title={isMaximized ? 'Återställ' : 'Maximera'}
+                >
+                  {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                title="Stäng"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              {children}
-            </div>
-            {/* Footer */}
-            {footer && (
-              <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-white flex-shrink-0">
-                {footer}
-              </div>
-            )}
           </div>
-          {/* Right panel: preview content */}
+
+          {/* Content area - children ALWAYS here, never remounted */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {children}
+          </div>
+
+          {/* Footer (if provided) */}
+          {footer && (
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-white flex-shrink-0">
+              {footer}
+            </div>
+          )}
+
+          {/* Resize handles (only when not maximized or pinned) */}
+          {!isMaximized && !isPinned && (
+            <>
+              <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+              <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+            </>
+          )}
+        </div>
+
+        {/* Right panel - only in split-view, but within same tree */}
+        {isSplitView && (
           <div className="w-1/2 h-full">
             {rightPanel}
           </div>
-        </div>
-      </div>,
-      document.body
-    )
-  }
-
-  // Render with or without backdrop
-  if (showBackdrop) {
-    return createPortal(
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-        {modalContent}
-      </div>,
-      document.body
-    )
-  }
-
-  // Without backdrop (floating panel mode)
-  return createPortal(
-    <div className="fixed z-[60]" style={isMaximized ? { inset: 0 } : undefined}>
-      {modalContent}
+        )}
+      </div>
     </div>,
     document.body
   )
