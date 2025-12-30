@@ -1,4 +1,5 @@
-import { FileText, Download, Maximize2, X, ChevronLeft, ChevronRight, PanelRight, PanelRightClose } from 'lucide-react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { FileText, Download, Maximize2, X, ChevronLeft, ChevronRight, PanelRight, PanelRightClose, ZoomIn, ZoomOut } from 'lucide-react'
 import DraggableModal from './DraggableModal'
 import type { EntityAttachment } from '@/types'
 import { ModalType } from '@/contexts/LayoutSettingsContext'
@@ -28,6 +29,177 @@ export interface AttachmentPreviewPanelProps {
 // Default preview panel size (vertical/portrait format for PDFs and receipts)
 const DEFAULT_PREVIEW_WIDTH = 420
 const DEFAULT_PREVIEW_HEIGHT = 620
+
+// Zoom constraints
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 5
+const ZOOM_STEP = 0.25
+
+// ============================================================================
+// ImageViewer Component (with zoom and pan)
+// ============================================================================
+
+interface ImageViewerProps {
+  src: string
+  alt: string
+}
+
+export function ImageViewer({ src, alt }: ImageViewerProps) {
+  const [zoom, setZoom] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null)
+
+  // Reset zoom and position when image changes
+  useEffect(() => {
+    setZoom(1)
+    setPosition({ x: 0, y: 0 })
+  }, [src])
+
+  // Zoom in
+  const handleZoomIn = useCallback(() => {
+    setZoom(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM))
+  }, [])
+
+  // Zoom out
+  const handleZoomOut = useCallback(() => {
+    setZoom(prev => {
+      const newZoom = Math.max(prev - ZOOM_STEP, MIN_ZOOM)
+      // Reset position if zooming back to 1 or less
+      if (newZoom <= 1) {
+        setPosition({ x: 0, y: 0 })
+      }
+      return newZoom
+    })
+  }, [])
+
+  // Handle mouse wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+    setZoom(prev => {
+      const newZoom = Math.max(MIN_ZOOM, Math.min(prev + delta, MAX_ZOOM))
+      // Reset position if zooming back to 1 or less
+      if (newZoom <= 1) {
+        setPosition({ x: 0, y: 0 })
+      }
+      return newZoom
+    })
+  }, [])
+
+  // Handle double-click to toggle between fit and 100%
+  const handleDoubleClick = useCallback(() => {
+    if (zoom === 1) {
+      setZoom(2)
+    } else {
+      setZoom(1)
+      setPosition({ x: 0, y: 0 })
+    }
+  }, [zoom])
+
+  // Start dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom <= 1) return // No panning when not zoomed
+    e.preventDefault()
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      posX: position.x,
+      posY: position.y,
+    }
+  }, [zoom, position])
+
+  // Handle dragging
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartRef.current) return
+      const deltaX = e.clientX - dragStartRef.current.x
+      const deltaY = e.clientY - dragStartRef.current.y
+      setPosition({
+        x: dragStartRef.current.posX + deltaX,
+        y: dragStartRef.current.posY + deltaY,
+      })
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+      dragStartRef.current = null
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging])
+
+  const canZoomIn = zoom < MAX_ZOOM
+  const canZoomOut = zoom > MIN_ZOOM
+
+  return (
+    <div className="relative h-full flex flex-col">
+      {/* Zoom controls */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-md border border-gray-200 p-1">
+        <button
+          onClick={handleZoomOut}
+          disabled={!canZoomOut}
+          className={`p-1.5 rounded transition-colors ${
+            canZoomOut ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
+          }`}
+          title="Zooma ut"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <span className="text-xs text-gray-600 min-w-[3rem] text-center font-medium">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          onClick={handleZoomIn}
+          disabled={!canZoomIn}
+          className={`p-1.5 rounded transition-colors ${
+            canZoomIn ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
+          }`}
+          title="Zooma in"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Image container */}
+      <div
+        className={`flex-1 overflow-hidden flex items-center justify-center ${
+          zoom > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
+        }`}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-full max-h-full bg-white shadow-sm rounded select-none"
+          style={{
+            transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
+            transformOrigin: 'center center',
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+          }}
+          draggable={false}
+        />
+      </div>
+
+      {/* Hint text */}
+      {zoom === 1 && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 bg-white/80 backdrop-blur-sm px-2 py-1 rounded">
+          Scrolla för att zooma • Dubbelklicka för 200%
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ============================================================================
 // Minimized Bar Component
@@ -143,7 +315,7 @@ export default function AttachmentPreviewPanel({
 
   // Preview content
   const previewContent = (
-    <div className="h-full overflow-auto bg-gray-100 -mx-6 -my-4 p-2">
+    <div className="h-full bg-gray-100 -mx-6 -my-4 p-2">
       {previewLoading ? (
         <div className="flex items-center justify-center h-full">
           <p className="text-gray-500">Laddar...</p>
@@ -151,10 +323,9 @@ export default function AttachmentPreviewPanel({
       ) : previewUrl ? (
         <>
           {isImage && (
-            <img
+            <ImageViewer
               src={previewUrl}
               alt={attachment.original_filename}
-              className="max-w-full h-auto mx-auto bg-white shadow-sm rounded"
             />
           )}
           {isPdf && (

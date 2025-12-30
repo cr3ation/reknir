@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, ReactNode, createElement } from 'reac
 import { FileText, Download, ChevronLeft, ChevronRight, PanelRightClose, X } from 'lucide-react'
 import { attachmentApi } from '@/services/api'
 import { usePinnedModal, ModalType } from '@/contexts/LayoutSettingsContext'
-import AttachmentPreviewPanel from '@/components/AttachmentPreviewPanel'
+import AttachmentPreviewPanel, { ImageViewer } from '@/components/AttachmentPreviewPanel'
 import type { EntityAttachment } from '@/types'
 
 // ============================================================================
@@ -261,17 +261,16 @@ export function useAttachmentPreviewController(
       ),
       // Content
       createElement('div', {
-        className: 'flex-1 overflow-auto bg-gray-100 p-2'
+        className: `flex-1 bg-gray-100 p-2 ${isImage ? 'overflow-hidden' : 'overflow-auto'}`
       },
         previewLoading
           ? createElement('div', { className: 'flex items-center justify-center h-full' },
               createElement('p', { className: 'text-gray-500' }, 'Laddar...'))
           : previewUrl
             ? (isImage
-                ? createElement('img', {
+                ? createElement(ImageViewer, {
                     src: previewUrl,
-                    alt: selectedAttachment.original_filename,
-                    className: 'max-w-full h-auto mx-auto bg-white shadow-sm rounded'
+                    alt: selectedAttachment.original_filename
                   })
                 : isPdf
                   ? createElement('iframe', {
