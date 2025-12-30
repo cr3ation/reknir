@@ -351,6 +351,13 @@ export default function AttachmentManager({
       setUploading(true)
       await onUpload(selectedFile)
       setSelectedFile(null)
+
+      // Reload available attachments in pending mode so the new upload appears
+      if (pendingMode && companyId) {
+        const response = await attachmentApi.list(companyId)
+        setAvailableAttachments(response.data)
+      }
+
       if (labels.uploadSuccess) alert(labels.uploadSuccess)
     } catch (error) {
       console.error('Failed to upload attachment:', error)
@@ -449,6 +456,12 @@ export default function AttachmentManager({
     setUploading(true)
     try {
       for (const file of filesToUpload) await onUpload(file)
+
+      // Reload available attachments in pending mode so the new uploads appear
+      if (pendingMode && companyId) {
+        const response = await attachmentApi.list(companyId)
+        setAvailableAttachments(response.data)
+      }
     } catch (error) {
       console.error('Failed to upload:', error)
       alert(labels.uploadError || 'Kunde inte ladda upp bilagan')
