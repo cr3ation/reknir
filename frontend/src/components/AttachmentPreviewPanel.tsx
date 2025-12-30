@@ -1,7 +1,7 @@
 import { FileText, Download, Maximize2, X, ChevronLeft, ChevronRight, PanelRight, PanelRightClose } from 'lucide-react'
 import DraggableModal from './DraggableModal'
 import type { EntityAttachment } from '@/types'
-import { PREVIEW_SIZE_PRESETS, useLayoutSettings, ModalType, type PreviewPosition } from '@/contexts/LayoutSettingsContext'
+import { ModalType } from '@/contexts/LayoutSettingsContext'
 
 // ============================================================================
 // Types & Interfaces
@@ -25,17 +25,9 @@ export interface AttachmentPreviewPanelProps {
   onTogglePin?: () => void
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function getInitialWidth(_previewPosition: PreviewPosition): number {
-  return PREVIEW_SIZE_PRESETS.standard.width
-}
-
-function getInitialHeight(_previewPosition: PreviewPosition): number {
-  return PREVIEW_SIZE_PRESETS.standard.height
-}
+// Default preview panel size (vertical/portrait format for PDFs and receipts)
+const DEFAULT_PREVIEW_WIDTH = 420
+const DEFAULT_PREVIEW_HEIGHT = 620
 
 // ============================================================================
 // Minimized Bar Component
@@ -94,8 +86,6 @@ export default function AttachmentPreviewPanel({
   isPinned = false,
   onTogglePin,
 }: AttachmentPreviewPanelProps) {
-  const { settings: layoutSettings } = useLayoutSettings()
-
   const isImage = attachment.mime_type.startsWith('image/')
   const isPdf = attachment.mime_type === 'application/pdf'
 
@@ -209,8 +199,8 @@ export default function AttachmentPreviewPanel({
     <DraggableModal
       modalType={ModalType.ATTACHMENT_PREVIEW}
       title={titleContent}
-      defaultWidth={getInitialWidth(layoutSettings.previewPosition)}
-      defaultHeight={getInitialHeight(layoutSettings.previewPosition)}
+      defaultWidth={DEFAULT_PREVIEW_WIDTH}
+      defaultHeight={DEFAULT_PREVIEW_HEIGHT}
       minWidth={300}
       minHeight={200}
       persistPosition={!isPinned}
@@ -223,7 +213,6 @@ export default function AttachmentPreviewPanel({
       footer={footerContent}
       showBackdrop={false}
       isPinned={isPinned}
-      pinnedSide="right"
     >
       {previewContent}
     </DraggableModal>

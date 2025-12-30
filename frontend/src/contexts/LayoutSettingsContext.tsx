@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react'
 
-export type PreviewPosition = 'right' | 'bottom-right' | 'left' | 'bottom-left'
-export type PreviewSize = 'compact' | 'standard' | 'large'
+// Which side the attachment preview appears on in split-view mode
+export type SplitViewAttachmentSide = 'left' | 'right'
 
 export enum ModalType {
   VERIFICATION = 'verification',
@@ -18,21 +18,13 @@ export interface ModalMaximizedSettings {
 }
 
 export interface LayoutSettings {
-  previewPosition: PreviewPosition
-  previewSize: PreviewSize
+  // Which side the attachment preview appears on in split-view
+  splitViewAttachmentSide: SplitViewAttachmentSide
   modalMaximized: ModalMaximizedSettings
 }
 
-// Predefined size presets (vertical/portrait format for PDFs and receipts)
-export const PREVIEW_SIZE_PRESETS: Record<PreviewSize, { width: number; height: number; label: string }> = {
-  compact: { width: 340, height: 500, label: 'Kompakt' },
-  standard: { width: 420, height: 620, label: 'Standard' },
-  large: { width: 520, height: 760, label: 'Stor' },
-}
-
 const DEFAULT_SETTINGS: LayoutSettings = {
-  previewPosition: 'right',
-  previewSize: 'standard',
+  splitViewAttachmentSide: 'right',
   modalMaximized: {
     [ModalType.VERIFICATION]: false,
     [ModalType.INVOICE]: false,

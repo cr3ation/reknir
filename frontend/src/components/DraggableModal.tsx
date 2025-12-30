@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Maximize2, Minimize2, Minus, PanelRight, PanelRightClose } from 'lucide-react'
-import { useModalMaximized, type ModalType } from '@/contexts/LayoutSettingsContext'
+import { useModalMaximized, useLayoutSettings, type ModalType } from '@/contexts/LayoutSettingsContext'
 
 // ============================================================================
 // Types & Interfaces
@@ -145,9 +145,12 @@ export default function DraggableModal({
   rightPanel,
 }: DraggableModalProps) {
   const { isMaximized, toggleMaximized } = useModalMaximized(modalType)
+  const { settings: layoutSettings } = useLayoutSettings()
 
   // Compute split-view mode (pinned with right panel)
   const isSplitView = isPinned && !!rightPanel
+  // Determine if we should reverse the flex direction (attachment on left)
+  const reverseFlexDirection = isSplitView && layoutSettings.splitViewAttachmentSide === 'left'
 
   // Position null means centered (default state)
   const [position, setPosition] = useState<Position | null>(null)
@@ -381,7 +384,7 @@ export default function DraggableModal({
 
       {/* Split-view container - layout changes via CSS */}
       <div
-        className={isSplitView ? 'absolute inset-2 flex gap-2' : ''}
+        className={isSplitView ? `absolute inset-2 flex gap-2 ${reverseFlexDirection ? 'flex-row-reverse' : ''}` : ''}
       >
         {/* Modal panel - ALWAYS same position in tree */}
         <div
