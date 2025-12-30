@@ -7,6 +7,7 @@ import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Acco
 import { InvoiceStatus, PaymentStatus } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useModalMaximized } from '@/contexts/LayoutSettingsContext'
+import { useDraggableModal, ResizeHandle } from '@/hooks/useDraggableModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
@@ -941,6 +942,17 @@ interface CreateInvoiceModalProps {
 
 function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess }: CreateInvoiceModalProps) {
   const { isMaximized, toggleMaximized } = useModalMaximized('invoice')
+  const {
+    handleDragStart,
+    handleResizeStart,
+    getModalStyle,
+    getHeaderStyle,
+  } = useDraggableModal({
+    defaultWidth: 900,
+    defaultHeight: Math.min(window.innerHeight * 0.9, 700),
+    minWidth: 600,
+    minHeight: 400,
+  })
   const [customerId, setCustomerId] = useState<number>(0)
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState('')
@@ -1046,9 +1058,19 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
   const totals = calculateTotals()
 
   return (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex z-50 ${isMaximized ? 'items-stretch p-2' : 'items-center justify-center p-4'}`}>
-      <div className={`bg-white rounded-lg w-full overflow-y-auto ${isMaximized ? 'h-full max-h-full' : 'max-w-4xl max-h-[90vh]'}`}>
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+      <div
+        className={`bg-white rounded-lg flex flex-col overflow-hidden ${
+          isMaximized ? 'fixed inset-2' : ''
+        }`}
+        style={isMaximized ? undefined : getModalStyle()}
+      >
+        {/* Draggable header */}
+        <div
+          className="bg-white border-b px-6 py-4 flex justify-between items-center select-none flex-shrink-0"
+          onMouseDown={isMaximized ? undefined : handleDragStart}
+          style={isMaximized ? undefined : getHeaderStyle()}
+        >
           <h2 className="text-2xl font-bold">Ny kundfaktura</h2>
           <div className="flex items-center gap-2">
             <button
@@ -1070,7 +1092,7 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto">
           {error && (
             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
               {error}
@@ -1334,6 +1356,20 @@ function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess
             </button>
           </div>
         </form>
+
+        {/* Resize handles (only when not maximized) */}
+        {!isMaximized && (
+          <>
+            <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+          </>
+        )}
       </div>
     </div>
   )
@@ -1350,6 +1386,17 @@ interface CreateSupplierInvoiceModalProps {
 
 function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, onSuccess }: CreateSupplierInvoiceModalProps) {
   const { isMaximized, toggleMaximized } = useModalMaximized('supplierInvoice')
+  const {
+    handleDragStart,
+    handleResizeStart,
+    getModalStyle,
+    getHeaderStyle,
+  } = useDraggableModal({
+    defaultWidth: 900,
+    defaultHeight: Math.min(window.innerHeight * 0.9, 700),
+    minWidth: 600,
+    minHeight: 400,
+  })
   const [supplierId, setSupplierId] = useState<number>(0)
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
@@ -1467,9 +1514,19 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
   const totals = calculateTotals()
 
   return (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex z-50 ${isMaximized ? 'items-stretch p-2' : 'items-center justify-center p-4'}`}>
-      <div className={`bg-white rounded-lg w-full overflow-y-auto ${isMaximized ? 'h-full max-h-full' : 'max-w-4xl max-h-[90vh]'}`}>
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+      <div
+        className={`bg-white rounded-lg shadow-xl flex flex-col overflow-hidden ${
+          isMaximized ? 'fixed inset-2' : ''
+        }`}
+        style={isMaximized ? undefined : getModalStyle()}
+      >
+        {/* Draggable header */}
+        <div
+          className="px-6 py-4 border-b border-gray-200 bg-white flex justify-between items-center select-none flex-shrink-0"
+          onMouseDown={isMaximized ? undefined : handleDragStart}
+          style={isMaximized ? undefined : getHeaderStyle()}
+        >
           <h2 className="text-2xl font-bold">Registrera leverantörsfaktura</h2>
           <div className="flex items-center gap-2">
             <button
@@ -1491,7 +1548,7 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto">
           {error && (
             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
               {error}
@@ -1752,6 +1809,20 @@ function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, o
             </button>
           </div>
         </form>
+
+        {/* Resize handles (only when not maximized) */}
+        {!isMaximized && (
+          <>
+            <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+          </>
+        )}
       </div>
     </div>
   )

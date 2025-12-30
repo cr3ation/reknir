@@ -8,6 +8,7 @@ import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
 import { getErrorMessage } from '@/utils/errors'
 import { useModalMaximized } from '@/contexts/LayoutSettingsContext'
+import { useDraggableModal, ResizeHandle } from '@/hooks/useDraggableModal'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function Verifications() {
@@ -261,6 +262,17 @@ function CreateVerificationModal({
 }: CreateVerificationModalProps) {
   const isEditing = verification !== null
   const { isMaximized, toggleMaximized } = useModalMaximized('verification')
+  const {
+    handleDragStart,
+    handleResizeStart,
+    getModalStyle,
+    getHeaderStyle,
+  } = useDraggableModal({
+    defaultWidth: 1024,  // max-w-5xl ≈ 1024px
+    defaultHeight: Math.min(window.innerHeight * 0.9, 800),
+    minWidth: 600,
+    minHeight: 400,
+  })
 
   const [formData, setFormData] = useState({
     series: verification?.series || 'A',
@@ -401,9 +413,21 @@ function CreateVerificationModal({
   }
 
   return (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex z-50 ${isMaximized ? 'items-stretch p-2' : 'items-center justify-center p-4 overflow-y-auto'}`}>
-      <div className={`bg-white rounded-lg shadow-xl w-full overflow-y-auto ${isMaximized ? 'h-full max-h-full' : 'max-w-5xl my-8 max-h-[90vh]'}`}>
-        <div className="px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10 flex justify-between items-center">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+      <div
+        className={`bg-white rounded-lg shadow-xl flex flex-col overflow-hidden ${
+          isMaximized
+            ? 'fixed inset-2'
+            : ''
+        }`}
+        style={isMaximized ? undefined : getModalStyle()}
+      >
+        {/* Draggable header */}
+        <div
+          className="px-6 py-4 border-b border-gray-200 bg-white flex justify-between items-center select-none flex-shrink-0"
+          onMouseDown={isMaximized ? undefined : handleDragStart}
+          style={isMaximized ? undefined : getHeaderStyle()}
+        >
           <h2 className="text-2xl font-bold">
             {isEditing ? 'Redigera verifikation' : 'Ny verifikation'}
           </h2>
@@ -427,7 +451,7 @@ function CreateVerificationModal({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4">
+        <form onSubmit={handleSubmit} className="px-6 py-4 flex-1 overflow-y-auto">
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-center">
               <AlertCircle className="w-5 h-5 mr-2" />
@@ -762,6 +786,20 @@ function CreateVerificationModal({
             </button>
           </div>
         </form>
+
+        {/* Resize handles (only when not maximized) */}
+        {!isMaximized && (
+          <>
+            <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
+            <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
+          </>
+        )}
       </div>
     </div>
   )
