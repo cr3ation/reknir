@@ -2,12 +2,19 @@ import { createContext, useContext, useState, ReactNode, useCallback } from 'rea
 
 export type PreviewPosition = 'right' | 'bottom-right' | 'left' | 'bottom-left'
 export type PreviewSize = 'compact' | 'standard' | 'large'
-export type ModalType = 'verification' | 'invoice' | 'supplierInvoice'
+
+export enum ModalType {
+  VERIFICATION = 'verification',
+  INVOICE = 'invoice',
+  SUPPLIER_INVOICE = 'supplierInvoice',
+  ATTACHMENT_PREVIEW = 'attachmentPreview',
+}
 
 export interface ModalMaximizedSettings {
-  verification: boolean
-  invoice: boolean
-  supplierInvoice: boolean
+  [ModalType.VERIFICATION]: boolean
+  [ModalType.INVOICE]: boolean
+  [ModalType.SUPPLIER_INVOICE]: boolean
+  [ModalType.ATTACHMENT_PREVIEW]: boolean
 }
 
 export interface LayoutSettings {
@@ -27,9 +34,10 @@ const DEFAULT_SETTINGS: LayoutSettings = {
   previewPosition: 'right',
   previewSize: 'standard',
   modalMaximized: {
-    verification: false,
-    invoice: false,
-    supplierInvoice: false,
+    [ModalType.VERIFICATION]: false,
+    [ModalType.INVOICE]: false,
+    [ModalType.SUPPLIER_INVOICE]: false,
+    [ModalType.ATTACHMENT_PREVIEW]: false,
   },
 }
 
@@ -39,6 +47,9 @@ interface LayoutSettingsContextType {
   settings: LayoutSettings
   updateSettings: (updates: Partial<LayoutSettings>) => void
   resetSettings: () => void
+  // Pinned modal state (not persisted - ephemeral)
+  pinnedModal: ModalType | null
+  setPinnedModal: (modal: ModalType | null) => void
 }
 
 const LayoutSettingsContext = createContext<LayoutSettingsContextType | undefined>(undefined)
@@ -66,6 +77,7 @@ function saveSettingsToStorage(settings: LayoutSettings): void {
 
 export function LayoutSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<LayoutSettings>(loadSettingsFromStorage)
+  const [pinnedModal, setPinnedModal] = useState<ModalType | null>(null)
 
   const updateSettings = useCallback((updates: Partial<LayoutSettings>) => {
     setSettings(prev => {
@@ -86,6 +98,8 @@ export function LayoutSettingsProvider({ children }: { children: ReactNode }) {
         settings,
         updateSettings,
         resetSettings,
+        pinnedModal,
+        setPinnedModal,
       }}
     >
       {children}
@@ -115,4 +129,21 @@ export function useModalMaximized(modalType: ModalType) {
   }, [settings.modalMaximized, modalType, isMaximized, updateSettings])
 
   return { isMaximized, toggleMaximized }
+}
+
+export function usePinnedModal(modalType: ModalType) {
+  const { pinnedModal, setPinnedModal } = useLayoutSettings()
+  const isPinned = pinnedModal === modalType
+
+  const togglePinned = useCallback(() => {
+    setPinnedModal(isPinned ? null : modalType)
+  }, [isPinned, modalType, setPinnedModal])
+
+  const unpinModal = useCallback(() => {
+    if (isPinned) {
+      setPinnedModal(null)
+    }
+  }, [isPinned, setPinnedModal])
+
+  return { isPinned, togglePinned, unpinModal }
 }

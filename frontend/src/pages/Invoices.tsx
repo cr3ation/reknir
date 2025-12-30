@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Download, Plus, X, Eye, DollarSign, Send, FileText, Maximize2, Minimize2 } from 'lucide-react'
+import { Download, Plus, Eye, DollarSign, Send, FileText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi, attachmentApi } from '@/services/api'
-import AttachmentManager from '@/components/AttachmentManager'
-import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, InvoiceLine } from '@/types'
+import api, { invoiceApi, supplierInvoiceApi, customerApi, supplierApi, accountApi } from '@/services/api'
+import DraggableModal from '@/components/DraggableModal'
+import { ModalType } from '@/contexts/LayoutSettingsContext'
+import InvoiceForm from '@/components/forms/InvoiceForm'
+import SupplierInvoiceForm from '@/components/forms/SupplierInvoiceForm'
+import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Account, EntityAttachment } from '@/types'
 import { InvoiceStatus, PaymentStatus } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
-import { useModalMaximized } from '@/contexts/LayoutSettingsContext'
-import { useDraggableModal, ResizeHandle } from '@/hooks/useDraggableModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
+import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 
 // Format number with Swedish thousand separators (space)
 const formatNumberWithSeparator = (value: number): string => {
@@ -51,6 +53,22 @@ export default function Invoices() {
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [payingInvoice, setPayingInvoice] = useState(false)
   const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
+
+  // Track attachments from supplier invoice form for preview controller
+  const [supplierInvoiceAttachments, setSupplierInvoiceAttachments] = useState<EntityAttachment[]>([])
+
+  // Attachment preview controller for supplier invoice modal
+  const {
+    openPreview: openSupplierInvoicePreview,
+    reset: resetSupplierInvoicePreview,
+    floatingPreview: supplierInvoiceFloatingPreview,
+    pinnedPreview: supplierInvoicePinnedPreview,
+    canPin: supplierInvoiceCanPin,
+    isPinned: supplierInvoiceIsPinned,
+    togglePinned: supplierInvoiceTogglePinned,
+  } = useAttachmentPreviewController(supplierInvoiceAttachments, {
+    modalType: ModalType.SUPPLIER_INVOICE,
+  })
 
   useEffect(() => {
     loadInvoices()
@@ -502,31 +520,70 @@ export default function Invoices() {
 
       {/* Create Invoice Modal */}
       {showCreateInvoiceModal && selectedCompany && (
-        <CreateInvoiceModal
-          companyId={selectedCompany.id}
-          customers={customers}
-          accounts={accounts}
+        <DraggableModal
+          modalType={ModalType.INVOICE}
+          title="Ny kundfaktura"
+          defaultWidth={900}
+          defaultHeight={Math.min(window.innerHeight * 0.9, 700)}
+          minWidth={600}
+          minHeight={400}
           onClose={() => setShowCreateInvoiceModal(false)}
-          onSuccess={() => {
-            setShowCreateInvoiceModal(false)
-            loadInvoices()
-          }}
-        />
+        >
+          <InvoiceForm
+            companyId={selectedCompany.id}
+            customers={customers}
+            accounts={accounts}
+            onSuccess={() => {
+              setShowCreateInvoiceModal(false)
+              loadInvoices()
+            }}
+            onCancel={() => setShowCreateInvoiceModal(false)}
+          />
+        </DraggableModal>
       )}
 
       {/* Create Supplier Invoice Modal */}
       {showCreateSupplierInvoiceModal && selectedCompany && (
-        <CreateSupplierInvoiceModal
-          companyId={selectedCompany.id}
-          suppliers={suppliers}
-          accounts={accounts}
-          onClose={() => setShowCreateSupplierInvoiceModal(false)}
-          onSuccess={() => {
+        <DraggableModal
+          modalType={ModalType.SUPPLIER_INVOICE}
+          title="Registrera leverantörsfaktura"
+          defaultWidth={900}
+          defaultHeight={Math.min(window.innerHeight * 0.9, 700)}
+          minWidth={600}
+          minHeight={400}
+          onClose={() => {
+            resetSupplierInvoicePreview()
+            setSupplierInvoiceAttachments([])
             setShowCreateSupplierInvoiceModal(false)
-            loadInvoices()
           }}
-        />
+          rightPanel={supplierInvoicePinnedPreview}
+          canPin={supplierInvoiceCanPin}
+          isPinned={supplierInvoiceIsPinned}
+          onTogglePinned={supplierInvoiceTogglePinned}
+        >
+          <SupplierInvoiceForm
+            companyId={selectedCompany.id}
+            suppliers={suppliers}
+            accounts={accounts}
+            onSuccess={() => {
+              resetSupplierInvoicePreview()
+              setSupplierInvoiceAttachments([])
+              setShowCreateSupplierInvoiceModal(false)
+              loadInvoices()
+            }}
+            onCancel={() => {
+              resetSupplierInvoicePreview()
+              setSupplierInvoiceAttachments([])
+              setShowCreateSupplierInvoiceModal(false)
+            }}
+            onAttachmentsChange={setSupplierInvoiceAttachments}
+            onAttachmentClick={(_, index) => openSupplierInvoicePreview(index)}
+          />
+        </DraggableModal>
       )}
+
+      {/* Floating attachment preview for supplier invoice (outside modal) */}
+      {supplierInvoiceFloatingPreview}
 
       {/* Send Invoice Confirmation Modal */}
       {confirmSendInvoice && (
@@ -927,903 +984,6 @@ export default function Invoices() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-// Create Invoice Modal Component
-interface CreateInvoiceModalProps {
-  companyId: number
-  customers: Customer[]
-  accounts: Account[]
-  onClose: () => void
-  onSuccess: () => void
-}
-
-function CreateInvoiceModal({ companyId, customers, accounts, onClose, onSuccess }: CreateInvoiceModalProps) {
-  const { isMaximized, toggleMaximized } = useModalMaximized('invoice')
-  const {
-    handleDragStart,
-    handleResizeStart,
-    getModalStyle,
-    getHeaderStyle,
-  } = useDraggableModal({
-    defaultWidth: 900,
-    defaultHeight: Math.min(window.innerHeight * 0.9, 700),
-    minWidth: 600,
-    minHeight: 400,
-  })
-  const [customerId, setCustomerId] = useState<number>(0)
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState('')
-  const [reference, setReference] = useState('')
-  const [ourReference, setOurReference] = useState('')
-  const [message, setMessage] = useState('')
-  const [lines, setLines] = useState<InvoiceLine[]>([
-    { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }
-  ])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // Update due date when customer changes
-  useEffect(() => {
-    if (customerId > 0) {
-      const customer = customers.find(c => c.id === customerId)
-      if (customer) {
-        const date = new Date(invoiceDate)
-        date.setDate(date.getDate() + customer.payment_terms_days)
-        setDueDate(date.toISOString().split('T')[0])
-      }
-    }
-  }, [customerId, invoiceDate, customers])
-
-  const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }])
-  }
-
-  const removeLine = (index: number) => {
-    if (lines.length > 1) {
-      setLines(lines.filter((_, i) => i !== index))
-    }
-  }
-
-  const updateLine = (index: number, field: keyof InvoiceLine, value: string | number | undefined) => {
-    const newLines = [...lines]
-    newLines[index] = { ...newLines[index], [field]: value }
-    setLines(newLines)
-  }
-
-  const calculateLineTotal = (line: InvoiceLine) => {
-    const net = line.quantity * line.unit_price
-    const vat = net * (line.vat_rate / 100)
-    return net + vat
-  }
-
-  const calculateTotals = () => {
-    let totalNet = 0
-    let totalVat = 0
-    lines.forEach(line => {
-      const net = line.quantity * line.unit_price
-      const vat = net * (line.vat_rate / 100)
-      totalNet += net
-      totalVat += vat
-    })
-    return { totalNet, totalVat, totalAmount: totalNet + totalVat }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (customerId === 0) {
-      setError('Välj en kund')
-      return
-    }
-
-    if (lines.some(l => !l.description)) {
-      setError('Alla rader måste ha en beskrivning')
-      return
-    }
-
-    setSaving(true)
-    setError(null)
-
-    try {
-      await invoiceApi.create({
-        company_id: companyId,
-        customer_id: customerId,
-        invoice_date: invoiceDate,
-        due_date: dueDate,
-        reference,
-        our_reference: ourReference,
-        message,
-        invoice_series: 'F',
-        invoice_lines: lines.map(line => ({
-          description: line.description,
-          quantity: line.quantity,
-          unit: line.unit,
-          unit_price: line.unit_price,
-          vat_rate: line.vat_rate,
-          account_id: line.account_id,
-        })),
-      })
-      onSuccess()
-    } catch (err) {
-      console.error('Failed to create invoice:', err)
-      setError(getErrorMessage(err, 'Kunde inte skapa faktura'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const totals = calculateTotals()
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-      <div
-        className={`bg-white rounded-lg flex flex-col overflow-hidden ${
-          isMaximized ? 'fixed inset-2' : ''
-        }`}
-        style={isMaximized ? undefined : getModalStyle()}
-      >
-        {/* Draggable header */}
-        <div
-          className="bg-white border-b px-6 py-4 flex justify-between items-center select-none flex-shrink-0"
-          onMouseDown={isMaximized ? undefined : handleDragStart}
-          style={isMaximized ? undefined : getHeaderStyle()}
-        >
-          <h2 className="text-2xl font-bold">Ny kundfaktura</h2>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleMaximized}
-              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title={isMaximized ? 'Återställ' : 'Maximera'}
-            >
-              {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title="Stäng"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto">
-          {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-              {error}
-            </div>
-          )}
-
-          {/* Customer and dates */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Kund *
-              </label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(parseInt(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
-              >
-                <option value={0}>Välj kund...</option>
-                {customers.map(customer => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fakturadatum *
-              </label>
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Förfallodatum *
-              </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Er referens
-              </label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Vår referens
-              </label>
-              <input
-                type="text"
-                value={ourReference}
-                onChange={(e) => setOurReference(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Invoice lines */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold">Fakturarader</h3>
-              <button
-                type="button"
-                onClick={addLine}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
-              >
-                + Lägg till rad
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {lines.map((line, index) => (
-                <div key={index} className="space-y-2 p-3 bg-gray-50 rounded">
-                  <div className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Beskrivning *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Beskrivning av vara/tjänst"
-                        value={line.description}
-                        onChange={(e) => updateLine(index, 'description', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Antal *
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="1"
-                        value={line.quantity || ''}
-                        onChange={(e) => {
-                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                          updateLine(index, 'quantity', value)
-                        }}
-                        step="1"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Enhet
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="st"
-                        value={line.unit}
-                        onChange={(e) => updateLine(index, 'unit', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        À-pris *
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="0,00"
-                        value={line.unit_price || ''}
-                        onChange={(e) => {
-                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                          updateLine(index, 'unit_price', value)
-                        }}
-                        step="0.01"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Moms *
-                      </label>
-                      <select
-                        value={line.vat_rate}
-                        onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value={0}>0%</option>
-                        <option value={6}>6%</option>
-                        <option value={12}>12%</option>
-                        <option value={25}>25%</option>
-                      </select>
-                    </div>
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        &nbsp;
-                      </label>
-                      <div className="flex justify-center">
-                        {lines.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeLine(index)}
-                            className="text-red-600 hover:text-red-800 p-2"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-12 md:col-span-5">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Intäktskonto
-                      </label>
-                      <select
-                        value={line.account_id || ''}
-                        onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-sm"
-                      >
-                        <option value="">Auto (baserat på moms)</option>
-                        {accounts.filter(a => a.account_number >= 3000 && a.account_number < 4000).map(account => (
-                          <option key={account.id} value={account.id}>
-                            {account.account_number} - {account.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-12 md:col-span-6 text-right font-mono text-sm">
-                      Totalt: {calculateLineTotal(line).toLocaleString('sv-SE')} kr
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Totals */}
-          <div className="bg-gray-50 p-4 rounded mb-6">
-            <div className="flex justify-between text-sm mb-1">
-              <span>Netto:</span>
-              <span className="font-mono">{totals.totalNet.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
-            </div>
-            <div className="flex justify-between text-sm mb-2">
-              <span>Moms:</span>
-              <span className="font-mono">{totals.totalVat.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold border-t pt-2">
-              <span>Totalt:</span>
-              <span className="font-mono">{totals.totalAmount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
-            </div>
-          </div>
-
-          {/* Message */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Meddelande (visas på fakturan)
-            </label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              placeholder="T.ex. betalningsvillkor eller övrig information..."
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Avbryt
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? 'Skapar...' : 'Skapa faktura'}
-            </button>
-          </div>
-        </form>
-
-        {/* Resize handles (only when not maximized) */}
-        {!isMaximized && (
-          <>
-            <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Create Supplier Invoice Modal Component
-interface CreateSupplierInvoiceModalProps {
-  companyId: number
-  suppliers: Supplier[]
-  accounts: Account[]
-  onClose: () => void
-  onSuccess: () => void
-}
-
-function CreateSupplierInvoiceModal({ companyId, suppliers, accounts, onClose, onSuccess }: CreateSupplierInvoiceModalProps) {
-  const { isMaximized, toggleMaximized } = useModalMaximized('supplierInvoice')
-  const {
-    handleDragStart,
-    handleResizeStart,
-    getModalStyle,
-    getHeaderStyle,
-  } = useDraggableModal({
-    defaultWidth: 900,
-    defaultHeight: Math.min(window.innerHeight * 0.9, 700),
-    minWidth: 600,
-    minHeight: 400,
-  })
-  const [supplierId, setSupplierId] = useState<number>(0)
-  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
-  const [dueDate, setDueDate] = useState('')
-  const [ocrNumber, setOcrNumber] = useState('')
-  const [reference, setReference] = useState('')
-  const [lines, setLines] = useState<InvoiceLine[]>([
-    { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }
-  ])
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pendingAttachmentIds, setPendingAttachmentIds] = useState<number[]>([])
-
-  // Update due date when supplier changes
-  useEffect(() => {
-    if (supplierId > 0) {
-      const supplier = suppliers.find(s => s.id === supplierId)
-      if (supplier) {
-        const date = new Date(invoiceDate)
-        date.setDate(date.getDate() + supplier.payment_terms_days)
-        setDueDate(date.toISOString().split('T')[0])
-      }
-    }
-  }, [supplierId, invoiceDate, suppliers])
-
-  const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unit: 'st', unit_price: 0, vat_rate: 25 }])
-  }
-
-  const removeLine = (index: number) => {
-    if (lines.length > 1) {
-      setLines(lines.filter((_, i) => i !== index))
-    }
-  }
-
-  const updateLine = (index: number, field: keyof InvoiceLine, value: string | number | undefined) => {
-    const newLines = [...lines]
-    newLines[index] = { ...newLines[index], [field]: value }
-    setLines(newLines)
-  }
-
-  const calculateLineTotal = (line: InvoiceLine) => {
-    const net = line.quantity * line.unit_price
-    const vat = net * (line.vat_rate / 100)
-    return net + vat
-  }
-
-  const calculateTotals = () => {
-    let totalNet = 0
-    let totalVat = 0
-    lines.forEach(line => {
-      const net = line.quantity * line.unit_price
-      const vat = net * (line.vat_rate / 100)
-      totalNet += net
-      totalVat += vat
-    })
-    return { totalNet, totalVat, totalAmount: totalNet + totalVat }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (supplierId === 0) {
-      setError('Välj en leverantör')
-      return
-    }
-
-    if (!supplierInvoiceNumber) {
-      setError('Ange leverantörens fakturanummer')
-      return
-    }
-
-    if (lines.some(l => !l.description)) {
-      setError('Alla rader måste ha en beskrivning')
-      return
-    }
-
-    setSaving(true)
-    setError(null)
-
-    try {
-      const response = await supplierInvoiceApi.create({
-        company_id: companyId,
-        supplier_id: supplierId,
-        supplier_invoice_number: supplierInvoiceNumber,
-        invoice_date: invoiceDate,
-        due_date: dueDate,
-        ocr_number: ocrNumber || undefined,
-        reference: reference || undefined,
-        supplier_invoice_lines: lines.map(line => ({
-          description: line.description,
-          quantity: line.quantity,
-          unit: line.unit,
-          unit_price: line.unit_price,
-          vat_rate: line.vat_rate,
-          account_id: line.account_id,
-        })),
-      })
-      const newInvoiceId = response.data.id!
-
-      // Link pending attachments to the new supplier invoice
-      for (const attachmentId of pendingAttachmentIds) {
-        await supplierInvoiceApi.linkAttachment(newInvoiceId, attachmentId)
-      }
-
-      onSuccess()
-    } catch (err) {
-      console.error('Failed to create supplier invoice:', err)
-      setError(getErrorMessage(err, 'Kunde inte skapa leverantörsfaktura'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const totals = calculateTotals()
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
-      <div
-        className={`bg-white rounded-lg shadow-xl flex flex-col overflow-hidden ${
-          isMaximized ? 'fixed inset-2' : ''
-        }`}
-        style={isMaximized ? undefined : getModalStyle()}
-      >
-        {/* Draggable header */}
-        <div
-          className="px-6 py-4 border-b border-gray-200 bg-white flex justify-between items-center select-none flex-shrink-0"
-          onMouseDown={isMaximized ? undefined : handleDragStart}
-          style={isMaximized ? undefined : getHeaderStyle()}
-        >
-          <h2 className="text-2xl font-bold">Registrera leverantörsfaktura</h2>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleMaximized}
-              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title={isMaximized ? 'Återställ' : 'Maximera'}
-            >
-              {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title="Stäng"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto">
-          {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-              {error}
-            </div>
-          )}
-
-          {/* Supplier and dates */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Leverantör *
-              </label>
-              <select
-                value={supplierId}
-                onChange={(e) => setSupplierId(parseInt(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
-              >
-                <option value={0}>Välj leverantör...</option>
-                {suppliers.map(supplier => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fakturanummer *
-              </label>
-              <input
-                type="text"
-                value={supplierInvoiceNumber}
-                onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                placeholder="Leverantörens fakturanummer"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fakturadatum *
-              </label>
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Förfallodatum *
-              </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                OCR-nummer
-              </label>
-              <input
-                type="text"
-                value={ocrNumber}
-                onChange={(e) => setOcrNumber(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Referens
-              </label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Invoice lines */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold">Fakturarader</h3>
-              <button
-                type="button"
-                onClick={addLine}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
-              >
-                + Lägg till rad
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {lines.map((line, index) => (
-                <div key={index} className="space-y-2 p-3 bg-gray-50 rounded">
-                  <div className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-12 md:col-span-6">
-                      <input
-                        type="text"
-                        placeholder="Beskrivning *"
-                        value={line.description}
-                        onChange={(e) => updateLine(index, 'description', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <input
-                        type="number"
-                        placeholder="Antal"
-                        value={line.quantity || ''} // Show empty string instead of 0 for better UX
-                        onChange={(e) => {
-                          // Handle empty fields as 0, avoid "025000" display issue
-                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                          updateLine(index, 'quantity', value)
-                        }}
-                        step="0.01"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <input
-                        type="number"
-                        placeholder="À-pris (kr per enhet)"
-                        value={line.unit_price || ''}
-                        onChange={(e) => {
-                          // Handle empty fields as 0, avoid "025000" display issue
-                          const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                          updateLine(index, 'unit_price', value)
-                        }}
-                        step="0.01"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                        required
-                      />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <select
-                        value={line.vat_rate}
-                        onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value={0}>0%</option>
-                        <option value={6}>6%</option>
-                        <option value={12}>12%</option>
-                        <option value={25}>25%</option>
-                      </select>
-                    </div>
-                    <div className="col-span-1 md:col-span-1 text-right">
-                      {lines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(index)}
-                          className="text-red-600 hover:text-red-800 p-2"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-12 md:col-span-6">
-                      <select
-                        value={line.account_id || ''}
-                        onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-sm"
-                      >
-                        <option value="">Auto (6570 - Övriga externa tjänster)</option>
-                        {accounts.filter(a => a.account_number >= 4000 && a.account_number < 8000).map(account => (
-                          <option key={account.id} value={account.id}>
-                            {account.account_number} - {account.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-12 md:col-span-5 text-right font-mono text-sm">
-                      Totalt: {calculateLineTotal(line).toLocaleString('sv-SE')} kr
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Totals */}
-          <div className="bg-gray-50 p-4 rounded mb-6">
-            <div className="flex justify-between text-sm mb-1">
-              <span>Netto:</span>
-              <span className="font-mono">{totals.totalNet.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
-            </div>
-            <div className="flex justify-between text-sm mb-2">
-              <span>Moms:</span>
-              <span className="font-mono">{totals.totalVat.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold border-t pt-2">
-              <span>Totalt:</span>
-              <span className="font-mono">{totals.totalAmount.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}</span>
-            </div>
-          </div>
-
-          {/* Attachments */}
-          <div className="mb-6">
-            <AttachmentManager
-              attachments={[]}
-              config={{
-                allowUpload: true,
-                allowDelete: true,
-              }}
-              labels={{
-                title: 'Bilagor',
-                emptyState: 'Inga bilagor',
-                uploadButton: 'Ladda upp',
-                deleteConfirm: (f) => `Ta bort ${f}?`,
-              }}
-              onUpload={async (file) => {
-                const res = await attachmentApi.upload(companyId, file)
-                setPendingAttachmentIds(prev => [...prev, res.data.id])
-              }}
-              onDelete={async () => {}}
-              onDownload={async () => {}}
-              companyId={companyId}
-              pendingMode={true}
-              pendingAttachmentIds={pendingAttachmentIds}
-              onPendingSelectionChange={setPendingAttachmentIds}
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Avbryt
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? 'Registrerar...' : 'Registrera faktura'}
-            </button>
-          </div>
-        </form>
-
-        {/* Resize handles (only when not maximized) */}
-        {!isMaximized && (
-          <>
-            <ResizeHandle direction="n" className="top-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="s" className="bottom-0 left-2 right-2 h-1 cursor-ns-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="e" className="right-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="w" className="left-0 top-2 bottom-2 w-1 cursor-ew-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="nw" className="top-0 left-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="ne" className="top-0 right-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="sw" className="bottom-0 left-0 w-3 h-3 cursor-nesw-resize" onResizeStart={handleResizeStart} />
-            <ResizeHandle direction="se" className="bottom-0 right-0 w-3 h-3 cursor-nwse-resize" onResizeStart={handleResizeStart} />
-          </>
-        )}
-      </div>
     </div>
   )
 }
