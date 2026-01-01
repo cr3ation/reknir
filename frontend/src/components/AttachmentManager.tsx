@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { FileText, Download, Trash2, Upload, Lock, X, FolderOpen } from 'lucide-react'
+import { FileText, Download, Trash2, Upload, Lock, X, FolderOpen, Search, Image, File } from 'lucide-react'
 import type { EntityAttachment, Attachment } from '@/types'
 import { EntityType, AttachmentRole } from '@/types'
 import { attachmentApi, supplierInvoiceApi, expenseApi, verificationApi } from '@/services/api'
 import { useDropZone } from '@/hooks/useDropZone'
-import AttachmentPreviewPanel from './AttachmentPreviewPanel'
+import AttachmentPreviewPanel, { ImageViewer } from './AttachmentPreviewPanel'
 
 // ============================================================================
 // Types & Interfaces
@@ -95,6 +95,10 @@ export default function AttachmentManager({
   const [availableAttachments, setAvailableAttachments] = useState<Attachment[]>([])
   const [modalAttachments, setModalAttachments] = useState<Attachment[]>([])  // Filtered list for modal
   const [loadingAvailable, setLoadingAvailable] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [modalPreviewAttachment, setModalPreviewAttachment] = useState<Attachment | null>(null)
+  const [modalPreviewUrl, setModalPreviewUrl] = useState<string | null>(null)
+  const [modalPreviewLoading, setModalPreviewLoading] = useState(false)
 
   // Track previous visible attachment ids to prevent unnecessary callback triggers
   const prevVisibleIdsRef = useRef<string>('')
@@ -313,8 +317,44 @@ export default function AttachmentManager({
   }
 
   const handleOpenSelectModal = () => {
+    setSearchQuery('')  // Reset search when opening modal
+    setModalPreviewAttachment(null)
+    setModalPreviewUrl(null)
     setShowSelectModal(true)
     loadAvailableAttachments()
+  }
+
+  const handleModalPreview = async (attachment: Attachment) => {
+    // If clicking the same attachment, deselect it
+    if (modalPreviewAttachment?.id === attachment.id) {
+      setModalPreviewAttachment(null)
+      if (modalPreviewUrl) window.URL.revokeObjectURL(modalPreviewUrl)
+      setModalPreviewUrl(null)
+      return
+    }
+
+    setModalPreviewAttachment(attachment)
+    setModalPreviewLoading(true)
+    if (modalPreviewUrl) window.URL.revokeObjectURL(modalPreviewUrl)
+    setModalPreviewUrl(null)
+
+    try {
+      const response = await attachmentApi.download(attachment.id)
+      const blob = new Blob([response.data], { type: attachment.mime_type })
+      const url = window.URL.createObjectURL(blob)
+      setModalPreviewUrl(url)
+    } catch (error) {
+      console.error('Failed to load preview:', error)
+    } finally {
+      setModalPreviewLoading(false)
+    }
+  }
+
+  const closeSelectModal = () => {
+    setShowSelectModal(false)
+    if (modalPreviewUrl) window.URL.revokeObjectURL(modalPreviewUrl)
+    setModalPreviewUrl(null)
+    setModalPreviewAttachment(null)
   }
 
   const linkAttachmentToEntity = async (attachmentId: number): Promise<void> => {
@@ -378,6 +418,54 @@ export default function AttachmentManager({
     pendingMode || (entityType !== undefined && entityId !== undefined)
   )
   const formatFileSize = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`
+
+  // Helper: Get file type icon based on mime type
+  const getFileTypeIcon = (mimeType: string) => {
+    if (mimeType === 'application/pdf') {
+      return <FileText className="w-6 h-6 text-red-500" />
+    }
+    if (mimeType.startsWith('image/')) {
+      return <Image className="w-6 h-6 text-blue-500" />
+    }
+    return <File className="w-6 h-6 text-gray-400" />
+  }
+
+  // Helper: Get file type label
+  const getFileTypeLabel = (mimeType: string) => {
+    if (mimeType === 'application/pdf') return 'PDF'
+    if (mimeType === 'image/jpeg') return 'JPG'
+    if (mimeType === 'image/png') return 'PNG'
+    if (mimeType === 'image/gif') return 'GIF'
+    if (mimeType.startsWith('image/')) return 'Bild'
+    return 'Fil'
+  }
+
+  // Helper: Format date relatively
+  const formatRelativeDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays === 0) return 'Idag'
+    if (diffDays === 1) return 'Igår'
+    if (diffDays < 7) return `${diffDays} dagar sedan`
+    if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7)
+      return `${weeks} ${weeks === 1 ? 'vecka' : 'veckor'} sedan`
+    }
+    // Format as date for older files
+    return date.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  // Filter modal attachments by search query
+  const filteredModalAttachments = useMemo(() => {
+    if (!searchQuery.trim()) return modalAttachments
+    const query = searchQuery.toLowerCase()
+    return modalAttachments.filter(a =>
+      a.original_filename.toLowerCase().includes(query)
+    )
+  }, [modalAttachments, searchQuery])
 
   if (isLoading) {
     return (
@@ -557,53 +645,132 @@ export default function AttachmentManager({
 
       {/* Select existing file modal */}
       {showSelectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowSelectModal(false)}>
-          <div className="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">{labels.selectExistingTitle || 'Välj fil'}</h3>
-              <button
-                onClick={() => setShowSelectModal(false)}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
-                title="Stäng"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={closeSelectModal}>
+          <div
+            className={`relative bg-white rounded-lg shadow-xl mx-4 overflow-hidden flex ${modalPreviewAttachment ? 'max-w-4xl' : 'max-w-lg'} w-full transition-all duration-200`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Left side: File list */}
+            <div className={`flex flex-col ${modalPreviewAttachment ? 'w-1/2 border-r' : 'w-full'}`}>
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-lg font-semibold">{labels.selectExistingTitle || 'Välj fil'}</h3>
+                <button
+                  onClick={closeSelectModal}
+                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                  title="Stäng"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="p-4 border-b">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Sök på filnamn..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 max-h-[50vh] overflow-auto flex-1">
+                {loadingAvailable ? (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-gray-500">Laddar...</p>
+                  </div>
+                ) : filteredModalAttachments.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <FolderOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>{searchQuery ? 'Inga filer matchar sökningen' : (labels.selectExistingEmpty || 'Inga tillgängliga filer')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredModalAttachments.map((attachment) => (
+                      <button
+                        key={attachment.id}
+                        onClick={() => handleModalPreview(attachment)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors border ${
+                          modalPreviewAttachment?.id === attachment.id
+                            ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-300'
+                            : 'bg-gray-50 border-transparent hover:bg-blue-50 hover:border-blue-200'
+                        }`}
+                      >
+                        {getFileTypeIcon(attachment.mime_type)}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{attachment.original_filename}</p>
+                          <p className="text-xs text-gray-500">
+                            {getFileTypeLabel(attachment.mime_type)} · {formatFileSize(attachment.size_bytes)} · {formatRelativeDate(attachment.created_at)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-4 border-t bg-gray-50">
+                <span className="text-xs text-gray-500">
+                  {filteredModalAttachments.length} {filteredModalAttachments.length === 1 ? 'fil' : 'filer'}
+                </span>
+                <button onClick={closeSelectModal} className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-md">
+                  Avbryt
+                </button>
+              </div>
             </div>
 
-            <div className="p-4 max-h-[60vh] overflow-auto">
-              {loadingAvailable ? (
-                <div className="flex items-center justify-center py-8">
-                  <p className="text-gray-500">Laddar...</p>
+            {/* Right side: Preview panel */}
+            {modalPreviewAttachment && (
+              <div className="w-1/2 flex flex-col bg-gray-100">
+                <div className="p-4 border-b bg-white">
+                  <p className="font-medium truncate">{modalPreviewAttachment.original_filename}</p>
+                  <p className="text-xs text-gray-500">
+                    {getFileTypeLabel(modalPreviewAttachment.mime_type)} · {formatFileSize(modalPreviewAttachment.size_bytes)}
+                  </p>
                 </div>
-              ) : modalAttachments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <FolderOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                  <p>{labels.selectExistingEmpty || 'Inga tillgängliga filer'}</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {modalAttachments.map((attachment) => (
-                    <button
-                      key={attachment.id}
-                      onClick={() => handleSelectExisting(attachment)}
-                      className="w-full flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 text-left"
-                    >
-                      <FileText className="w-6 h-6 text-gray-400" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{attachment.original_filename}</p>
-                        <p className="text-xs text-gray-500">{formatFileSize(attachment.size_bytes)}</p>
+
+                <div className="flex-1 flex flex-col min-h-[300px] max-h-[50vh] overflow-hidden">
+                  {modalPreviewLoading ? (
+                    <div className="flex-1 flex items-center justify-center text-gray-500">Laddar förhandsvisning...</div>
+                  ) : modalPreviewUrl ? (
+                    modalPreviewAttachment.mime_type.startsWith('image/') ? (
+                      <ImageViewer
+                        src={modalPreviewUrl}
+                        alt={modalPreviewAttachment.original_filename}
+                      />
+                    ) : modalPreviewAttachment.mime_type === 'application/pdf' ? (
+                      <iframe
+                        src={modalPreviewUrl}
+                        className="w-full flex-1 min-h-[300px] rounded"
+                        title={modalPreviewAttachment.original_filename}
+                      />
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-gray-500 text-center">
+                        <div>
+                          <File className="w-16 h-16 mx-auto mb-2 text-gray-300" />
+                          <p>Förhandsvisning ej tillgänglig</p>
+                        </div>
                       </div>
-                    </button>
-                  ))}
+                    )
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-gray-500">Kunde inte ladda förhandsvisning</div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div className="flex items-center justify-end gap-2 p-4 border-t">
-              <button onClick={() => setShowSelectModal(false)} className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md">
-                Avbryt
-              </button>
-            </div>
+                <div className="p-4 border-t bg-white">
+                  <button
+                    onClick={() => handleSelectExisting(modalPreviewAttachment)}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                  >
+                    Välj denna fil
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
