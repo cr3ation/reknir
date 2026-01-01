@@ -5,14 +5,72 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
-from app.models.attachment import Attachment, AttachmentLink, AttachmentStatus
+from app.dependencies import get_current_active_user, verify_company_access
+from app.models.attachment import Attachment, AttachmentLink, AttachmentStatus, EntityType
+from app.models.expense import Expense
+from app.models.fiscal_year import FiscalYear
+from app.models.invoice import Invoice, SupplierInvoice
 from app.models.user import User
+from app.models.verification import Verification
 from app.schemas.attachment import AttachmentListItem, AttachmentResponse
 from app.services import attachment_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def check_attachment_has_closed_fiscal_year_links(db: Session, attachment_id: int) -> bool:
+    """
+    Kontrollera om bilagan har länkar till entiteter i stängda räkenskapsår.
+    Returnerar True om någon länk finns i stängt år.
+
+    Används för att förhindra radering av bilagor som hör till bokförda
+    transaktioner i stängda räkenskapsår (svensk bokföringslag).
+    """
+    links = db.query(AttachmentLink).filter(AttachmentLink.attachment_id == attachment_id).all()
+
+    for link in links:
+        if link.entity_type == EntityType.VERIFICATION:
+            verification = db.query(Verification).filter(Verification.id == link.entity_id).first()
+            if verification:
+                fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == verification.fiscal_year_id).first()
+                if fiscal_year and fiscal_year.is_closed:
+                    return True
+
+        elif link.entity_type == EntityType.INVOICE:
+            invoice = db.query(Invoice).filter(Invoice.id == link.entity_id).first()
+            if invoice:
+                fiscal_year = db.query(FiscalYear).filter(
+                    FiscalYear.company_id == invoice.company_id,
+                    FiscalYear.start_date <= invoice.invoice_date,
+                    FiscalYear.end_date >= invoice.invoice_date,
+                ).first()
+                if fiscal_year and fiscal_year.is_closed:
+                    return True
+
+        elif link.entity_type == EntityType.SUPPLIER_INVOICE:
+            supplier_invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == link.entity_id).first()
+            if supplier_invoice:
+                fiscal_year = db.query(FiscalYear).filter(
+                    FiscalYear.company_id == supplier_invoice.company_id,
+                    FiscalYear.start_date <= supplier_invoice.invoice_date,
+                    FiscalYear.end_date >= supplier_invoice.invoice_date,
+                ).first()
+                if fiscal_year and fiscal_year.is_closed:
+                    return True
+
+        elif link.entity_type == EntityType.EXPENSE:
+            expense = db.query(Expense).filter(Expense.id == link.entity_id).first()
+            if expense:
+                fiscal_year = db.query(FiscalYear).filter(
+                    FiscalYear.company_id == expense.company_id,
+                    FiscalYear.start_date <= expense.expense_date,
+                    FiscalYear.end_date >= expense.expense_date,
+                ).first()
+                if fiscal_year and fiscal_year.is_closed:
+                    return True
+
+    return False
 
 
 @router.post("/", response_model=AttachmentResponse, status_code=status.HTTP_201_CREATED)
@@ -144,6 +202,13 @@ async def delete_attachment(
 
     # Verify access to attachment's company
     await verify_company_access(attachment.company_id, current_user, db)
+
+    # Check if attachment is linked to any entity in a closed fiscal year
+    if check_attachment_has_closed_fiscal_year_links(db, attachment_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kan ej radera bilaga som är länkad till entitet i stängt räkenskapsår",
+        )
 
     # Check if attachment has any links
     link_count = db.query(AttachmentLink).filter(AttachmentLink.attachment_id == attachment_id).count()
