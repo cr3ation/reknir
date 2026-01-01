@@ -40,33 +40,45 @@ def check_attachment_has_closed_fiscal_year_links(db: Session, attachment_id: in
         elif link.entity_type == EntityType.INVOICE:
             invoice = db.query(Invoice).filter(Invoice.id == link.entity_id).first()
             if invoice:
-                fiscal_year = db.query(FiscalYear).filter(
-                    FiscalYear.company_id == invoice.company_id,
-                    FiscalYear.start_date <= invoice.invoice_date,
-                    FiscalYear.end_date >= invoice.invoice_date,
-                ).first()
+                fiscal_year = (
+                    db.query(FiscalYear)
+                    .filter(
+                        FiscalYear.company_id == invoice.company_id,
+                        FiscalYear.start_date <= invoice.invoice_date,
+                        FiscalYear.end_date >= invoice.invoice_date,
+                    )
+                    .first()
+                )
                 if fiscal_year and fiscal_year.is_closed:
                     return True
 
         elif link.entity_type == EntityType.SUPPLIER_INVOICE:
             supplier_invoice = db.query(SupplierInvoice).filter(SupplierInvoice.id == link.entity_id).first()
             if supplier_invoice:
-                fiscal_year = db.query(FiscalYear).filter(
-                    FiscalYear.company_id == supplier_invoice.company_id,
-                    FiscalYear.start_date <= supplier_invoice.invoice_date,
-                    FiscalYear.end_date >= supplier_invoice.invoice_date,
-                ).first()
+                fiscal_year = (
+                    db.query(FiscalYear)
+                    .filter(
+                        FiscalYear.company_id == supplier_invoice.company_id,
+                        FiscalYear.start_date <= supplier_invoice.invoice_date,
+                        FiscalYear.end_date >= supplier_invoice.invoice_date,
+                    )
+                    .first()
+                )
                 if fiscal_year and fiscal_year.is_closed:
                     return True
 
         elif link.entity_type == EntityType.EXPENSE:
             expense = db.query(Expense).filter(Expense.id == link.entity_id).first()
             if expense:
-                fiscal_year = db.query(FiscalYear).filter(
-                    FiscalYear.company_id == expense.company_id,
-                    FiscalYear.start_date <= expense.expense_date,
-                    FiscalYear.end_date >= expense.expense_date,
-                ).first()
+                fiscal_year = (
+                    db.query(FiscalYear)
+                    .filter(
+                        FiscalYear.company_id == expense.company_id,
+                        FiscalYear.start_date <= expense.expense_date,
+                        FiscalYear.end_date >= expense.expense_date,
+                    )
+                    .first()
+                )
                 if fiscal_year and fiscal_year.is_closed:
                     return True
 
@@ -86,7 +98,9 @@ async def upload_attachment(
     Creates an attachment record and saves the file to storage.
     The attachment is not linked to any entity yet - use the link endpoints on entities to do that.
     """
-    logger.info(f"Upload attachment: company_id={company_id}, filename={file.filename}, content_type={file.content_type}")
+    logger.info(
+        f"Upload attachment: company_id={company_id}, filename={file.filename}, content_type={file.content_type}"
+    )
 
     # Verify company access
     await verify_company_access(company_id, current_user, db)

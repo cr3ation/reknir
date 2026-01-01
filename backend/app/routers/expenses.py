@@ -340,9 +340,7 @@ async def link_attachment(
         )
 
     if attachment.company_id != expense.company_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company")
 
     # Check if link already exists
     existing_link = (

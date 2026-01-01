@@ -308,9 +308,7 @@ async def link_attachment(
         )
 
     if attachment.company_id != verification.company_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company")
 
     # Check if link already exists
     existing_link = (
@@ -323,7 +321,9 @@ async def link_attachment(
         .first()
     )
     if existing_link:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment already linked to this verification")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment already linked to this verification"
+        )
 
     # Create link
     link = AttachmentLink(
