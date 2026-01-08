@@ -484,10 +484,215 @@ seed_demo_data() {
     api_post "/api/invoices/${INVOICE3_ID}/mark-paid" "{\"paid_date\": \"2025-04-05\", \"paid_amount\": 31250}" > /dev/null
     echo "   Invoice 3 paid"
 
-    # Step 10: Create 3 manual verifications for 2025
+    # Step 10: Create 3 suppliers
+    echo "Creating suppliers..."
+
+    supplier1=$(api_post "/api/suppliers" "{
+        \"company_id\": ${COMPANY_ID},
+        \"name\": \"Kontorsmaterial AB\",
+        \"org_number\": \"556111-2222\",
+        \"contact_person\": \"Kent Kontorsson\",
+        \"email\": \"order@kontorsmaterial.se\",
+        \"phone\": \"08-111 22 33\",
+        \"address\": \"Kontorsgatan 10\",
+        \"postal_code\": \"11111\",
+        \"city\": \"Stockholm\",
+        \"country\": \"Sverige\",
+        \"payment_terms_days\": 30
+    }")
+    SUPPLIER1_ID=$(echo "$supplier1" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created: Kontorsmaterial AB"
+
+    supplier2=$(api_post "/api/suppliers" "{
+        \"company_id\": ${COMPANY_ID},
+        \"name\": \"IT-Lösningar Sverige AB\",
+        \"org_number\": \"556333-4444\",
+        \"contact_person\": \"Ingrid IT-sson\",
+        \"email\": \"faktura@itlosningar.se\",
+        \"phone\": \"08-333 44 55\",
+        \"address\": \"Servervägen 5\",
+        \"postal_code\": \"22222\",
+        \"city\": \"Göteborg\",
+        \"country\": \"Sverige\",
+        \"payment_terms_days\": 30
+    }")
+    SUPPLIER2_ID=$(echo "$supplier2" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created: IT-Lösningar Sverige AB"
+
+    supplier3=$(api_post "/api/suppliers" "{
+        \"company_id\": ${COMPANY_ID},
+        \"name\": \"Fastighetsservice Stockholm AB\",
+        \"org_number\": \"556555-6666\",
+        \"contact_person\": \"Fredrik Fastighet\",
+        \"email\": \"faktura@fastighetsservice.se\",
+        \"phone\": \"08-555 66 77\",
+        \"address\": \"Hyresvägen 15\",
+        \"postal_code\": \"33333\",
+        \"city\": \"Stockholm\",
+        \"country\": \"Sverige\",
+        \"payment_terms_days\": 30
+    }")
+    SUPPLIER3_ID=$(echo "$supplier3" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created: Fastighetsservice Stockholm AB"
+
+    # Step 11: Create 6 supplier invoices with various statuses
+    echo "Creating supplier invoices..."
+
+    # Supplier Invoice 1 - Draft (not registered)
+    sinv1=$(api_post "/api/supplier-invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER1_ID},
+        \"supplier_invoice_number\": \"KM-2025-001\",
+        \"invoice_date\": \"2025-04-01\",
+        \"due_date\": \"2025-05-01\",
+        \"reference\": \"Kontorsartiklar Q2\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Kopieringspapper A4\",
+                \"quantity\": 50,
+                \"unit_price\": 200,
+                \"vat_rate\": 25
+            },
+            {
+                \"description\": \"Pennor och kontorsmaterial\",
+                \"quantity\": 1,
+                \"unit_price\": 1500,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV1_ID=$(echo "$sinv1" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created supplier invoice 1 (11 500 SEK) - Draft"
+
+    # Supplier Invoice 2 - Registered, unpaid
+    sinv2=$(api_post "/api/supplier-invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER2_ID},
+        \"supplier_invoice_number\": \"IT-2025-042\",
+        \"invoice_date\": \"2025-03-15\",
+        \"due_date\": \"2025-04-15\",
+        \"reference\": \"Molntjänster mars\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Azure molntjänster mars\",
+                \"quantity\": 1,
+                \"unit_price\": 8500,
+                \"vat_rate\": 25
+            },
+            {
+                \"description\": \"Support och underhåll\",
+                \"quantity\": 5,
+                \"unit_price\": 1200,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV2_ID=$(echo "$sinv2" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    api_post "/api/supplier-invoices/${SINV2_ID}/register" "{}" > /dev/null
+    echo "   Created supplier invoice 2 (14 500 SEK) - Registered, unpaid"
+
+    # Supplier Invoice 3 - Registered, partially paid
+    sinv3=$(api_post "/api/supplier-invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER3_ID},
+        \"supplier_invoice_number\": \"FS-2025-118\",
+        \"invoice_date\": \"2025-02-01\",
+        \"due_date\": \"2025-03-01\",
+        \"reference\": \"Hyra februari\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Lokalhyra februari\",
+                \"quantity\": 1,
+                \"unit_price\": 25000,
+                \"vat_rate\": 0
+            },
+            {
+                \"description\": \"Fastighetsskötsel\",
+                \"quantity\": 1,
+                \"unit_price\": 3000,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV3_ID=$(echo "$sinv3" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    api_post "/api/supplier-invoices/${SINV3_ID}/register" "{}" > /dev/null
+    api_post "/api/supplier-invoices/${SINV3_ID}/mark-paid" "{\"paid_date\": \"2025-02-28\", \"paid_amount\": 15000}" > /dev/null
+    echo "   Created supplier invoice 3 (28 750 SEK) - Partially paid (15 000 SEK)"
+
+    # Supplier Invoice 4 - Registered, fully paid
+    sinv4=$(api_post "/api/supplier-invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER1_ID},
+        \"supplier_invoice_number\": \"KM-2025-002\",
+        \"invoice_date\": \"2025-01-10\",
+        \"due_date\": \"2025-02-10\",
+        \"reference\": \"Kontorsartiklar januari\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Skrivbordsmaterial\",
+                \"quantity\": 1,
+                \"unit_price\": 4500,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV4_ID=$(echo "$sinv4" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    api_post "/api/supplier-invoices/${SINV4_ID}/register" "{}" > /dev/null
+    api_post "/api/supplier-invoices/${SINV4_ID}/mark-paid" "{\"paid_date\": \"2025-02-05\", \"paid_amount\": 5625}" > /dev/null
+    echo "   Created supplier invoice 4 (5 625 SEK) - Fully paid"
+
+    # Supplier Invoice 5 - Registered, unpaid, overdue
+    sinv5=$(api_post "/api/supplier-invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER2_ID},
+        \"supplier_invoice_number\": \"IT-2025-015\",
+        \"invoice_date\": \"2025-01-01\",
+        \"due_date\": \"2025-01-31\",
+        \"reference\": \"Licenser Q1\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Microsoft 365-licenser\",
+                \"quantity\": 10,
+                \"unit_price\": 350,
+                \"vat_rate\": 25
+            },
+            {
+                \"description\": \"Antiviruslicenser\",
+                \"quantity\": 10,
+                \"unit_price\": 150,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV5_ID=$(echo "$sinv5" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    api_post "/api/supplier-invoices/${SINV5_ID}/register" "{}" > /dev/null
+    echo "   Created supplier invoice 5 (6 250 SEK) - Registered, unpaid (overdue)"
+
+    # Supplier Invoice 6 - Cancelled
+    sinv6=$(api_post "/api/supplier-invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER3_ID},
+        \"supplier_invoice_number\": \"FS-2025-099\",
+        \"invoice_date\": \"2025-01-15\",
+        \"due_date\": \"2025-02-15\",
+        \"reference\": \"Felaktig faktura\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Extra tjänst (feldebiterad)\",
+                \"quantity\": 1,
+                \"unit_price\": 5000,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV6_ID=$(echo "$sinv6" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    api_post "/api/supplier-invoices/${SINV6_ID}/cancel" "{}" > /dev/null
+    echo "   Created supplier invoice 6 (6 250 SEK) - Cancelled"
+
+    # Step 12: Create 3 manual verifications for 2025
     echo "Creating manual verifications for 2025..."
 
-    # Get account IDs
+    # Get account IDs for 2025
     ACC_5010=$(get_account_id 5010 $FISCAL_YEAR_2025_ID)  # Lokalhyra
     ACC_6110=$(get_account_id 6110 $FISCAL_YEAR_2025_ID)  # Kontorsmaterial
     ACC_1930=$(get_account_id 1930 $FISCAL_YEAR_2025_ID)  # Bank
@@ -535,7 +740,7 @@ seed_demo_data() {
     }" > /dev/null
     echo "   Created: Ränteintäkter Q1 (150 SEK)"
 
-    # Step 11: Create fiscal year 2026
+    # Step 13: Create fiscal year 2026
     echo "Creating fiscal year 2026..."
     fy2026_response=$(api_post "/api/fiscal-years" "{
         \"company_id\": ${COMPANY_ID},
@@ -548,12 +753,12 @@ seed_demo_data() {
     FISCAL_YEAR_2026_ID=$(echo "$fy2026_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     echo "   Created fiscal year 2026 (ID: ${FISCAL_YEAR_2026_ID})"
 
-    # Step 12: Copy chart of accounts to 2026
+    # Step 14: Copy chart of accounts to 2026
     echo "Copying chart of accounts to 2026..."
     api_post "/api/fiscal-years/${FISCAL_YEAR_2026_ID}/copy-chart-of-accounts?source_fiscal_year_id=${FISCAL_YEAR_2025_ID}" "{}" > /dev/null
     echo "   Chart of accounts copied"
 
-    # Step 13: Create 3 manual verifications for 2026
+    # Step 15: Create 3 manual verifications for 2026
     echo "Creating manual verifications for 2026..."
 
     # Get account IDs for 2026
@@ -627,7 +832,7 @@ echo "     - Takes longer"
 echo ""
 echo "  3) Quick Reset with Demo Data"
 echo "     - Same as Quick Reset"
-echo "     - Plus: Creates demo company, customers, invoices"
+echo "     - Plus: Creates demo company, customers, suppliers, invoices"
 echo "     - Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
 echo ""
 read -p "Select option [1]: " RESET_TYPE
@@ -711,7 +916,7 @@ elif [ "$RESET_TYPE" = "3" ]; then
     echo "  ✓ Stop and remove containers"
     echo "  ✓ Remove database volume (all data deleted)"
     echo "  ✓ Restart with empty migrated database"
-    echo "  ✓ Create demo user, company, customers, invoices"
+    echo "  ✓ Create demo user, company, customers, suppliers, invoices"
     echo "  ✗ Keep existing images (no rebuild)"
     echo ""
     read -p "Continue? [Y/n]: " CONFIRM
@@ -741,8 +946,10 @@ elif [ "$RESET_TYPE" = "3" ]; then
     echo "Data created:"
     echo "  - Fiscal Years: 2025, 2026"
     echo "  - Customers: 5"
-    echo "  - Invoices: 5 (3 paid, 2 unpaid)"
-    echo "  - Verifications: 6 total (3 in 2025, 3 in 2026)"
+    echo "  - Customer invoices: 5 (3 paid, 2 unpaid)"
+    echo "  - Suppliers: 3"
+    echo "  - Supplier invoices: 6 (1 draft, 2 unpaid, 1 partial, 1 paid, 1 cancelled)"
+    echo "  - Manual verifications: 6 (3 in 2025, 3 in 2026)"
 fi
 
 echo ""

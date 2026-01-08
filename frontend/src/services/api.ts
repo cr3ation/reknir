@@ -26,15 +26,15 @@ import type {
   Expense,
   ExpenseCreateData,
   MonthlyStatistics,
+  Attachment,
+  EntityAttachment,
+  AttachmentRole,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 // Add auth token to all requests
@@ -87,9 +87,7 @@ export const companyApi = {
   uploadLogo: (id: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post<Company>(`/companies/${id}/logo`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    return api.post<Company>(`/companies/${id}/logo`, formData)
   },
   getLogo: (id: number) => `${API_BASE_URL}/api/companies/${id}/logo`,
   deleteLogo: (id: number) => api.delete<Company>(`/companies/${id}/logo`),
@@ -151,6 +149,15 @@ export const verificationApi = {
   update: (id: number, data: Partial<Verification>) =>
     api.patch<Verification>(`/verifications/${id}`, data),
   delete: (id: number) => api.delete(`/verifications/${id}`),
+  // Attachment link methods
+  listAttachments: (id: number) => api.get<EntityAttachment[]>(`/verifications/${id}/attachments`),
+  linkAttachment: (id: number, attachmentId: number, role?: AttachmentRole) =>
+    api.post<EntityAttachment>(`/verifications/${id}/attachments`, {
+      attachment_id: attachmentId,
+      role: role || 'supporting',
+    }),
+  unlinkAttachment: (id: number, attachmentId: number) =>
+    api.delete(`/verifications/${id}/attachments/${attachmentId}`),
 }
 
 // Posting Templates
@@ -254,15 +261,30 @@ export const supplierInvoiceApi = {
   markPaid: (id: number, data: { paid_date: string; paid_amount?: number; bank_account_id?: number }) =>
     api.post<SupplierInvoice>(`/supplier-invoices/${id}/mark-paid`, data),
   delete: (id: number) => api.delete(`/supplier-invoices/${id}`),
-  uploadAttachment: (id: number, file: File) => {
+  // Attachment link methods (new unified attachment system)
+  listAttachments: (id: number) => api.get<EntityAttachment[]>(`/supplier-invoices/${id}/attachments`),
+  linkAttachment: (id: number, attachmentId: number, role?: AttachmentRole) =>
+    api.post<EntityAttachment>(`/supplier-invoices/${id}/attachments`, {
+      attachment_id: attachmentId,
+      role: role || 'original',
+    }),
+  unlinkAttachment: (id: number, attachmentId: number) =>
+    api.delete(`/supplier-invoices/${id}/attachments/${attachmentId}`),
+}
+
+// Attachments (Unified attachment system)
+export const attachmentApi = {
+  upload: (companyId: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post<SupplierInvoice>(`/supplier-invoices/${id}/upload-attachment`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    return api.post<Attachment>('/attachments/', formData, {
+      params: { company_id: companyId },
     })
   },
-  downloadAttachment: (id: number) => api.get(`/supplier-invoices/${id}/attachment`, { responseType: 'blob' }),
-  deleteAttachment: (id: number) => api.delete<SupplierInvoice>(`/supplier-invoices/${id}/attachment`),
+  get: (id: number) => api.get<Attachment>(`/attachments/${id}`),
+  download: (id: number) => api.get(`/attachments/${id}/content`, { responseType: 'blob' }),
+  delete: (id: number) => api.delete(`/attachments/${id}`),
+  list: (companyId: number) => api.get<Attachment[]>('/attachments/', { params: { company_id: companyId } }),
 }
 
 // SIE4 Import/Export
@@ -272,9 +294,6 @@ export const sie4Api = {
     formData.append('file', file)
     return api.post<SIE4ImportResponse>(`/sie4/import/${companyId}`, formData, {
       params: { fiscal_year_id: fiscalYearId },
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
     })
   },
   export: (companyId: number, fiscalYearId: number, includeVerifications: boolean = true) => {
@@ -312,15 +331,15 @@ export const expenseApi = {
     api.post<Expense>(`/expenses/${id}/book`, null, { params: { employee_payable_account_id: employeePayableAccountId } }),
   markPaid: (id: number, paidDate: string, bankAccountId: number) =>
     api.post<Expense>(`/expenses/${id}/mark-paid`, null, { params: { paid_date: paidDate, bank_account_id: bankAccountId } }),
-  uploadReceipt: (id: number, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return api.post<Expense>(`/expenses/${id}/upload-receipt`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  },
-  downloadReceipt: (id: number) => api.get(`/expenses/${id}/receipt`, { responseType: 'blob' }),
-  deleteReceipt: (id: number) => api.delete<Expense>(`/expenses/${id}/receipt`),
+  // Attachment link methods (new unified attachment system)
+  listAttachments: (id: number) => api.get<EntityAttachment[]>(`/expenses/${id}/attachments`),
+  linkAttachment: (id: number, attachmentId: number, role?: AttachmentRole) =>
+    api.post<EntityAttachment>(`/expenses/${id}/attachments`, {
+      attachment_id: attachmentId,
+      role: role || 'receipt',
+    }),
+  unlinkAttachment: (id: number, attachmentId: number) =>
+    api.delete(`/expenses/${id}/attachments/${attachmentId}`),
 }
 
 export default api

@@ -1,24 +1,19 @@
-import shutil
-import uuid
 from datetime import date, datetime
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
+from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
 from app.models.expense import Expense, ExpenseStatus
+from app.models.fiscal_year import FiscalYear
 from app.models.user import User
+from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
 from app.schemas.expense import ExpenseCreate, ExpenseResponse, ExpenseUpdate
 from app.services.expense_service import create_expense_payment_verification, create_expense_verification
 
 router = APIRouter()
-
-# Create receipts directory if it doesn't exist
-RECEIPTS_DIR = Path("/app/receipts")
-RECEIPTS_DIR.mkdir(exist_ok=True)
 
 
 @router.post("/", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
@@ -302,97 +297,172 @@ async def book_expense(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
-@router.post("/{expense_id}/upload-receipt", response_model=ExpenseResponse)
-async def upload_receipt(
+# =============================================================================
+# Attachment link endpoints
+# =============================================================================
+
+
+@router.post("/{expense_id}/attachments", response_model=EntityAttachmentItem, status_code=status.HTTP_201_CREATED)
+async def link_attachment(
     expense_id: int,
-    file: UploadFile = File(...),
+    link_data: AttachmentLinkCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Upload a receipt file for an expense"""
+    """Link an attachment to an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Expense {expense_id} not found")
 
-    # Verify user has access to this company
     await verify_company_access(expense.company_id, current_user, db)
 
-    # Validate file type (images and PDFs)
-    allowed_extensions = {".jpg", ".jpeg", ".png", ".pdf", ".gif"}
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in allowed_extensions:
+    # Check that fiscal year is open
+    fiscal_year = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == expense.company_id,
+            FiscalYear.start_date <= expense.expense_date,
+            FiscalYear.end_date >= expense.expense_date,
+        )
+        .first()
+    )
+    if not fiscal_year or fiscal_year.is_closed:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type {file_ext} not allowed. Allowed types: {', '.join(allowed_extensions)}",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify attachments when fiscal year is closed",
         )
 
-    # Delete old receipt if exists
-    if expense.receipt_filename:
-        old_path = RECEIPTS_DIR / expense.receipt_filename
-        if old_path.exists():
-            old_path.unlink()
+    # Verify attachment exists and belongs to same company
+    attachment = db.query(Attachment).filter(Attachment.id == link_data.attachment_id).first()
+    if not attachment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Attachment {link_data.attachment_id} not found"
+        )
 
-    # Generate unique filename
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = RECEIPTS_DIR / unique_filename
+    if attachment.company_id != expense.company_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment belongs to different company")
 
-    # Save file
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Check if link already exists
+    existing_link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == link_data.attachment_id,
+            AttachmentLink.entity_type == EntityType.EXPENSE,
+            AttachmentLink.entity_id == expense_id,
+        )
+        .first()
+    )
+    if existing_link:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attachment already linked to this expense")
 
-    # Update expense record
-    expense.receipt_filename = unique_filename
+    # Create link
+    link = AttachmentLink(
+        attachment_id=link_data.attachment_id,
+        entity_type=EntityType.EXPENSE,
+        entity_id=expense_id,
+        role=link_data.role or AttachmentRole.RECEIPT,
+        sort_order=link_data.sort_order or 0,
+    )
+    db.add(link)
     db.commit()
-    db.refresh(expense)
+    db.refresh(link)
 
-    return expense
+    return EntityAttachmentItem(
+        link_id=link.id,
+        attachment_id=attachment.id,
+        original_filename=attachment.original_filename,
+        mime_type=attachment.mime_type,
+        size_bytes=attachment.size_bytes,
+        status=attachment.status,
+        role=link.role,
+        sort_order=link.sort_order,
+        created_at=attachment.created_at,
+    )
 
 
-@router.get("/{expense_id}/receipt")
-async def download_receipt(
-    expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
+@router.get("/{expense_id}/attachments", response_model=list[EntityAttachmentItem])
+async def list_expense_attachments(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Download the receipt file for an expense"""
+    """List all attachments linked to an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Expense {expense_id} not found")
 
-    # Verify user has access to this company
     await verify_company_access(expense.company_id, current_user, db)
 
-    if not expense.receipt_filename:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No receipt file found for this expense")
+    links = (
+        db.query(AttachmentLink)
+        .filter(AttachmentLink.entity_type == EntityType.EXPENSE, AttachmentLink.entity_id == expense_id)
+        .order_by(AttachmentLink.sort_order)
+        .all()
+    )
 
-    file_path = RECEIPTS_DIR / expense.receipt_filename
-    if not file_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt file not found on disk")
+    result = []
+    for link in links:
+        attachment = db.query(Attachment).filter(Attachment.id == link.attachment_id).first()
+        if attachment:
+            result.append(
+                EntityAttachmentItem(
+                    link_id=link.id,
+                    attachment_id=attachment.id,
+                    original_filename=attachment.original_filename,
+                    mime_type=attachment.mime_type,
+                    size_bytes=attachment.size_bytes,
+                    status=attachment.status,
+                    role=link.role,
+                    sort_order=link.sort_order,
+                    created_at=attachment.created_at,
+                )
+            )
 
-    return FileResponse(path=str(file_path), filename=expense.receipt_filename, media_type="application/octet-stream")
+    return result
 
 
-@router.delete("/{expense_id}/receipt", response_model=ExpenseResponse)
-async def delete_receipt(
-    expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
+@router.delete("/{expense_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unlink_attachment(
+    expense_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """Delete the receipt file for an expense"""
+    """Unlink an attachment from an expense"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Expense {expense_id} not found")
 
-    # Verify user has access to this company
     await verify_company_access(expense.company_id, current_user, db)
 
-    if not expense.receipt_filename:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No receipt file found for this expense")
+    # Check that fiscal year is open
+    fiscal_year = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == expense.company_id,
+            FiscalYear.start_date <= expense.expense_date,
+            FiscalYear.end_date >= expense.expense_date,
+        )
+        .first()
+    )
+    if not fiscal_year or fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify attachments when fiscal year is closed",
+        )
 
-    # Delete file from disk
-    file_path = RECEIPTS_DIR / expense.receipt_filename
-    if file_path.exists():
-        file_path.unlink()
+    link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.attachment_id == attachment_id,
+            AttachmentLink.entity_type == EntityType.EXPENSE,
+            AttachmentLink.entity_id == expense_id,
+        )
+        .first()
+    )
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not linked to this expense")
 
-    # Clear filename from database
-    expense.receipt_filename = None
+    db.delete(link)
     db.commit()
-    db.refresh(expense)
-
-    return expense
+    return None

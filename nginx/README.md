@@ -6,7 +6,7 @@ This directory contains nginx configuration for production deployment.
 
 - **nginx.conf**: Main reverse proxy configuration
   - Routes `/api/*` → Backend (FastAPI on port 8000)
-  - Routes `/*` → Frontend (Vite on port 5173)
+  - Routes `/*` → Frontend (built static files on port 80)
   - Includes rate limiting, security headers, and health checks
 
 ## Configuration Details
@@ -23,7 +23,7 @@ This directory contains nginx configuration for production deployment.
 - Rate limiting (API: 10 req/s, General: 30 req/s)
 - Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
 - CORS support
-- 20MB upload limit for receipts/invoices
+- 20MB upload limit for attachments
 
 ### SSL/TLS
 

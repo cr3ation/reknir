@@ -36,8 +36,6 @@ services:
     volumes:
       - ./backend:/app
       - ./database:/database
-      - ./receipts:/app/receipts
-      - ./invoices:/app/invoices
       - ./uploads:/app/uploads
       - /app/.venv  # Prevent overwriting venv
     restart: unless-stopped

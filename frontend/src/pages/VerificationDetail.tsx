@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-react'
-import { verificationApi, accountApi } from '@/services/api'
-import type { Verification, Account } from '@/types'
+import { verificationApi, accountApi, attachmentApi } from '@/services/api'
+import type { Verification, Account, EntityAttachment } from '@/types'
+import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import AttachmentManager from '@/components/AttachmentManager'
 
 export default function VerificationDetail() {
   const { verificationId } = useParams<{ verificationId: string }>()
@@ -13,12 +15,18 @@ export default function VerificationDetail() {
   const { selectedFiscalYear } = useFiscalYear()
   const [verification, setVerification] = useState<Verification | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [attachments, setAttachments] = useState<EntityAttachment[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadVerification = useCallback(async () => {
     try {
       const response = await verificationApi.get(parseInt(verificationId!))
       setVerification(response.data)
+
+      // Load attachments
+      const attachmentsRes = await verificationApi.listAttachments(parseInt(verificationId!))
+      setAttachments(attachmentsRes.data)
+
       setLoading(false)
     } catch (error) {
       console.error('Failed to load verification:', error)
@@ -43,6 +51,39 @@ export default function VerificationDetail() {
     loadVerification()
     loadAccounts()
   }, [loadVerification, loadAccounts])
+
+  // Attachment handlers for AttachmentManager
+  const handleUploadAttachment = async (file: File) => {
+    if (!selectedCompany) throw new Error('No company selected')
+
+    const uploadRes = await attachmentApi.upload(selectedCompany.id, file)
+    await verificationApi.linkAttachment(parseInt(verificationId!), uploadRes.data.id)
+
+    const attachmentsRes = await verificationApi.listAttachments(parseInt(verificationId!))
+    setAttachments(attachmentsRes.data)
+  }
+
+  const handleDeleteAttachment = async (attachment: EntityAttachment) => {
+    await verificationApi.unlinkAttachment(parseInt(verificationId!), attachment.attachment_id)
+    setAttachments(attachments.filter(a => a.attachment_id !== attachment.attachment_id))
+  }
+
+  const handleDownloadAttachment = async (attachment: EntityAttachment) => {
+    const response = await attachmentApi.download(attachment.attachment_id)
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', attachment.original_filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const loadAttachments = useCallback(async () => {
+    const attachmentsRes = await verificationApi.listAttachments(parseInt(verificationId!))
+    setAttachments(attachmentsRes.data)
+  }, [verificationId])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -270,6 +311,33 @@ export default function VerificationDetail() {
               )}
             </div>
           </div>
+
+          {/* Attachments */}
+          <AttachmentManager
+            attachments={attachments}
+            config={{
+              allowUpload: !(selectedFiscalYear?.is_closed ?? true),
+              allowDelete: !(selectedFiscalYear?.is_closed ?? true),
+            }}
+            labels={{
+              title: 'Bokföringsunderlag',
+              emptyState: 'Inga underlag uppladdade',
+              uploadButton: 'Välj fil att ladda upp',
+              addMoreButton: 'Lägg till underlag',
+              deleteConfirm: (f) => `Ta bort underlaget "${f}"?`,
+              uploadSuccess: 'Underlaget har laddats upp',
+              uploadError: 'Kunde inte ladda upp underlaget',
+              deleteError: 'Kunde inte ta bort underlaget',
+              downloadError: 'Kunde inte ladda ner underlaget',
+            }}
+            onUpload={handleUploadAttachment}
+            onDelete={handleDeleteAttachment}
+            onDownload={handleDownloadAttachment}
+            companyId={selectedCompany?.id}
+            entityType={EntityType.VERIFICATION}
+            entityId={parseInt(verificationId!)}
+            onAttachmentsChange={loadAttachments}
+          />
         </div>
 
         {/* Sidebar */}

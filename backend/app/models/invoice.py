@@ -184,9 +184,6 @@ class SupplierInvoice(Base):
     invoice_verification_id = Column(Integer, ForeignKey("verifications.id"), nullable=True)
     payment_verification_id = Column(Integer, ForeignKey("verifications.id"), nullable=True)
 
-    # Attachment
-    attachment_path = Column(String, nullable=True)  # PDF/image of invoice
-
     # Timestamps
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

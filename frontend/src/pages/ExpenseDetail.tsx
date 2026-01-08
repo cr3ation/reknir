@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen, Download, Upload } from 'lucide-react'
-import { expenseApi, accountApi } from '@/services/api'
-import type { Expense, Account } from '@/types'
+import { ArrowLeft, Edit2, Check, X, FileText, DollarSign, BookOpen } from 'lucide-react'
+import { expenseApi, accountApi, attachmentApi } from '@/services/api'
+import type { Expense, Account, EntityAttachment } from '@/types'
+import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
+import AttachmentManager from '@/components/AttachmentManager'
 
 export default function ExpenseDetail() {
   const { expenseId } = useParams<{ expenseId: string }>()
@@ -13,9 +15,9 @@ export default function ExpenseDetail() {
   const { selectedFiscalYear } = useFiscalYear()
   const [expense, setExpense] = useState<Expense | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [attachments, setAttachments] = useState<EntityAttachment[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const [formData, setFormData] = useState({
     employee_name: '',
@@ -45,6 +47,11 @@ export default function ExpenseDetail() {
         expense_account_id: response.data.expense_account_id?.toString() || '',
         vat_account_id: response.data.vat_account_id?.toString() || '',
       })
+
+      // Load attachments
+      const attachmentsRes = await expenseApi.listAttachments(parseInt(expenseId!))
+      setAttachments(attachmentsRes.data)
+
       setLoading(false)
     } catch (error) {
       console.error('Failed to load expense:', error)
@@ -77,14 +84,8 @@ export default function ExpenseDetail() {
       }
 
       const response = await expenseApi.update(parseInt(expenseId!), payload)
-
-      if (selectedFile) {
-        await expenseApi.uploadReceipt(parseInt(expenseId!), selectedFile)
-      }
-
       setExpense(response.data)
       setEditing(false)
-      setSelectedFile(null)
       await loadExpense()
     } catch (error) {
       console.error('Failed to save expense:', error)
@@ -169,23 +170,38 @@ export default function ExpenseDetail() {
     }
   }
 
-  const handleDownloadReceipt = async () => {
-    if (!expense?.receipt_filename) return
-    try {
-      const response = await expenseApi.downloadReceipt(parseInt(expenseId!))
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', expense.receipt_filename)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Failed to download receipt:', error)
-      alert('Kunde inte ladda ner kvittot')
-    }
+  // Attachment handlers for AttachmentManager
+  const handleUploadAttachment = async (file: File) => {
+    if (!selectedCompany) throw new Error('No company selected')
+
+    const uploadRes = await attachmentApi.upload(selectedCompany.id, file)
+    await expenseApi.linkAttachment(parseInt(expenseId!), uploadRes.data.id)
+
+    const attachmentsRes = await expenseApi.listAttachments(parseInt(expenseId!))
+    setAttachments(attachmentsRes.data)
   }
+
+  const handleDeleteAttachment = async (attachment: EntityAttachment) => {
+    await expenseApi.unlinkAttachment(parseInt(expenseId!), attachment.attachment_id)
+    setAttachments(attachments.filter(a => a.attachment_id !== attachment.attachment_id))
+  }
+
+  const handleDownloadAttachment = async (attachment: EntityAttachment) => {
+    const response = await attachmentApi.download(attachment.attachment_id)
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', attachment.original_filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const loadAttachments = useCallback(async () => {
+    const attachmentsRes = await expenseApi.listAttachments(parseInt(expenseId!))
+    setAttachments(attachmentsRes.data)
+  }, [expenseId])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -356,10 +372,7 @@ export default function ExpenseDetail() {
                     Spara ändringar
                   </button>
                   <button
-                    onClick={() => {
-                      setEditing(false)
-                      setSelectedFile(null)
-                    }}
+                    onClick={() => setEditing(false)}
                     className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
                   >
                     Avbryt
@@ -410,30 +423,32 @@ export default function ExpenseDetail() {
             )}
           </div>
 
-          {/* Receipt */}
-          <div className="card">
-            <h2 className="text-xl font-bold mb-4">Kvitto</h2>
-            {expense.receipt_filename ? (
-              <div className="flex items-center gap-3">
-                <FileText className="w-8 h-8 text-gray-400" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{expense.receipt_filename}</p>
-                  <p className="text-xs text-gray-500">Kvitto uppladdat</p>
-                </div>
-                <button
-                  onClick={handleDownloadReceipt}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Upload className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p>Inget kvitto uppladdat</p>
-              </div>
-            )}
-          </div>
+          {/* Receipt/Attachments */}
+          <AttachmentManager
+            attachments={attachments}
+            config={{
+              allowUpload: !(selectedFiscalYear?.is_closed ?? true),
+              allowDelete: !(selectedFiscalYear?.is_closed ?? true),
+            }}
+            labels={{
+              title: 'Kvitto',
+              emptyState: 'Inget kvitto uppladdat',
+              uploadButton: 'Välj fil att ladda upp',
+              addMoreButton: 'Lägg till kvitto',
+              deleteConfirm: (f) => `Ta bort kvittot "${f}"?`,
+              uploadSuccess: 'Kvittot har laddats upp',
+              uploadError: 'Kunde inte ladda upp kvittot',
+              deleteError: 'Kunde inte ta bort kvittot',
+              downloadError: 'Kunde inte ladda ner kvittot',
+            }}
+            onUpload={handleUploadAttachment}
+            onDelete={handleDeleteAttachment}
+            onDownload={handleDownloadAttachment}
+            companyId={selectedCompany?.id}
+            entityType={EntityType.EXPENSE}
+            entityId={parseInt(expenseId!)}
+            onAttachmentsChange={loadAttachments}
+          />
         </div>
 
         {/* Sidebar */}

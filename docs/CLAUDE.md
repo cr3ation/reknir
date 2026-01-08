@@ -229,8 +229,9 @@ Kredit: 1930 Bankkonto              [Belopp]
 - `GET /api/supplier-invoices/{id}` - Hämta faktura
 - `POST /api/supplier-invoices/{id}/register` - Bokför
 - `POST /api/supplier-invoices/{id}/mark-paid` - Markera betald
-- `POST /api/supplier-invoices/{id}/upload-attachment` - Ladda upp bilaga
-- `GET /api/supplier-invoices/{id}/attachment` - Ladda ner bilaga
+- `POST /api/supplier-invoices/{id}/attachments` - Länka befintlig bilaga
+- `GET /api/supplier-invoices/{id}/attachments` - Lista bilagor
+- `DELETE /api/supplier-invoices/{id}/attachments/{attachment_id}` - Ta bort bilaga-länk
 
 **Routes:**
 - `/invoices` - Lista (samma sida som kundfakturor)
@@ -504,15 +505,10 @@ docker compose exec backend alembic revision --autogenerate -m "beskrivning"
 
 ## Filuppladdning
 
-### Kvitton (Utlägg)
-- Lagrad i: `/app/receipts/`
-- Docker volume: `./receipts:/app/receipts`
-- Format: JPG, JPEG, PNG, PDF, GIF
-- Unika filnamn: UUID
-
-### Fakturabilagor (Leverantörsfakturor)
-- Lagrad i: `/app/invoices/`
-- Docker volume: `./invoices:/app/invoices`
+### Bilagor (Attachments)
+Systemet använder en generell attachment-hantering för alla typer av bilagor:
+- Hanteras via `/api/attachments/` endpoints
+- Kan länkas till verifikationer, leverantörsfakturor, utlägg etc.
 - Format: JPG, JPEG, PNG, PDF, GIF
 - Unika filnamn: UUID
 
@@ -568,13 +564,28 @@ git push -u origin branch-name
 ```
 
 ## API Authentication
-Systemet har för närvarande ingen autentisering (single-company mode). Detta kan läggas till i framtiden med JWT tokens eller liknande.
+Systemet använder JWT-baserad autentisering med stöd för flera användare och roller.
+
+**Autentiseringsflöde:**
+1. Användaren loggar in via `POST /api/auth/login` med email och lösenord
+2. Systemet returnerar en JWT-token (giltig i 7 dagar)
+3. Token skickas med i Authorization-header: `Bearer <token>`
+
+**Roller:**
+- **Admin**: Full tillgång till alla företag och användarhantering
+- **Regular User**: Tillgång endast till tilldelade företag
+
+**Autentiseringskrav:**
+- Alla API-endpoints (utom login/register) kräver giltig JWT-token
+- Företagsspecifika endpoints kontrollerar även att användaren har tillgång till företaget
+
+Se [AUTH_SETUP.md](AUTH_SETUP.md) för detaljerad dokumentation.
 
 ## Framtida Förbättringar
 
 ### Planerade Funktioner
-- [ ] Användarautentisering och roller
-- [ ] Multi-company support
+- [x] Användarautentisering och roller (implementerat)
+- [x] Multi-company support (implementerat)
 - [ ] Automatiska påminnelser för förfallna fakturor
 - [ ] Bankkontointegrationer (BankID, Open Banking)
 - [ ] Lönehantering

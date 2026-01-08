@@ -14,7 +14,6 @@ class ExpenseBase(BaseModel):
     vat_amount: Decimal = Field(default=Decimal("0"), ge=0)
     expense_account_id: int | None = None
     vat_account_id: int | None = None
-    receipt_filename: str | None = None
 
 
 class ExpenseCreate(ExpenseBase):
@@ -33,7 +32,6 @@ class ExpenseUpdate(BaseModel):
     vat_amount: Decimal | None = Field(None, ge=0)
     expense_account_id: int | None = None
     vat_account_id: int | None = None
-    receipt_filename: str | None = None
     status: str | None = None
 
 

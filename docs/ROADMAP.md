@@ -134,9 +134,9 @@
 **Prioritet: MEDEL | Komplexitet: MEDEL**
 
 ### 3.1 Användarhantering
-- [ ] **Multi-user support**
+- [x] **Multi-user support** (implementerat)
   - Flera användare per företag
-  - Roller och behörigheter (Admin, Ekonomi, Användare)
+  - Roller och behörigheter (Admin, Regular User)
   - JWT-baserad autentisering
 
 - [ ] **Godkännandeflöden**
@@ -145,10 +145,10 @@
   - E-postsignering av dokument
 
 ### 3.2 Multi-company
-- [ ] **Flera företag per användare**
+- [x] **Flera företag per användare** (implementerat)
   - Växla mellan företag
-  - Konsoliderade rapporter
-  - Delade kunder/leverantörer
+  - [ ] Konsoliderade rapporter
+  - [ ] Delade kunder/leverantörer
 
 ### 3.3 Projektredovisning
 - [ ] **Projekt & uppdrag**

@@ -252,7 +252,6 @@ class SupplierInvoiceResponse(SupplierInvoiceBase):
     paid_date: date | None
     invoice_verification_id: int | None
     payment_verification_id: int | None
-    attachment_path: str | None
     created_at: datetime
     updated_at: datetime
     supplier_invoice_lines: list[SupplierInvoiceLineResponse]

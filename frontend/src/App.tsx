@@ -19,6 +19,7 @@ import InviteAccept from './pages/InviteAccept'
 import Setup from './pages/Setup'
 import Login from './pages/Login'
 import { FiscalYearProvider } from './contexts/FiscalYearContext'
+import { LayoutSettingsProvider } from './contexts/LayoutSettingsContext'
 import CompanySelector from './components/CompanySelector'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -26,18 +27,20 @@ import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
-        <CompanyProvider>
-          <FiscalYearProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/invite/:token" element={<InviteAccept />} />
-              <Route path="/setup" element={<Setup />} />
-              <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
-            </Routes>
-          </FiscalYearProvider>
-        </CompanyProvider>
+        <LayoutSettingsProvider>
+          <CompanyProvider>
+            <FiscalYearProvider>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/invite/:token" element={<InviteAccept />} />
+                <Route path="/setup" element={<Setup />} />
+                <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+              </Routes>
+            </FiscalYearProvider>
+          </CompanyProvider>
+        </LayoutSettingsProvider>
       </AuthProvider>
     </Router>
   )
