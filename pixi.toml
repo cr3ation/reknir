@@ -1,0 +1,39 @@
+# Pixi configuration for Reknir
+# This provides a local Python environment for running CLI tools without Docker
+#
+# Usage:
+#   pixi install                    # Install dependencies
+#   pixi run seed-templates         # Seed posting templates
+#   pixi run seed-bas               # Seed BAS kontoplan
+#   pixi run seed-all               # Seed everything
+#
+# Note: You need DATABASE_URL set to connect to the database:
+#   DATABASE_URL="postgresql://user:pass@host:5432/reknir" pixi run seed-templates
+
+[workspace]
+name = "reknir"
+version = "0.1.0"
+description = "Reknir - Swedish accounting software"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+# Database seeding tasks (run from backend directory)
+seed-templates = { cmd = "python -m app.cli seed-templates", cwd = "backend", description = "Seed posting templates (konteringsmallar)" }
+seed-bas = { cmd = "python -m app.cli seed-bas", cwd = "backend", description = "Seed BAS 2024 kontoplan" }
+seed-all = { cmd = "python -m app.cli seed-all", cwd = "backend", description = "Seed both BAS kontoplan and posting templates" }
+
+# Docker seeding tasks (copies seed files and runs in container)
+docker-seed-templates = { cmd = "docker exec reknir-backend mkdir -p /app/database/seeds && docker cp database/seeds/. reknir-backend:/app/database/seeds/ && docker exec reknir-backend python -m app.cli seed-templates", description = "Seed templates in Docker container" }
+docker-seed-bas = { cmd = "docker exec reknir-backend mkdir -p /app/database/seeds && docker cp database/seeds/. reknir-backend:/app/database/seeds/ && docker exec reknir-backend python -m app.cli seed-bas", description = "Seed BAS kontoplan in Docker container" }
+docker-seed-all = { cmd = "docker exec reknir-backend mkdir -p /app/database/seeds && docker cp database/seeds/. reknir-backend:/app/database/seeds/ && docker exec reknir-backend python -m app.cli seed-all", description = "Seed everything in Docker container" }
+
+[dependencies]
+python = ">=3.11"
+
+[pypi-dependencies]
+sqlalchemy = ">=2.0.25"
+psycopg2-binary = ">=2.9.9"
+python-dotenv = ">=1.0.0"
+pydantic = ">=2.5.3"
+pydantic-settings = ">=2.1.0"

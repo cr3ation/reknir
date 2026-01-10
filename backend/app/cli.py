@@ -13,6 +13,30 @@ from app.models.account import AccountType
 from app.models.posting_template import PostingTemplate, PostingTemplateLine
 
 
+def get_seeds_path():
+    """
+    Get the path to seeds directory, checking multiple locations.
+
+    This function supports both development and Docker environments:
+    - Development: Seeds are in /repo/database/seeds (sibling of backend)
+    - Docker: Seeds are copied to /app/database/seeds inside the container
+
+    Returns:
+        Path: Path to the seeds directory
+
+    Raises:
+        FileNotFoundError: If seeds directory is not found in any location
+    """
+    candidates = [
+        Path(__file__).parent.parent.parent / "database" / "seeds",  # Dev: /repo/database/seeds
+        Path(__file__).parent.parent / "database" / "seeds",  # Docker: /app/database/seeds
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    raise FileNotFoundError(f"Seeds directory not found. Tried: {[str(p) for p in candidates]}")
+
+
 def seed_bas_accounts(company_id: int):
     """
     Seed BAS 2024 kontoplan for a company
@@ -40,10 +64,10 @@ def seed_bas_accounts(company_id: int):
                 return False
 
         # Read BAS accounts JSON
-        json_path = Path(__file__).parent.parent.parent / "database" / "seeds" / "bas_accounts.json"
-
-        if not json_path.exists():
-            print(f"Error: BAS accounts file not found at {json_path}")
+        try:
+            json_path = get_seeds_path() / "bas_accounts.json"
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
             return False
 
         with open(json_path, encoding="utf-8") as f:
@@ -103,7 +127,7 @@ def seed_bas_accounts(company_id: int):
 
 def load_posting_templates():
     """Load posting templates from JSON file"""
-    template_file = Path(__file__).parent.parent.parent / "database" / "seeds" / "posting_templates.json"
+    template_file = get_seeds_path() / "posting_templates.json"
     with open(template_file, encoding="utf-8") as f:
         return json.load(f)
 

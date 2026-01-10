@@ -91,6 +91,44 @@ npm install
 npm run dev
 ```
 
+## Seeding Data
+
+After creating a company via the onboarding wizard, you can seed it with the Swedish BAS kontoplan and common posting templates (konteringsmallar).
+
+### In Docker (Production)
+
+```bash
+# Copy seed files to container (required for production)
+docker exec reknir-backend mkdir -p /app/database/seeds
+docker cp database/seeds/. reknir-backend:/app/database/seeds/
+
+# Seed BAS kontoplan for company ID 1
+docker exec reknir-backend python -m app.cli seed-bas
+
+# Seed posting templates for company ID 1
+docker exec reknir-backend python -m app.cli seed-templates
+
+# Or seed everything at once
+docker exec reknir-backend python -m app.cli seed-all
+
+# For a different company ID:
+docker exec reknir-backend python -m app.cli seed-all 2
+```
+
+### Local Development (with pixi)
+
+If you have [pixi](https://pixi.sh) installed, you can run the CLI tools locally:
+
+```bash
+# Install dependencies
+pixi install
+
+# Run seed commands (requires DATABASE_URL to point to your database)
+DATABASE_URL="postgresql://reknir:reknir@localhost:5432/reknir" pixi run seed-templates
+DATABASE_URL="postgresql://reknir:reknir@localhost:5432/reknir" pixi run seed-bas
+DATABASE_URL="postgresql://reknir:reknir@localhost:5432/reknir" pixi run seed-all
+```
+
 ## Utility Scripts
 
 | Script | Description |
