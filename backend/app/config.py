@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     app_name: str = "Reknir - Swedish Bookkeeping"
     debug: bool = True
 
+    # Backup
+    backup_dir: str = "/backups"
+
     # Authentication
     secret_key: str = "your-secret-key-change-in-production-use-openssl-rand-hex-32"
     algorithm: str = "HS256"

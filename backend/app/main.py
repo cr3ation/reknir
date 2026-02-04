@@ -7,6 +7,7 @@ from app.routers import (
     accounts,
     attachments,
     auth,
+    backup,
     companies,
     customers,
     dashboard,
@@ -75,6 +76,9 @@ app.include_router(attachments.router, prefix="/api/attachments", tags=["attachm
 # SIE4 import/export and default accounts
 app.include_router(sie4.router)
 app.include_router(default_accounts.router)
+
+# Backup and restore
+app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 
 
 @app.get("/")

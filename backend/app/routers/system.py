@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import __version__
 from app.database import get_db
 from app.models.user import User
+from app.schema_version import CURRENT_SCHEMA_VERSION
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -27,4 +28,5 @@ def get_system_info(db: Session = Depends(get_db)):
     return {
         "needs_setup": user_count == 0,
         "version": __version__,
+        "schema_version": CURRENT_SCHEMA_VERSION,
     }
