@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi } from '@/services/api'
-import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine } from '@/types'
+import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi } from '@/services/api'
+import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo } from '@/types'
 import { VATReportingPeriod, AccountingBasis } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2 } from 'lucide-react'
+import RestoreModal from '@/components/RestoreModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useLayoutSettings } from '@/contexts/LayoutSettingsContext'
@@ -33,6 +34,11 @@ export default function SettingsPage() {
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [backups, setBackups] = useState<BackupInfo[]>([])
+  const [loadingBackups, setLoadingBackups] = useState(false)
+  const [creatingBackup, setCreatingBackup] = useState(false)
+  const [downloadingBackup, setDownloadingBackup] = useState<string | null>(null)
+  const [showRestoreModal, setShowRestoreModal] = useState(false)
   const [importSummary, setImportSummary] = useState<{
     accounts_created: number
     accounts_updated: number
@@ -77,6 +83,12 @@ export default function SettingsPage() {
   useEffect(() => {
     loadData()
   }, [selectedCompany, selectedFiscalYear])
+
+  useEffect(() => {
+    if (activeTab === 'import') {
+      loadBackups()
+    }
+  }, [activeTab])
 
   const loadData = async () => {
     if (!selectedCompany) {
@@ -348,6 +360,86 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadBackups = async () => {
+    setLoadingBackups(true)
+    try {
+      const response = await backupApi.list()
+      setBackups(response.data)
+    } catch (error: any) {
+      console.error('Failed to load backups:', error)
+      showMessage('Kunde inte ladda backups', 'error')
+    } finally {
+      setLoadingBackups(false)
+    }
+  }
+
+  const handleCreateBackup = async () => {
+    setCreatingBackup(true)
+    try {
+      const response = await backupApi.create()
+
+      // Trigger download
+      const blob = new Blob([response.data], { type: 'application/gzip' })
+      const url = window.URL.createObjectURL(blob)
+      const contentDisposition = response.headers['content-disposition']
+      let filename = `reknir_backup_${new Date().toISOString().split('T')[0]}.tar.gz`
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^";\n]+)"?/)
+        if (match) filename = match[1]
+      }
+
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      showMessage('Backup skapad och nedladdad!', 'success')
+      loadBackups()
+    } catch (error: any) {
+      console.error('Backup creation failed:', error)
+      showMessage(error.response?.data?.detail || 'Kunde inte skapa backup', 'error')
+    } finally {
+      setCreatingBackup(false)
+    }
+  }
+
+  const handleDownloadBackup = async (filename: string) => {
+    setDownloadingBackup(filename)
+    try {
+      const response = await backupApi.download(filename)
+
+      const blob = new Blob([response.data], { type: 'application/gzip' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      showMessage('Backup nedladdad', 'success')
+    } catch (error: any) {
+      console.error('Backup download failed:', error)
+      showMessage('Kunde inte ladda ner backup', 'error')
+    } finally {
+      setDownloadingBackup(null)
+    }
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const formatBackupDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleString('sv-SE')
   }
 
   const handleVATReportingPeriodChange = async (newPeriod: VATReportingPeriod) => {
@@ -1231,6 +1323,135 @@ export default function SettingsPage() {
       {/* Import/Export Tab */}
       {activeTab === 'import' && (
         <div>
+          {/* Backup Section */}
+          <div className="card mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <HardDrive className="w-5 h-5 text-gray-600" />
+              <h2 className="text-xl font-semibold">Systembackup</h2>
+            </div>
+            <p className="text-gray-600 mb-4">
+              Skapa fullständiga backups av hela systemet, inklusive databas och bilagor.
+            </p>
+
+            {/* Create Backup */}
+            <div className="mb-6">
+              <button
+                onClick={handleCreateBackup}
+                disabled={creatingBackup || loading}
+                className="btn btn-primary inline-flex items-center"
+              >
+                {creatingBackup ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Skapar backup...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Skapa och ladda ner backup
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Backup List */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Backups på servern</h3>
+                <button
+                  onClick={loadBackups}
+                  disabled={loadingBackups}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {loadingBackups ? 'Laddar...' : 'Uppdatera'}
+                </button>
+              </div>
+
+              {loadingBackups ? (
+                <div className="text-center py-4 text-gray-500">
+                  <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                  Laddar backups...
+                </div>
+              ) : backups.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  <p>Inga backups på servern.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Skapad</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Version</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Schema</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Storlek</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Åtgärder</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {backups.map((backup) => (
+                        <tr key={backup.filename} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 text-sm text-gray-900">
+                            {formatBackupDate(backup.created_at)}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-gray-600">{backup.app_version}</td>
+                          <td className="px-3 py-2 text-sm text-gray-600">{backup.schema_version}</td>
+                          <td className="px-3 py-2 text-sm text-gray-600">
+                            {formatFileSize(backup.size_bytes)}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleDownloadBackup(backup.filename)}
+                                disabled={downloadingBackup === backup.filename}
+                                className="text-blue-600 hover:text-blue-800 p-1"
+                                title="Ladda ner"
+                              >
+                                {downloadingBackup === backup.filename ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setShowRestoreModal(true)}
+                                className="text-amber-600 hover:text-amber-800 p-1"
+                                title="Återställ"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Restore Button */}
+            <div className="border-t mt-4 pt-4">
+              <button
+                onClick={() => setShowRestoreModal(true)}
+                className="btn btn-secondary inline-flex items-center"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Återställ från backup
+              </button>
+              <p className="mt-2 text-sm text-gray-500">
+                Återställ systemet från en backup på servern eller ladda upp en backup-fil.
+              </p>
+            </div>
+
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded">
+              <p className="text-sm text-amber-800">
+                <strong>Varning:</strong> Återställning ersätter ALL data i systemet. Skapa alltid en backup
+                av nuvarande data innan du återställer.
+              </p>
+            </div>
+          </div>
+
           {/* SIE4 Import/Export Section */}
       <div className="card mb-6">
         <h2 className="text-xl font-semibold mb-4">SIE4 Import/Export</h2>
@@ -1947,6 +2168,13 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Restore Modal */}
+      <RestoreModal
+        isOpen={showRestoreModal}
+        onClose={() => setShowRestoreModal(false)}
+        backups={backups}
+      />
 
     </div>
   )

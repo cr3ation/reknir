@@ -372,7 +372,7 @@ def main():
             )
             if result.success:
                 print("Restore completed successfully!")
-                print(f"Backup ID: {result.backup_id}")
+                print(f"Backup: {result.backup_filename}")
                 print(f"Stages: {', '.join(result.stages_completed)}")
             else:
                 print(f"Restore failed: {result.message}")

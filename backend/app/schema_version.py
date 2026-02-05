@@ -25,4 +25,28 @@ def get_current_schema_version() -> str:
     return head
 
 
+def get_applied_schema_version() -> str:
+    """Read the actually applied schema version from the database.
+
+    Queries the alembic_version table to determine which migration
+    has been applied. This may differ from CURRENT_SCHEMA_VERSION
+    if migrations are pending.
+    """
+    from sqlalchemy import create_engine, text
+
+    from app.config import settings
+
+    engine = create_engine(settings.database_url)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT version_num FROM alembic_version LIMIT 1")
+            ).fetchone()
+            if row is None:
+                return "unknown"
+            return row[0]
+    finally:
+        engine.dispose()
+
+
 CURRENT_SCHEMA_VERSION = get_current_schema_version()

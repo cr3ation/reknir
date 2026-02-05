@@ -638,3 +638,20 @@ export interface EntityAttachment {
   size_bytes: number
   status: AttachmentStatus
 }
+
+// Backup & Restore
+
+export interface BackupInfo {
+  created_at: string
+  app_version: string
+  schema_version: string
+  filename: string
+  size_bytes: number
+}
+
+export interface RestoreResponse {
+  success: boolean
+  backup_filename: string
+  message: string
+  stages_completed: string[]
+}

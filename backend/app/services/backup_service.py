@@ -1,7 +1,7 @@
 """Backup service for creating and listing full system backups.
 
 A backup is a tar.gz archive containing:
-- manifest.json: version metadata and backup ID
+- manifest.json: version metadata
 - database_dump: pg_dump in custom format
 - files/: all attachment files
 """
@@ -13,14 +13,13 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 from app import __version__
 from app.config import settings
-from app.schema_version import CURRENT_SCHEMA_VERSION
+from app.schema_version import get_applied_schema_version
 from app.services.attachment_service import ATTACHMENTS_DIR
 
 logger = logging.getLogger(__name__)
@@ -49,18 +48,18 @@ def create_backup() -> Path:
     Raises:
         RuntimeError: If pg_dump fails or archive creation fails.
     """
-    backup_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    timestamp_label = now.strftime("%Y%m%d_%H%M%S")
+    timestamp = now.isoformat()
 
     with tempfile.TemporaryDirectory(prefix="reknir_backup_") as tmp_dir:
         tmp_path = Path(tmp_dir)
 
         # 1. Create manifest.json
         manifest = {
-            "backup_id": backup_id,
             "created_at": timestamp,
             "app_version": __version__,
-            "schema_version": CURRENT_SCHEMA_VERSION,
+            "schema_version": get_applied_schema_version(),
         }
         manifest_path = tmp_path / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2))
@@ -98,7 +97,7 @@ def create_backup() -> Path:
 
         # 4. Create tar.gz archive
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        archive_name = f"reknir_backup_{backup_id}.tar.gz"
+        archive_name = f"reknir_backup_{timestamp_label}.tar.gz"
         archive_path = BACKUP_DIR / archive_name
 
         with tarfile.open(archive_path, "w:gz") as tar:
@@ -106,7 +105,7 @@ def create_backup() -> Path:
             tar.add(str(dump_path), arcname="backup/database_dump")
             tar.add(str(files_dir), arcname="backup/files")
 
-        logger.info(f"Backup created: {archive_path} (id={backup_id})")
+        logger.info(f"Backup created: {archive_path}")
         return archive_path
 
 
@@ -114,7 +113,7 @@ def list_backups() -> list[dict]:
     """List all available backup archives with their manifest metadata.
 
     Returns:
-        List of dicts with backup_id, created_at, app_version,
+        List of dicts with created_at, app_version,
         schema_version, filename, size_bytes.
     """
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)

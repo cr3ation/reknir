@@ -11,8 +11,11 @@ from pydantic import BaseModel
 
 from app.dependencies import require_admin
 from app.models.user import User
+import fnmatch
+
 from app.services import backup_service
 from app.services import restore_service
+from app.services.backup_service import BACKUP_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +26,6 @@ router = APIRouter()
 
 
 class BackupInfo(BaseModel):
-    backup_id: str
     created_at: str
     app_version: str
     schema_version: str
@@ -33,7 +35,7 @@ class BackupInfo(BaseModel):
 
 class RestoreResponse(BaseModel):
     success: bool
-    backup_id: str
+    backup_filename: str
     message: str
     stages_completed: list[str]
 
@@ -69,6 +71,106 @@ async def list_backups(
     return backup_service.list_backups()
 
 
+@router.get("/download/{filename}")
+async def download_backup(
+    filename: str,
+    admin: User = Depends(require_admin),
+):
+    """Download a specific backup file from server. Admin only."""
+    # Security: reject path traversal attempts
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename",
+        )
+
+    # Validate filename pattern
+    if not fnmatch.fnmatch(filename, "reknir_backup_*.tar.gz"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid backup filename format",
+        )
+
+    archive_path = BACKUP_DIR / filename
+    if not archive_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Backup not found: {filename}",
+        )
+
+    return FileResponse(
+        path=str(archive_path),
+        filename=filename,
+        media_type="application/gzip",
+    )
+
+
+@router.post("/restore/{filename}", response_model=RestoreResponse)
+async def restore_from_server(
+    filename: str,
+    admin: User = Depends(require_admin),
+):
+    """Restore from a backup file already on the server.
+
+    This is a destructive operation -- all current data will be replaced
+    with the backup contents. The restore is all-or-nothing: if any
+    validation fails, production remains untouched.
+
+    Admin only.
+    """
+    # Security: reject path traversal attempts
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename",
+        )
+
+    # Validate filename pattern
+    if not fnmatch.fnmatch(filename, "reknir_backup_*.tar.gz"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid backup filename format",
+        )
+
+    archive_path = BACKUP_DIR / filename
+    if not archive_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Backup not found: {filename}",
+        )
+
+    try:
+        result = restore_service.restore_from_archive(
+            archive_path=archive_path,
+            performed_by=admin.email,
+        )
+
+        return RestoreResponse(
+            success=result.success,
+            backup_filename=result.backup_filename,
+            message=result.message,
+            stages_completed=result.stages_completed,
+        )
+
+    except restore_service.RestoreError as e:
+        restore_service._log_restore_event(
+            backup_filename=filename,
+            performed_by=admin.email,
+            success=False,
+            message=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Restore from server failed unexpectedly: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Restore failed: {str(e)}",
+        )
+
+
 @router.post("/restore", response_model=RestoreResponse)
 async def restore_backup(
     file: UploadFile = File(...),
@@ -98,7 +200,7 @@ async def restore_backup(
 
         return RestoreResponse(
             success=result.success,
-            backup_id=result.backup_id,
+            backup_filename=result.backup_filename,
             message=result.message,
             stages_completed=result.stages_completed,
         )
@@ -106,7 +208,7 @@ async def restore_backup(
     except restore_service.RestoreError as e:
         # Log failed attempt
         restore_service._log_restore_event(
-            backup_id="unknown",
+            backup_filename="unknown",
             performed_by=admin.email,
             success=False,
             message=str(e),

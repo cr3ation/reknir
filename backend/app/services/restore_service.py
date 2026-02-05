@@ -49,7 +49,7 @@ class RestoreResult:
 
     def __init__(self):
         self.success: bool = False
-        self.backup_id: str = ""
+        self.backup_filename: str = ""
         self.message: str = ""
         self.stages_completed: list[str] = []
         self.started_at: datetime = datetime.now(timezone.utc)
@@ -129,9 +129,9 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
         with open(manifest_path) as f:
             manifest = json.load(f)
 
-        result.backup_id = manifest.get("backup_id", "unknown")
+        result.backup_filename = archive_path.name
 
-        for field in ["backup_id", "created_at", "app_version", "schema_version"]:
+        for field in ["created_at", "app_version", "schema_version"]:
             if field not in manifest:
                 raise RestoreError(
                     f"Missing required field: {field}", "read_manifest"
@@ -150,7 +150,6 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
                 "version_check",
             )
 
-        needs_migration = backup_schema < CURRENT_SCHEMA_VERSION
         result.stages_completed.append("version_check")
 
         # ---- Stage 4: Create temporary database ----
@@ -184,9 +183,18 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
             timeout=600,
         )
 
-        # pg_restore may return non-zero for warnings; check stderr for real errors
-        if pg_result.returncode != 0 and "error" in pg_result.stderr.lower():
-            raise RestoreError(f"pg_restore failed: {pg_result.stderr}", "restore_db")
+        # pg_restore returns non-zero for both fatal errors and non-fatal warnings
+        # (e.g. SET transaction_timeout from newer pg_dump versions).
+        # If it reports "errors ignored on restore" it means it continued past them.
+        # Only fail on truly fatal issues where pg_restore couldn't proceed at all.
+        if pg_result.returncode != 0:
+            stderr = pg_result.stderr
+            has_ignored_errors = "errors ignored on restore" in stderr
+            if not has_ignored_errors:
+                # Fatal error - pg_restore couldn't even partially complete
+                raise RestoreError(f"pg_restore failed: {stderr}", "restore_db")
+            else:
+                logger.warning(f"pg_restore completed with non-fatal warnings: {stderr}")
 
         result.stages_completed.append("restore_db")
 
@@ -204,10 +212,12 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
         result.stages_completed.append("restore_files")
 
-        # ---- Stage 7: Run migrations if needed ----
-        if needs_migration:
-            temp_db_url = _build_database_url(db_info, temp_dbname)
-            _run_alembic_upgrade(temp_db_url)
+        # ---- Stage 7: Run migrations ----
+        # Always run alembic upgrade to ensure the restored database has all
+        # current migrations applied. Alembic reads alembic_version from the
+        # restored DB and only runs what's missing — a no-op if already at head.
+        temp_db_url = _build_database_url(db_info, temp_dbname)
+        _run_alembic_upgrade(temp_db_url)
 
         result.stages_completed.append("migrations")
 
@@ -262,7 +272,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
         # ---- Stage 10: Log restore event ----
         _log_restore_event(
-            backup_id=result.backup_id,
+            backup_filename=result.backup_filename,
             performed_by=performed_by,
             success=True,
             message="Restore completed successfully",
@@ -413,7 +423,7 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
 
 
 def _log_restore_event(
-    backup_id: str,
+    backup_filename: str,
     performed_by: str,
     success: bool,
     message: str,
@@ -422,7 +432,7 @@ def _log_restore_event(
     """Log a restore event to both the application log and the restore_log table."""
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "backup_id": backup_id,
+        "backup_filename": backup_filename,
         "performed_by": performed_by,
         "success": success,
         "message": message,
@@ -446,13 +456,13 @@ def _log_restore_event(
             conn.execute(
                 text(
                     "INSERT INTO restore_log "
-                    "(backup_id, performed_by, success, message, "
+                    "(backup_filename, performed_by, success, message, "
                     " backup_app_version, backup_schema_version, created_at) "
-                    "VALUES (:backup_id, :performed_by, :success, :message, "
+                    "VALUES (:backup_filename, :performed_by, :success, :message, "
                     " :app_version, :schema_version, NOW())"
                 ),
                 {
-                    "backup_id": backup_id,
+                    "backup_filename": backup_filename,
                     "performed_by": performed_by,
                     "success": success,
                     "message": message,
