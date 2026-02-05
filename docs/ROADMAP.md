@@ -1,6 +1,6 @@
 # REKNIR - Utvecklingsplan
 
-## Nuläge (v1.2 - December 2025)
+## Nuläge (v1.3 - Februari 2026)
 ✅ Komplett bokföringssystem med dubbel bokföring
 ✅ Kundfakturor med PDF och betalningshantering
 ✅ Leverantörsfakturor med bilagor och betalning
@@ -18,6 +18,7 @@
 ✅ Standardkonton
 ✅ Balansräkning och resultaträkning
 ✅ Månatlig statistik och rapporter
+✅ Backup och restore med GUI (kalendervy, uppladdning, server-restore)
 
 ---
 
@@ -64,17 +65,21 @@
   - Kontoutdrag
 
 ### 1.3 Data & Säkerhet
-- [ ] **Backup-funktionalitet**
-  - Automatiska backuper
-  - Manuell backup/restore
-  - Export av hela databasen
+- [x] **Backup-funktionalitet** (v1.3.0)
+  - Automatiska backuper (cron-baserat)
+  - Manuell backup/restore via GUI
+  - Export av hela databasen (databas + bilagor i .tar.gz)
+  - Kalenderbaserad backup-väljare
+  - Restore från server eller filuppladdning
+  - CLI-stöd (`backup create`, `backup list`, `backup restore`)
+  - Metadata per backup (version, schema, storlek)
 
-- [ ] **Audit log**
+- [ ] **Audit log** (v1.3.1)
   - Logga alla ändringar
   - Visa ändringshistorik per post
   - Spårbarhet för revision
 
-- [ ] **Datavalidering**
+- [ ] **Datavalidering** (v1.3.2)
   - Varningar för obalanserade verifikationer
   - Kontroll av momssatser
   - Validering vid periodavslut
@@ -288,17 +293,17 @@
 ## Prioriterad Roadmap
 
 ### Q1 2025 - Stabilisering (v1.1)
-1. Dashboard med verkliga siffror
+1. ~~Dashboard med verkliga siffror~~ ✅
 2. Förbättrad sökning & filtrering
 3. PDF-export av rapporter
-4. Backup-funktionalitet
-5. Audit log
+4. ~~Backup-funktionalitet~~ ✅ (v1.3.0)
+5. Audit log (v1.3.1)
 
 ### Q2 2025 - Användbarhet (v1.2)
 1. Batch-operationer
 2. Notifikationer
 3. Excel-export
-4. Datavalidering
+4. Datavalidering (v1.3.2)
 5. Förbättrad momsrapportering
 
 ### Q3 2025 - Automatisering (v2.0)
@@ -419,6 +424,6 @@
 
 ---
 
-**Senast uppdaterad:** 2025-12-21
-**Version:** 1.2 (under utveckling)
+**Senast uppdaterad:** 2026-02-05
+**Version:** 1.3 (under utveckling)
 **Status:** Funktionell MVP - lämplig för testning och utveckling, ej för produktionsdrift ännu

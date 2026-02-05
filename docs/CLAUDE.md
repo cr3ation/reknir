@@ -45,6 +45,7 @@ reknir/
 ├── invoices/                 # Fakturabilagor
 ├── uploads/                  # Uppladdade filer (logotyper)
 │   └── logos/                # Företagslogotyper
+├── backups/                  # Backup-arkiv (.tar.gz)
 └── docker-compose.yml        # Container orchestration
 ```
 
@@ -331,7 +332,32 @@ Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förut
 **Routes:**
 - `/settings` - Inställningar (fliken "Konteringsmallar")
 
-### 11. Företagsinställningar
+### 11. Backup & Restore
+- Komplett backup-system med databas + bilagor i .tar.gz-arkiv
+- Manuell backup via GUI (Inställningar → Backup)
+- Automatisk backup via cron
+- Restore via GUI med wizard (5 steg: källa → välj → bekräfta → progress → resultat)
+- Kalenderbaserad backup-väljare med snabbåtkomst till senaste backuper
+- Restore från server (befintliga backuper) eller filuppladdning
+- CLI-stöd (`backup create`, `backup list`, `backup restore`)
+- Metadata per backup: appversion, schemaversion, storlek, tidpunkt
+
+**Backup-arkiv innehåller:**
+- SQL-dump av hela databasen
+- Alla uppladdade filer (logotyper, bilagor, kvitton)
+- Metadata-fil (JSON) med version och schemainformation
+
+**API Endpoints:**
+- `POST /api/backup/create` - Skapa ny backup
+- `GET /api/backup/list` - Lista alla backuper
+- `GET /api/backup/download/{filename}` - Ladda ner backup
+- `POST /api/backup/restore/{filename}` - Återställ från server-backup
+- `POST /api/backup/restore` - Återställ från uppladdad fil
+
+**Routes:**
+- `/settings` - Inställningar (fliken "Backup")
+
+### 12. Företagsinställningar
 - Företagsinformation med automatiskt VAT-nummer
 - Logotypuppladdning och visning
 - Flikbaserad navigation (Företag, Konton, Räkenskapsår, Mallar, Import)
@@ -448,6 +474,17 @@ Systemet använder default accounts för automatisk bokföring:
 - `get_default_account()` - Hämta standardkonto
 - `get_revenue_account_for_vat_rate()` - Hämta intäktskonto för momssats
 - `get_vat_outgoing_account_for_rate()` - Hämta utgående momskonto
+
+### `/backend/app/services/backup_service.py`
+- `create_backup()` - Skapar komplett backup-arkiv (.tar.gz) med databas, bilagor och metadata
+- `list_backups()` - Listar alla tillgängliga backuper med metadata
+- `BACKUP_DIR` - Sökväg till backup-katalogen
+
+### `/backend/app/services/restore_service.py`
+- `restore_from_archive()` - Återställer hela systemet från ett backup-arkiv
+- `RestoreError` - Exception för restore-fel
+- Validerar arkivintegritet och schemakompatibilitet
+- All-or-nothing: om validering misslyckas bevaras produktion orörd
 
 ### `/backend/app/services/pdf_service.py`
 - `generate_invoice_pdf()` - Genererar PDF från faktura med Jinja2-mall och WeasyPrint
@@ -603,7 +640,7 @@ Se [AUTH_SETUP.md](AUTH_SETUP.md) för detaljerad dokumentation.
 - [ ] Bakgrundsjobb för tunga operationer (Celery)
 - [ ] Fulltext-sökning (Elasticsearch)
 - [ ] Audit log för alla ändringar
-- [ ] Backup och disaster recovery
+- [x] Backup och disaster recovery (implementerat v1.3.0)
 - [ ] Prestanda-optimering av stora datamängder
 - [ ] WebSocket för realtidsuppdateringar
 
@@ -627,10 +664,25 @@ BSD 3-Clause License - Se LICENSE-filen i projektets rot.
 
 ---
 
-**Version:** 1.2.0
-**Senast uppdaterad:** 2025-12-03
+**Version:** 1.3.0
+**Senast uppdaterad:** 2026-02-05
 
 ## Ändringslogg
+
+### v1.3.0 (2026-02-05)
+- ✅ Komplett backup- och restore-system
+  - Backend-tjänster: `backup_service.py` och `restore_service.py`
+  - CLI-kommandon: `backup create`, `backup list`, `backup restore`
+  - REST API: skapa, lista, ladda ner, återställa backuper
+  - Backup-arkiv (.tar.gz) med databas-dump, bilagor och metadata
+- ✅ Backup/restore GUI i Inställningar
+  - Wizard-modal med 5 steg (källa → välj → bekräfta → progress → resultat)
+  - Kalenderbaserad backup-väljare med prickar på dagar med backuper
+  - Snabbåtkomst-chips för de 3 senaste backuperna
+  - Restore från server eller via filuppladdning
+  - Nätverksfel-hantering vid DB-byte (auto-reload)
+- ✅ Fix: Logotypvisning i inställningar (blob URL via axios istället för img src)
+- ✅ Fix: Drag-and-drop-sortering av konteringsmallar (undvik mutation av React state)
 
 ### v1.2.0 (2025-12-02)
 - ✅ Fullständigt stöd för flera räkenskapsår med separata kontoplaner

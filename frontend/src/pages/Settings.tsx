@@ -737,7 +737,7 @@ export default function SettingsPage() {
       return
     }
 
-    const sortedTemplates = templates.sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
+    const sortedTemplates = [...templates].sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
     const draggedIndex = sortedTemplates.findIndex((t: any) => t.id === draggedTemplate.id)
     const targetIndex = sortedTemplates.findIndex((t: any) => t.id === targetTemplate.id)
 
@@ -762,15 +762,19 @@ export default function SettingsPage() {
     const [movedTemplate] = reorderedTemplates.splice(draggedIndex, 1)
     reorderedTemplates.splice(insertIndex, 0, movedTemplate)
 
-    // Update local state immediately for smooth UX
-    setTemplates(reorderedTemplates)
+    // Update sort_order on each template and set state immediately for smooth UX
+    const updatedTemplates = reorderedTemplates.map((template: any, index: number) => ({
+      ...template,
+      sort_order: index + 1
+    }))
+    setTemplates(updatedTemplates)
     handleDragEnd()
 
     try {
-      // Create the new order array with sort_order values
-      const templateOrders = reorderedTemplates.map((template: any, index: number) => ({
+      // Create the new order array for the API call
+      const templateOrders = updatedTemplates.map((template: any) => ({
         id: template.id,
-        sort_order: index + 1
+        sort_order: template.sort_order
       }))
 
       await postingTemplateApi.reorder(selectedCompany.id, templateOrders)
@@ -1709,7 +1713,7 @@ export default function SettingsPage() {
 
         {templates.length > 0 ? (
           <div className="space-y-2">
-            {templates
+            {[...templates]
               .sort((a: any, b: any) => (a.sort_order || 999) - (b.sort_order || 999))
               .map((template: any) => (
                 <div key={template.id} className="relative">

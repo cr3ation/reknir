@@ -1,5 +1,6 @@
 """Backup and restore API endpoints. Admin only."""
 
+import fnmatch
 import logging
 import shutil
 import tempfile
@@ -11,10 +12,7 @@ from pydantic import BaseModel
 
 from app.dependencies import require_admin
 from app.models.user import User
-import fnmatch
-
-from app.services import backup_service
-from app.services import restore_service
+from app.services import backup_service, restore_service
 from app.services.backup_service import BACKUP_DIR
 
 logger = logging.getLogger(__name__)
@@ -60,7 +58,7 @@ async def create_backup(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Backup creation failed: {str(e)}",
-        )
+        ) from e
 
 
 @router.get("/list", response_model=list[BackupInfo])
@@ -162,13 +160,13 @@ async def restore_from_server(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Restore from server failed unexpectedly: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Restore failed: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/restore", response_model=RestoreResponse)
@@ -187,9 +185,7 @@ async def restore_backup(
     temp_archive = None
     try:
         # Save uploaded file to temp location
-        with tempfile.NamedTemporaryFile(
-            suffix=".tar.gz", delete=False, prefix="reknir_restore_upload_"
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False, prefix="reknir_restore_upload_") as tmp:
             shutil.copyfileobj(file.file, tmp)
             temp_archive = Path(tmp.name)
 
@@ -216,13 +212,13 @@ async def restore_backup(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Restore failed unexpectedly: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Restore failed: {str(e)}",
-        )
+        ) from e
     finally:
         if temp_archive and temp_archive.exists():
             temp_archive.unlink()

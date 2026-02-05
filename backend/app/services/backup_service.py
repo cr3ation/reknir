@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -48,7 +48,7 @@ def create_backup() -> Path:
     Raises:
         RuntimeError: If pg_dump fails or archive creation fails.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     timestamp_label = now.strftime("%Y%m%d_%H%M%S")
     timestamp = now.isoformat()
 
@@ -72,11 +72,15 @@ def create_backup() -> Path:
         result = subprocess.run(
             [
                 "pg_dump",
-                "-h", db_info["host"],
-                "-p", db_info["port"],
-                "-U", db_info["user"],
+                "-h",
+                db_info["host"],
+                "-p",
+                db_info["port"],
+                "-U",
+                db_info["user"],
                 "-Fc",
-                "-f", str(dump_path),
+                "-f",
+                str(dump_path),
                 db_info["dbname"],
             ],
             env=env,

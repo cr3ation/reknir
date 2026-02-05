@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -52,7 +52,7 @@ class RestoreResult:
         self.backup_filename: str = ""
         self.message: str = ""
         self.stages_completed: list[str] = []
-        self.started_at: datetime = datetime.now(timezone.utc)
+        self.started_at: datetime = datetime.now(UTC)
         self.completed_at: datetime | None = None
 
 
@@ -70,15 +70,10 @@ def _parse_database_url(url: str) -> dict:
 
 def _build_database_url(db_info: dict, dbname: str) -> str:
     """Build a PostgreSQL connection URL from components."""
-    return (
-        f"postgresql://{db_info['user']}:{db_info['password']}"
-        f"@{db_info['host']}:{db_info['port']}/{dbname}"
-    )
+    return f"postgresql://{db_info['user']}:{db_info['password']}" f"@{db_info['host']}:{db_info['port']}/{dbname}"
 
 
-def _run_pg_command(
-    cmd: list[str], password: str, timeout: int = 120
-) -> subprocess.CompletedProcess:
+def _run_pg_command(cmd: list[str], password: str, timeout: int = 120) -> subprocess.CompletedProcess:
     """Run a PostgreSQL CLI command with PGPASSWORD set."""
     env = {**os.environ, "PGPASSWORD": password}
     return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout)
@@ -113,9 +108,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
             # Security: validate member paths to prevent path traversal
             for member in tar.getmembers():
                 if member.name.startswith("/") or ".." in member.name:
-                    raise RestoreError(
-                        "Archive contains unsafe paths", "extract"
-                    )
+                    raise RestoreError("Archive contains unsafe paths", "extract")
             tar.extractall(temp_extract_dir)
 
         result.stages_completed.append("extract")
@@ -133,9 +126,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
         for field in ["created_at", "app_version", "schema_version"]:
             if field not in manifest:
-                raise RestoreError(
-                    f"Missing required field: {field}", "read_manifest"
-                )
+                raise RestoreError(f"Missing required field: {field}", "read_manifest")
 
         result.stages_completed.append("read_manifest")
 
@@ -171,10 +162,14 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
         pg_result = _run_pg_command(
             [
                 "pg_restore",
-                "-h", db_info["host"],
-                "-p", db_info["port"],
-                "-U", db_info["user"],
-                "-d", temp_dbname,
+                "-h",
+                db_info["host"],
+                "-p",
+                db_info["port"],
+                "-U",
+                db_info["user"],
+                "-d",
+                temp_dbname,
                 "--no-owner",
                 "--no-acl",
                 str(dump_path),
@@ -247,12 +242,8 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
             # 9b: Rename production -> old, temp -> production
             conn.execute(text(f"DROP DATABASE IF EXISTS {old_dbname}"))
-            conn.execute(
-                text(f"ALTER DATABASE {prod_dbname} RENAME TO {old_dbname}")
-            )
-            conn.execute(
-                text(f"ALTER DATABASE {temp_dbname} RENAME TO {prod_dbname}")
-            )
+            conn.execute(text(f"ALTER DATABASE {prod_dbname} RENAME TO {old_dbname}"))
+            conn.execute(text(f"ALTER DATABASE {temp_dbname} RENAME TO {prod_dbname}"))
 
         maint_engine.dispose()
 
@@ -281,7 +272,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
         result.success = True
         result.message = "Restore completed successfully"
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
 
         return result
 
@@ -299,9 +290,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
         # Drop temp DB if it still exists (means swap didn't happen)
         try:
             maintenance_url = _build_database_url(db_info, "postgres")
-            cleanup_engine = create_engine(
-                maintenance_url, isolation_level="AUTOCOMMIT"
-            )
+            cleanup_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
             with cleanup_engine.connect() as conn:
                 conn.execute(text(f"DROP DATABASE IF EXISTS {temp_dbname}"))
             cleanup_engine.dispose()
@@ -311,14 +300,13 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
 def _run_alembic_upgrade(database_url: str) -> None:
     """Run Alembic migrations programmatically against a given database URL."""
-    from alembic import command
-    from alembic.config import Config
     from pathlib import Path as P
 
+    from alembic import command
+    from alembic.config import Config
+
     alembic_cfg = Config()
-    alembic_cfg.set_main_option(
-        "script_location", str(P(__file__).parent.parent.parent / "alembic")
-    )
+    alembic_cfg.set_main_option("script_location", str(P(__file__).parent.parent.parent / "alembic"))
     alembic_cfg.set_main_option("sqlalchemy.url", database_url)
 
     command.upgrade(alembic_cfg, "head")
@@ -348,9 +336,7 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
         if row:
             total_debit, total_credit = row[0], row[1]
             if abs(float(total_debit) - float(total_credit)) > 0.01:
-                errors.append(
-                    f"Debit/credit mismatch: debit={total_debit}, credit={total_credit}"
-                )
+                errors.append(f"Debit/credit mismatch: debit={total_debit}, credit={total_credit}")
 
         # Validation 2: Per-verification balance check
         unbalanced = session.execute(
@@ -366,14 +352,10 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
 
         if unbalanced:
             samples = [f"{r[1]}{r[2]}" for r in unbalanced[:5]]
-            errors.append(
-                f"{len(unbalanced)} unbalanced verification(s): {samples}"
-            )
+            errors.append(f"{len(unbalanced)} unbalanced verification(s): {samples}")
 
         # Validation 3: All attachment file references have corresponding files
-        attachments = session.execute(
-            text("SELECT id, storage_filename FROM attachments")
-        ).fetchall()
+        attachments = session.execute(text("SELECT id, storage_filename FROM attachments")).fetchall()
 
         missing_files = []
         for att in attachments:
@@ -382,10 +364,7 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
                 missing_files.append(att[1])
 
         if missing_files:
-            errors.append(
-                f"{len(missing_files)} attachment file(s) missing from backup: "
-                f"{missing_files[:5]}"
-            )
+            errors.append(f"{len(missing_files)} attachment file(s) missing from backup: " f"{missing_files[:5]}")
 
         # Validation 4: Referential integrity - transaction_lines -> accounts
         orphan_lines = session.execute(
@@ -397,9 +376,7 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
         ).scalar()
 
         if orphan_lines and orphan_lines > 0:
-            errors.append(
-                f"{orphan_lines} transaction line(s) reference non-existent accounts"
-            )
+            errors.append(f"{orphan_lines} transaction line(s) reference non-existent accounts")
 
         # Validation 5: Referential integrity - verifications -> companies
         orphan_verifications = session.execute(
@@ -411,9 +388,7 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
         ).scalar()
 
         if orphan_verifications and orphan_verifications > 0:
-            errors.append(
-                f"{orphan_verifications} verification(s) reference non-existent companies"
-            )
+            errors.append(f"{orphan_verifications} verification(s) reference non-existent companies")
 
     finally:
         session.close()
@@ -431,7 +406,7 @@ def _log_restore_event(
 ) -> None:
     """Log a restore event to both the application log and the restore_log table."""
     log_entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "backup_filename": backup_filename,
         "performed_by": performed_by,
         "success": success,
@@ -467,9 +442,7 @@ def _log_restore_event(
                     "success": success,
                     "message": message,
                     "app_version": manifest.get("app_version") if manifest else None,
-                    "schema_version": (
-                        manifest.get("schema_version") if manifest else None
-                    ),
+                    "schema_version": (manifest.get("schema_version") if manifest else None),
                 },
             )
             conn.commit()

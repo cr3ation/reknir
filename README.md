@@ -13,6 +13,7 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 - Balance sheet and income statement
 - SIE4 import/export for integration with other accounting software
 - Multi-user authentication with role-based access
+- Backup and restore with calendar-based GUI and CLI support
 - PostgreSQL with automatic backups
 
 ## Tech Stack
@@ -172,13 +173,32 @@ This software follows Swedish accounting standards:
 - **BAS 2024 Kontoplan**: Standard Swedish chart of accounts
 - **SIE4 Format**: Standard export format for accountants
 
-## Backup
+## Backup & Restore
 
-The system includes automatic daily backups with 7-year retention (Swedish Bokföringslagen compliance).
+The system includes a complete backup and restore solution with both GUI and CLI support.
 
-- Backups stored in `backups/` directory
-- Manual backup: `docker compose exec postgres pg_dump -U reknir reknir > backup.sql`
-- Restore: `docker compose exec -T postgres psql -U reknir reknir < backup.sql`
+### GUI (Settings → Backup)
+- Create backups with one click
+- Calendar-based backup selector for restore
+- Restore from server backups or upload a backup file
+- Each backup includes: database, attachments, receipts, and metadata
+
+### CLI
+```bash
+# Create a backup
+docker compose exec backend python -m app.cli backup create
+
+# List available backups
+docker compose exec backend python -m app.cli backup list
+
+# Restore from a backup
+docker compose exec backend python -m app.cli backup restore <filename>
+```
+
+### Automatic Backups
+- Cron-based automatic daily backups
+- Backups stored in `backups/` directory as `.tar.gz` archives
+- Each archive contains SQL dump, uploaded files, and version metadata
 
 ## Support
 

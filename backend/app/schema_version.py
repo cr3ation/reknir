@@ -39,9 +39,7 @@ def get_applied_schema_version() -> str:
     engine = create_engine(settings.database_url)
     try:
         with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT version_num FROM alembic_version LIMIT 1")
-            ).fetchone()
+            row = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).fetchone()
             if row is None:
                 return "unknown"
             return row[0]
