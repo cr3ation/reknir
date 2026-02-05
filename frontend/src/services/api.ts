@@ -91,7 +91,7 @@ export const companyApi = {
     formData.append('file', file)
     return api.post<Company>(`/companies/${id}/logo`, formData)
   },
-  getLogo: (id: number) => `${API_BASE_URL}/api/companies/${id}/logo`,
+  getLogo: (id: number) => api.get(`/companies/${id}/logo`, { responseType: 'blob' }),
   deleteLogo: (id: number) => api.delete<Company>(`/companies/${id}/logo`),
 }
 

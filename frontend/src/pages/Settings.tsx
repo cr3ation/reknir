@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [showImportSummary, setShowImportSummary] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [loadingBackups, setLoadingBackups] = useState(false)
   const [creatingBackup, setCreatingBackup] = useState(false)
@@ -89,6 +90,28 @@ export default function SettingsPage() {
       loadBackups()
     }
   }, [activeTab])
+
+  // Load company logo as blob URL (img tags can't send auth headers)
+  useEffect(() => {
+    if (!selectedCompany?.logo_filename) {
+      setLogoUrl(null)
+      return
+    }
+
+    let objectUrl: string | null = null
+    companyApi.getLogo(selectedCompany.id)
+      .then((res) => {
+        objectUrl = URL.createObjectURL(res.data)
+        setLogoUrl(objectUrl)
+      })
+      .catch(() => {
+        setLogoUrl(null)
+      })
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [selectedCompany?.id, selectedCompany?.logo_filename])
 
   const loadData = async () => {
     if (!selectedCompany) {
@@ -1256,11 +1279,11 @@ export default function SettingsPage() {
             <div className="card mb-6">
               <h2 className="text-xl font-semibold mb-4">Företagslogotyp</h2>
               <div className="flex items-start space-x-6">
-                {selectedCompany.logo_filename ? (
+                {selectedCompany.logo_filename && logoUrl ? (
                   <div className="flex-shrink-0">
                     <div className="relative">
                       <img
-                        src={companyApi.getLogo(selectedCompany.id)}
+                        src={logoUrl}
                         alt="Företagslogotyp"
                         className="w-40 h-40 object-contain border-2 border-gray-300 rounded-lg bg-white shadow-sm"
                         onError={(e) => {
