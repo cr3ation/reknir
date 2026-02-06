@@ -34,6 +34,7 @@ class AttachmentRole(str, enum.Enum):
     RECEIPT = "receipt"  # Payment receipt/confirmation
     SUPPORTING = "supporting"  # Supporting documentation
     CONTRACT = "contract"  # Contract/agreement
+    ARCHIVED_PDF = "archived_pdf"  # Canonical snapshot at issuance - immutable
 
 
 class Attachment(Base):

@@ -1,14 +1,17 @@
+import hashlib
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
-from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
+from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, AttachmentStatus, EntityType
+from app.services.attachment_service import ATTACHMENTS_DIR
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
 from app.models.fiscal_year import FiscalYear
@@ -20,6 +23,22 @@ from app.services.invoice_service import create_invoice_payment_verification, cr
 from app.services.pdf_service import generate_invoice_pdf
 
 router = APIRouter()
+
+
+def get_archived_pdf_attachment(db: Session, invoice_id: int) -> Attachment | None:
+    """Get archived PDF for an invoice via AttachmentLink."""
+    link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.entity_type == EntityType.INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+            AttachmentLink.role == AttachmentRole.ARCHIVED_PDF,
+        )
+        .first()
+    )
+    if link:
+        return db.query(Attachment).filter(Attachment.id == link.attachment_id).first()
+    return None
 
 
 @router.post("/", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
@@ -216,8 +235,43 @@ async def send_invoice(
     if invoice.status != InvoiceStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not in draft status")
 
-    # Get company accounting basis
+    # Get customer and company (needed for PDF)
+    customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
+
+    # Archive PDF BEFORE status change (immutable snapshot for bookkeeping)
+    pdf_bytes = generate_invoice_pdf(invoice, customer, company)
+    checksum = hashlib.sha256(pdf_bytes).hexdigest()
+
+    storage_filename = f"{uuid.uuid4()}.pdf"
+    file_path = ATTACHMENTS_DIR / storage_filename
+    file_path.write_bytes(pdf_bytes)
+
+    # Filename format: faktura_{companyId}_{series}{number}_{YYYYMMDD}.pdf (sortable, no sensitive data)
+    issue_date_str = invoice.invoice_date.strftime("%Y%m%d")
+    original_filename = f"faktura_{invoice.company_id}_{invoice.invoice_series}{invoice.invoice_number}_{issue_date_str}.pdf"
+
+    attachment = Attachment(
+        company_id=invoice.company_id,
+        original_filename=original_filename,
+        storage_filename=storage_filename,
+        mime_type="application/pdf",
+        size_bytes=len(pdf_bytes),
+        checksum_sha256=checksum,
+        status=AttachmentStatus.READY,
+        created_by=current_user.id,
+    )
+    db.add(attachment)
+    db.flush()
+
+    link = AttachmentLink(
+        attachment_id=attachment.id,
+        entity_type=EntityType.INVOICE,
+        entity_id=invoice.id,
+        role=AttachmentRole.ARCHIVED_PDF,
+        sort_order=0,
+    )
+    db.add(link)
 
     # Create verification only for accrual method
     if company.accounting_basis == AccountingBasis.ACCRUAL:
@@ -323,7 +377,9 @@ async def download_invoice_pdf(
     """
     Download invoice as PDF
 
-    Returns a professionally formatted Swedish invoice PDF
+    Returns a professionally formatted Swedish invoice PDF.
+    For ISSUED invoices, returns the archived (immutable) PDF.
+    For DRAFT invoices, generates on-demand for preview.
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
@@ -332,19 +388,30 @@ async def download_invoice_pdf(
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    # Get customer and company
+    # ISSUED invoice: Return archived PDF (immutable snapshot)
+    if invoice.status == InvoiceStatus.ISSUED:
+        archived = get_archived_pdf_attachment(db, invoice_id)
+        if archived:
+            file_path = ATTACHMENTS_DIR / archived.storage_filename
+            if file_path.exists():
+                return FileResponse(
+                    path=str(file_path),
+                    filename=archived.original_filename,
+                    media_type="application/pdf",
+                )
+
+    # DRAFT or missing archived: Generate on-demand (preview)
     customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
 
     if not customer or not company:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load invoice data")
 
-    # Generate PDF
     try:
         pdf_bytes = generate_invoice_pdf(invoice, customer, company)
-
-        # Return PDF as download
-        filename = f"faktura_{invoice.invoice_series}{invoice.invoice_number}.pdf"
+        # Filename format: faktura_{companyId}_{series}{number}_{YYYYMMDD}.pdf
+        issue_date_str = invoice.invoice_date.strftime("%Y%m%d")
+        filename = f"faktura_{invoice.company_id}_{invoice.invoice_series}{invoice.invoice_number}_{issue_date_str}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -580,6 +647,13 @@ async def unlink_attachment(
     )
     if not link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not linked to this invoice")
+
+    # ARCHIVED_PDF is ALWAYS immutable (Swedish bookkeeping law)
+    if link.role == AttachmentRole.ARCHIVED_PDF:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot remove archived invoice PDF (bookkeeping law)",
+        )
 
     db.delete(link)
     db.commit()
