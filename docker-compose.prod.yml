@@ -36,6 +36,7 @@ services:
         condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
+      - ./backups:/backups
     restart: unless-stopped
     networks:
       - reknir-internal

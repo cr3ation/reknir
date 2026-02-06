@@ -50,8 +50,7 @@ frontend/.env
 postgres_data/
 
 # Backups
-backups/*.sql
-backups/*.sql.gz
+backups/
 
 # Uploads (company logos and other user uploads)
 uploads/

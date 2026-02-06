@@ -36,6 +36,7 @@ export interface Company {
   fiscal_year_end: string
   accounting_basis: AccountingBasis
   vat_reporting_period: VATReportingPeriod
+  is_vat_registered: boolean
   logo_filename?: string
 }
 
@@ -637,4 +638,21 @@ export interface EntityAttachment {
   mime_type: string
   size_bytes: number
   status: AttachmentStatus
+}
+
+// Backup & Restore
+
+export interface BackupInfo {
+  created_at: string
+  app_version: string
+  schema_version: string
+  filename: string
+  size_bytes: number
+}
+
+export interface RestoreResponse {
+  success: boolean
+  backup_filename: string
+  message: string
+  stages_completed: string[]
 }

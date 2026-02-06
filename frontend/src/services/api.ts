@@ -29,6 +29,8 @@ import type {
   Attachment,
   EntityAttachment,
   AttachmentRole,
+  BackupInfo,
+  RestoreResponse,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -89,7 +91,7 @@ export const companyApi = {
     formData.append('file', file)
     return api.post<Company>(`/companies/${id}/logo`, formData)
   },
-  getLogo: (id: number) => `${API_BASE_URL}/api/companies/${id}/logo`,
+  getLogo: (id: number) => api.get(`/companies/${id}/logo`, { responseType: 'blob' }),
   deleteLogo: (id: number) => api.delete<Company>(`/companies/${id}/logo`),
 }
 
@@ -340,6 +342,35 @@ export const expenseApi = {
     }),
   unlinkAttachment: (id: number, attachmentId: number) =>
     api.delete(`/expenses/${id}/attachments/${attachmentId}`),
+}
+
+// Backup & Restore
+// Longer timeout for backup/restore operations (10 minutes)
+const BACKUP_TIMEOUT = 10 * 60 * 1000
+
+export const backupApi = {
+  list: () => api.get<BackupInfo[]>('/backup/list'),
+
+  create: () => api.post('/backup/create', null, {
+    responseType: 'blob',
+    timeout: BACKUP_TIMEOUT,
+  }),
+
+  download: (filename: string) =>
+    api.get(`/backup/download/${filename}`, { responseType: 'blob' }),
+
+  restoreFromServer: (filename: string) =>
+    api.post<RestoreResponse>(`/backup/restore/${filename}`, null, {
+      timeout: BACKUP_TIMEOUT,
+    }),
+
+  restoreFromUpload: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<RestoreResponse>('/backup/restore', formData, {
+      timeout: BACKUP_TIMEOUT,
+    })
+  },
 }
 
 export default api

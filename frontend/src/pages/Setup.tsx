@@ -34,6 +34,7 @@ export default function Setup() {
     email: '',
     accounting_basis: AccountingBasis.ACCRUAL,
     vat_reporting_period: VATReportingPeriod.QUARTERLY,
+    is_vat_registered: true,
   })
 
   // Fiscal year data
@@ -384,6 +385,24 @@ export default function Setup() {
                 />
               </div>
 
+              {/* VAT Registration */}
+              <div className="mb-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={companyData.is_vat_registered}
+                    onChange={(e) => setCompanyData({ ...companyData, is_vat_registered: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Företaget är momsregistrerat
+                  </span>
+                </label>
+                <p className="mt-1 text-xs text-gray-500 ml-6">
+                  Avmarkera om företaget inte är registrerat för moms hos Skatteverket
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -407,25 +426,35 @@ export default function Setup() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${companyData.is_vat_registered ? 'text-gray-700' : 'text-gray-400'}`}>
                     Momsperiod
                   </label>
                   <div className="relative">
                     <select
                       value={companyData.vat_reporting_period}
                       onChange={(e) => setCompanyData({ ...companyData, vat_reporting_period: e.target.value as any })}
-                      className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-gray-900 font-medium"
+                      disabled={!companyData.is_vat_registered}
+                      className={`w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium ${
+                        companyData.is_vat_registered
+                          ? 'bg-white cursor-pointer text-gray-900'
+                          : 'bg-gray-100 cursor-not-allowed text-gray-400'
+                      }`}
                     >
                       <option value="monthly">Månadsvis</option>
                       <option value="quarterly">Kvartalsvis</option>
                       <option value="yearly">Årsvis</option>
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                      <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                      <svg className={`h-5 w-5 ${companyData.is_vat_registered ? 'text-gray-400' : 'text-gray-300'}`} viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
                     </div>
                   </div>
+                  {!companyData.is_vat_registered && (
+                    <p className="mt-1 text-xs text-gray-400">
+                      Ej relevant för företag som inte är momsregistrerade
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

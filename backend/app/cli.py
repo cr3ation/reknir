@@ -276,12 +276,18 @@ def main():
         print("  seed-templates [company_id] - Import Swedish posting templates for a company")
         print("  seed-all [company_id]       - Import both BAS and templates (complete setup)")
         print("                                Default company_id: 1")
+        print("  backup                      - Create a full system backup")
+        print("  list-backups                - List available backups")
+        print("  restore <path>              - Restore from a backup archive")
         print("\nExamples:")
         print("  python -m app.cli seed-bas")
         print("  python -m app.cli seed-templates")
         print("  python -m app.cli seed-all          # Complete setup")
         print("  python -m app.cli seed-bas 2")
         print("  python -m app.cli seed-templates 2")
+        print("  python -m app.cli backup")
+        print("  python -m app.cli list-backups")
+        print("  python -m app.cli restore /backups/reknir_backup_xxx.tar.gz")
         sys.exit(1)
 
     command = sys.argv[1]
@@ -312,6 +318,68 @@ def main():
 
         success = seed_all(company_id)
         sys.exit(0 if success else 1)
+
+    elif command == "backup":
+        from app.services import backup_service
+
+        print("Creating backup...")
+        try:
+            archive_path = backup_service.create_backup()
+            print(f"Backup created: {archive_path}")
+        except Exception as e:
+            print(f"Backup failed: {e}")
+            sys.exit(1)
+
+    elif command == "list-backups":
+        from app.services import backup_service
+
+        backups = backup_service.list_backups()
+        if not backups:
+            print("No backups found")
+        else:
+            for b in backups:
+                size_mb = b["size_bytes"] / (1024 * 1024)
+                print(
+                    f"  {b['filename']}  "
+                    f"({size_mb:.1f} MB)  "
+                    f"created: {b['created_at']}  "
+                    f"schema: {b['schema_version']}"
+                )
+
+    elif command == "restore":
+        if len(sys.argv) < 3:
+            print("Usage: python -m app.cli restore <path-to-backup.tar.gz>")
+            sys.exit(1)
+
+        archive_path = Path(sys.argv[2])
+        if not archive_path.exists():
+            print(f"Error: File not found: {archive_path}")
+            sys.exit(1)
+
+        print("WARNING: This will replace ALL current data with the backup.")
+        print(f"Archive: {archive_path}")
+        response = input("Are you sure? (yes/no): ")
+        if response.lower() != "yes":
+            print("Aborted")
+            sys.exit(0)
+
+        from app.services import restore_service
+
+        try:
+            result = restore_service.restore_from_archive(
+                archive_path=archive_path,
+                performed_by="cli-admin",
+            )
+            if result.success:
+                print("Restore completed successfully!")
+                print(f"Backup: {result.backup_filename}")
+                print(f"Stages: {', '.join(result.stages_completed)}")
+            else:
+                print(f"Restore failed: {result.message}")
+                sys.exit(1)
+        except restore_service.RestoreError as e:
+            print(f"Restore failed at stage '{e.stage}': {e}")
+            sys.exit(1)
 
     else:
         print(f"Unknown command: {command}")
