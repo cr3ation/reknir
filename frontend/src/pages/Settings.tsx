@@ -63,6 +63,7 @@ export default function SettingsPage() {
     vat_number: '',
     accounting_basis: AccountingBasis.ACCRUAL,
     vat_reporting_period: VATReportingPeriod.QUARTERLY,
+    is_vat_registered: true,
   })
 
   const getNextFiscalYearDefaults = () => {
@@ -229,6 +230,7 @@ export default function SettingsPage() {
       vat_number: selectedCompany.vat_number || '',
       accounting_basis: selectedCompany.accounting_basis,
       vat_reporting_period: selectedCompany.vat_reporting_period,
+      is_vat_registered: selectedCompany.is_vat_registered ?? true,
     })
     setEditingCompany(true)
   }
@@ -248,6 +250,7 @@ export default function SettingsPage() {
       vat_number: '',
       accounting_basis: AccountingBasis.ACCRUAL,
       vat_reporting_period: VATReportingPeriod.QUARTERLY,
+      is_vat_registered: true,
     })
   }
 
@@ -309,6 +312,7 @@ export default function SettingsPage() {
         vat_number: '',
         accounting_basis: AccountingBasis.ACCRUAL,
         vat_reporting_period: VATReportingPeriod.QUARTERLY,
+        is_vat_registered: true,
       })
       await loadCompanies()
       setSelectedCompany(response.data)
@@ -921,8 +925,16 @@ export default function SettingsPage() {
                   <p className="text-gray-900">{selectedCompany.org_number}</p>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Momsregistrerad</label>
+                  <p className="text-gray-900">{selectedCompany.is_vat_registered ? 'Ja' : 'Nej'}</p>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">VAT-nummer</label>
-                  <p className="text-gray-900">{selectedCompany.vat_number || '-'}</p>
+                  <p className="text-gray-900">
+                    {selectedCompany.is_vat_registered
+                      ? (selectedCompany.vat_number || '-')
+                      : 'Ej momsregistrerad'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -970,13 +982,15 @@ export default function SettingsPage() {
                     {selectedCompany.accounting_basis === 'accrual' ? 'Bokföringsmässiga grunder' : 'Kontantmetoden'}
                   </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Momsredovisning</label>
-                  <p className="text-gray-900">
-                    {selectedCompany.vat_reporting_period === 'monthly' ? 'Månadsvis' :
-                     selectedCompany.vat_reporting_period === 'quarterly' ? 'Kvartalsvis' : 'Årlig'}
-                  </p>
-                </div>
+                {selectedCompany.is_vat_registered && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Momsredovisning</label>
+                    <p className="text-gray-900">
+                      {selectedCompany.vat_reporting_period === 'monthly' ? 'Månadsvis' :
+                       selectedCompany.vat_reporting_period === 'quarterly' ? 'Kvartalsvis' : 'Årlig'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1119,19 +1133,43 @@ export default function SettingsPage() {
                     <option value="cash">Kontantmetoden</option>
                   </select>
                 </div>
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={companyForm.is_vat_registered}
+                      onChange={(e) => setCompanyForm({ ...companyForm, is_vat_registered: e.target.checked })}
+                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Företaget är momsregistrerat
+                    </span>
+                  </label>
+                  <p className="mt-1 text-xs text-gray-500 ml-6">
+                    Avmarkera om företaget inte är registrerat för moms hos Skatteverket
+                  </p>
+                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className={`block text-sm font-medium mb-1 ${companyForm.is_vat_registered ? 'text-gray-700' : 'text-gray-400'}`}>
                     Momsredovisningsperiod
                   </label>
                   <select
                     value={companyForm.vat_reporting_period}
                     onChange={(e) => setCompanyForm({ ...companyForm, vat_reporting_period: e.target.value as VATReportingPeriod })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    disabled={!companyForm.is_vat_registered}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
+                      !companyForm.is_vat_registered ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''
+                    }`}
                   >
                     <option value="monthly">Månadsvis</option>
                     <option value="quarterly">Kvartalsvis</option>
                     <option value="yearly">Årlig</option>
                   </select>
+                  {!companyForm.is_vat_registered && (
+                    <p className="mt-1 text-xs text-gray-400">
+                      Ej relevant för företag som inte är momsregistrerade
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1193,89 +1231,103 @@ export default function SettingsPage() {
       {/* VAT Reporting Period Section */}
       <div className="card mb-6">
         <h2 className="text-xl font-semibold mb-4">Momsredovisningsperiod</h2>
-        <p className="text-gray-600 mb-4">
-          Välj hur ofta ditt företag ska redovisa moms till Skatteverket.
-        </p>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3">
-            {/* Monthly Option */}
-            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === 'monthly'
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}>
-              <input
-                type="radio"
-                name="vat_period"
-                value="monthly"
-                checked={selectedCompany?.vat_reporting_period === 'monthly'}
-                onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
-                disabled={loading}
-                className="mt-1 mr-3"
-              />
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">Månadsvis</div>
-                <div className="text-sm text-gray-600 mt-1">
-                  För företag med omsättning över 40 miljoner SEK/år. Deklarera varje månad.
-                </div>
+        {selectedCompany?.is_vat_registered ? (
+          <>
+            <p className="text-gray-600 mb-4">
+              Välj hur ofta ditt företag ska redovisa moms till Skatteverket.
+            </p>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3">
+                {/* Monthly Option */}
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  selectedCompany?.vat_reporting_period === 'monthly'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="vat_period"
+                    value="monthly"
+                    checked={selectedCompany?.vat_reporting_period === 'monthly'}
+                    onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
+                    disabled={loading}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Månadsvis</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      För företag med omsättning över 40 miljoner SEK/år. Deklarera varje månad.
+                    </div>
+                  </div>
+                </label>
+
+                {/* Quarterly Option */}
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  selectedCompany?.vat_reporting_period === 'quarterly'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="vat_period"
+                    value="quarterly"
+                    checked={selectedCompany?.vat_reporting_period === 'quarterly'}
+                    onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
+                    disabled={loading}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Kvartalsvis (Rekommenderat)</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Vanligast för små och medelstora företag. Deklarera varje kvartal.
+                    </div>
+                  </div>
+                </label>
+
+                {/* Yearly Option */}
+                <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                  selectedCompany?.vat_reporting_period === 'yearly'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="vat_period"
+                    value="yearly"
+                    checked={selectedCompany?.vat_reporting_period === 'yearly'}
+                    onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
+                    disabled={loading}
+                    className="mt-1 mr-3"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">Årlig</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      För företag med omsättning under 1 miljon SEK/år. Deklarera en gång per år.
+                    </div>
+                  </div>
+                </label>
               </div>
-            </label>
 
-            {/* Quarterly Option */}
-            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === 'quarterly'
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}>
-              <input
-                type="radio"
-                name="vat_period"
-                value="quarterly"
-                checked={selectedCompany?.vat_reporting_period === 'quarterly'}
-                onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
-                disabled={loading}
-                className="mt-1 mr-3"
-              />
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">Kvartalsvis (Rekommenderat)</div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Vanligast för små och medelstora företag. Deklarera varje kvartal.
-                </div>
+              <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>OBS:</strong> Kontakta Skatteverket om du är osäker på vilken redovisningsperiod
+                  som gäller för ditt företag. Detta påverkar hur ofta du måste lämna momsdeklaration.
+                </p>
               </div>
-            </label>
-
-            {/* Yearly Option */}
-            <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-              selectedCompany?.vat_reporting_period === 'yearly'
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}>
-              <input
-                type="radio"
-                name="vat_period"
-                value="yearly"
-                checked={selectedCompany?.vat_reporting_period === 'yearly'}
-                onChange={(e) => handleVATReportingPeriodChange(e.target.value as VATReportingPeriod)}
-                disabled={loading}
-                className="mt-1 mr-3"
-              />
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">Årlig</div>
-                <div className="text-sm text-gray-600 mt-1">
-                  För företag med omsättning under 1 miljon SEK/år. Deklarera en gång per år.
-                </div>
-              </div>
-            </label>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded p-3">
-            <p className="text-sm text-blue-800">
-              <strong>OBS:</strong> Kontakta Skatteverket om du är osäker på vilken redovisningsperiod
-              som gäller för ditt företag. Detta påverkar hur ofta du måste lämna momsdeklaration.
+            </div>
+          </>
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-gray-600">
+              Företaget är inte momsregistrerat. Momsredovisningsperiod är därför inte relevant.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Om företaget blir momsregistrerat kan du aktivera detta under "Redigera" ovan.
             </p>
           </div>
-        </div>
+        )}
       </div>
 
           {/* Company Logo Section */}

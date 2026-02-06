@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, Date, Integer, String
+from sqlalchemy import Boolean, Column, Date, Integer, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
@@ -55,6 +55,7 @@ class Company(Base):
         default=VATReportingPeriod.QUARTERLY,
         nullable=False,
     )
+    is_vat_registered = Column(Boolean, default=True, nullable=False)
 
     # Logo
     logo_filename = Column(String, nullable=True)  # Filename of uploaded logo
@@ -76,9 +77,12 @@ class Company(Base):
     def vat_number(self) -> str:
         """
         Calculate Swedish VAT number from organization number.
+        Returns empty string if company is not VAT registered.
         Swedish VAT numbers follow the format: SE + 10-digit org_number (without dash) + 01
         Example: 556644-4354 becomes SE5566444354001
         """
+        if not self.is_vat_registered:
+            return ""
         if not self.org_number:
             return ""
 
