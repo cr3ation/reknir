@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -8,6 +9,32 @@ from weasyprint import HTML
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice
+
+
+def format_sek(value: float | Decimal | int, decimals: int = 2) -> str:
+    """
+    Format a number using Swedish locale conventions.
+    Uses comma as decimal separator and space as thousands separator.
+
+    Examples:
+        1234.56 -> "1 234,56"
+        1000 -> "1 000,00"
+        0.5 -> "0,50"
+    """
+    if value is None:
+        return ""
+
+    # Convert to float if needed
+    num = float(value)
+
+    # Format with specified decimals
+    formatted = f"{num:,.{decimals}f}"
+
+    # Replace: comma -> temp, period -> comma, temp -> space (for thousands)
+    # Standard format: 1,234.56 -> Swedish: 1 234,56
+    formatted = formatted.replace(",", " ").replace(".", ",")
+
+    return formatted
 
 
 def generate_invoice_pdf(invoice: Invoice, customer: Customer, company: Company) -> bytes:
@@ -40,6 +67,7 @@ def generate_invoice_pdf(invoice: Invoice, customer: Customer, company: Company)
         print(f"Template directory: {template_dir}")
 
         env = Environment(loader=FileSystemLoader(str(template_dir)))
+        env.filters["format_sek"] = format_sek
         template = env.get_template("invoice_template.html")
         print("Template loaded successfully")
 

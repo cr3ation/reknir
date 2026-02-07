@@ -301,11 +301,11 @@
             {% for line in invoice.invoice_lines %}
             <tr>
                 <td>{{ line.description }}</td>
-                <td style="text-align: center;">{{ "%.2f"|format(line.quantity) }}</td>
+                <td style="text-align: center;">{{ line.quantity|format_sek }}</td>
                 <td style="text-align: center;">{{ line.unit }}</td>
-                <td class="number">{{ "%.2f"|format(line.unit_price) }} kr</td>
+                <td class="number">{{ line.unit_price|format_sek }} kr</td>
                 <td class="number">{{ "%.0f"|format(line.vat_rate) }}%</td>
-                <td class="number">{{ "%.2f"|format(line.net_amount) }} kr</td>
+                <td class="number">{{ line.net_amount|format_sek }} kr</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -316,15 +316,15 @@
         <table>
             <tr>
                 <td>Netto:</td>
-                <td>{{ "%.2f"|format(invoice.net_amount) }} kr</td>
+                <td>{{ invoice.net_amount|format_sek }} kr</td>
             </tr>
             <tr>
                 <td>Moms:</td>
-                <td>{{ "%.2f"|format(invoice.vat_amount) }} kr</td>
+                <td>{{ invoice.vat_amount|format_sek }} kr</td>
             </tr>
             <tr class="total-row">
                 <td>ATT BETALA:</td>
-                <td>{{ "%.2f"|format(invoice.total_amount) }} kr</td>
+                <td>{{ invoice.total_amount|format_sek }} kr</td>
             </tr>
         </table>
     </div>
@@ -332,7 +332,7 @@
     <!-- Payment Info -->
     <div class="payment-info">
         <h3>Betalningsinformation</h3>
-        <p style="margin: 3px 0;"><strong>Belopp att betala: {{ "%.2f"|format(invoice.total_amount) }} kr</strong></p>
+        <p style="margin: 3px 0;"><strong>Belopp att betala: {{ invoice.total_amount|format_sek }} kr</strong></p>
         <p style="margin: 3px 0;">Förfallodatum: {{ invoice.due_date }}</p>
         {% if invoice.status == 'paid' %}
         <p style="color: green; margin: 3px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
