@@ -332,12 +332,33 @@
     <!-- Payment Info -->
     <div class="payment-info">
         <h3>Betalningsinformation</h3>
-        <p style="margin: 3px 0;"><strong>Belopp att betala: {{ invoice.total_amount|format_sek }} kr</strong></p>
-        <p style="margin: 3px 0;">Förfallodatum: {{ invoice.due_date }}</p>
+        <p style="margin: 5px 0;">Förfallodatum: <strong>{{ invoice.due_date }}</strong></p>
+        {% if invoice.payment_type %}
+        <p style="margin: 5px 0;">Betalsätt: <strong>
+            {%- if invoice.payment_type.value == 'bankgiro' -%}Bankgiro
+            {%- elif invoice.payment_type.value == 'plusgiro' -%}Plusgiro
+            {%- elif invoice.payment_type.value == 'bank_account' -%}Bankkonto
+            {%- endif -%}
+        </strong></p>
+        <p style="margin: 5px 0;">
+            {% if invoice.payment_type.value == 'bankgiro' and invoice.bankgiro_number %}
+            Bankgironr: <strong>{{ invoice.bankgiro_number }}</strong>
+            {% elif invoice.payment_type.value == 'plusgiro' and invoice.plusgiro_number %}
+            Plusgironr: <strong>{{ invoice.plusgiro_number }}</strong>
+            {% elif invoice.payment_type.value == 'bank_account' and invoice.clearing_number and invoice.account_number %}
+            Clearingnr: <strong>{{ invoice.clearing_number }}</strong> Kontonr: <strong>{{ invoice.account_number }}</strong>
+            {% endif %}
+        </p>
+        {% if invoice.payment_type.value == 'bank_account' and invoice.iban %}
+        <p style="margin: 3px 0; font-size: 8pt; color: #555;">
+            (IBAN: {{ invoice.iban }}{% if invoice.bic %} BIC: {{ invoice.bic }}{% endif %})
+        </p>
+        {% endif %}
+        {% endif %}
+        <p style="margin: 5px 0;">Betalningsreferens: <strong>{{ invoice.invoice_series }}{{ invoice.invoice_number }}</strong></p>
+        <p style="margin: 5px 0;"><strong>Belopp att betala: {{ invoice.total_amount|format_sek }} kr</strong></p>
         {% if invoice.status == 'paid' %}
-        <p style="color: green; margin: 3px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
-        {% else %}
-        <p style="margin: 3px 0;">Vänligen ange fakturanummer {{ invoice.invoice_number }} som referens vid betalning.</p>
+        <p style="color: green; margin: 5px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
         {% endif %}
     </div>
 

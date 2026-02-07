@@ -22,6 +22,14 @@ class VATReportingPeriod(str, enum.Enum):
     YEARLY = "yearly"  # Årlig (omsättning < 1M SEK/år)
 
 
+class PaymentType(str, enum.Enum):
+    """Payment type for invoices"""
+
+    BANKGIRO = "bankgiro"
+    PLUSGIRO = "plusgiro"
+    BANK_ACCOUNT = "bank_account"
+
+
 class Company(Base):
     """Company/organization information"""
 
@@ -59,6 +67,18 @@ class Company(Base):
 
     # Logo
     logo_filename = Column(String, nullable=True)  # Filename of uploaded logo
+
+    # Payment information (for invoices)
+    payment_type = Column(
+        SQLEnum(PaymentType, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
+    bankgiro_number = Column(String(20), nullable=True)
+    plusgiro_number = Column(String(20), nullable=True)
+    clearing_number = Column(String(10), nullable=True)
+    account_number = Column(String(20), nullable=True)
+    iban = Column(String(34), nullable=True)  # Max 34 chars per standard
+    bic = Column(String(11), nullable=True)  # 8 or 11 chars
 
     # Relationships
     accounts = relationship("Account", back_populates="company", cascade="all, delete-orphan")

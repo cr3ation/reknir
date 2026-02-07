@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
+from app.models.company import PaymentType
 
 
 class InvoiceStatus(str, enum.Enum):
@@ -79,6 +80,18 @@ class Invoice(Base):
 
     # PDF
     pdf_path = Column(String, nullable=True)
+
+    # Payment information (snapshot from company at creation time)
+    payment_type = Column(
+        SQLEnum(PaymentType, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
+    )
+    bankgiro_number = Column(String(20), nullable=True)
+    plusgiro_number = Column(String(20), nullable=True)
+    clearing_number = Column(String(10), nullable=True)
+    account_number = Column(String(20), nullable=True)
+    iban = Column(String(34), nullable=True)
+    bic = Column(String(11), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, server_default=func.now(), nullable=False)

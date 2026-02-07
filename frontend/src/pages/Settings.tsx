@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi } from '@/services/api'
 import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo } from '@/types'
-import { VATReportingPeriod, AccountingBasis } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2 } from 'lucide-react'
+import { VATReportingPeriod, AccountingBasis, PaymentType } from '@/types'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -64,6 +64,13 @@ export default function SettingsPage() {
     accounting_basis: AccountingBasis.ACCRUAL,
     vat_reporting_period: VATReportingPeriod.QUARTERLY,
     is_vat_registered: true,
+    payment_type: '' as PaymentType | '',
+    bankgiro_number: '',
+    plusgiro_number: '',
+    clearing_number: '',
+    account_number: '',
+    iban: '',
+    bic: '',
   })
 
   const getNextFiscalYearDefaults = () => {
@@ -231,6 +238,13 @@ export default function SettingsPage() {
       accounting_basis: selectedCompany.accounting_basis,
       vat_reporting_period: selectedCompany.vat_reporting_period,
       is_vat_registered: selectedCompany.is_vat_registered ?? true,
+      payment_type: selectedCompany.payment_type || '',
+      bankgiro_number: selectedCompany.bankgiro_number || '',
+      plusgiro_number: selectedCompany.plusgiro_number || '',
+      clearing_number: selectedCompany.clearing_number || '',
+      account_number: selectedCompany.account_number || '',
+      iban: selectedCompany.iban || '',
+      bic: selectedCompany.bic || '',
     })
     setEditingCompany(true)
   }
@@ -251,6 +265,13 @@ export default function SettingsPage() {
       accounting_basis: AccountingBasis.ACCRUAL,
       vat_reporting_period: VATReportingPeriod.QUARTERLY,
       is_vat_registered: true,
+      payment_type: '',
+      bankgiro_number: '',
+      plusgiro_number: '',
+      clearing_number: '',
+      account_number: '',
+      iban: '',
+      bic: '',
     })
   }
 
@@ -280,7 +301,18 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      const response = await companyApi.update(selectedCompany.id, companyForm)
+      // Send null for empty payment fields so backend can validate properly
+      const formData = {
+        ...companyForm,
+        payment_type: companyForm.payment_type || null,
+        bankgiro_number: companyForm.bankgiro_number || null,
+        plusgiro_number: companyForm.plusgiro_number || null,
+        clearing_number: companyForm.clearing_number || null,
+        account_number: companyForm.account_number || null,
+        iban: companyForm.iban || null,
+        bic: companyForm.bic || null,
+      }
+      const response = await companyApi.update(selectedCompany.id, formData)
       setSelectedCompany(response.data)
       showMessage('Företagsinformation uppdaterad!', 'success')
       setEditingCompany(false)
@@ -296,7 +328,18 @@ export default function SettingsPage() {
   const handleCreateCompany = async () => {
     try {
       setLoading(true)
-      const response = await companyApi.create(companyForm)
+      // Send null for empty payment fields so backend can validate properly
+      const formData = {
+        ...companyForm,
+        payment_type: companyForm.payment_type || null,
+        bankgiro_number: companyForm.bankgiro_number || null,
+        plusgiro_number: companyForm.plusgiro_number || null,
+        clearing_number: companyForm.clearing_number || null,
+        account_number: companyForm.account_number || null,
+        iban: companyForm.iban || null,
+        bic: companyForm.bic || null,
+      }
+      const response = await companyApi.create(formData)
       showMessage('Nytt företag skapat!', 'success')
       setShowCreateCompany(false)
       setCompanyForm({
@@ -313,6 +356,13 @@ export default function SettingsPage() {
         accounting_basis: AccountingBasis.ACCRUAL,
         vat_reporting_period: VATReportingPeriod.QUARTERLY,
         is_vat_registered: true,
+        payment_type: '',
+        bankgiro_number: '',
+        plusgiro_number: '',
+        clearing_number: '',
+        account_number: '',
+        iban: '',
+        bic: '',
       })
       await loadCompanies()
       setSelectedCompany(response.data)
@@ -866,10 +916,10 @@ export default function SettingsPage() {
 
       {message && (
         <div
-          className={`mb-4 p-4 rounded ${
+          className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 p-4 rounded-lg shadow-lg max-w-xl ${
             messageType === 'success'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
+              ? 'bg-green-100 text-green-800 border border-green-300'
+              : 'bg-red-100 text-red-800 border border-red-300'
           }`}
         >
           <pre className="whitespace-pre-wrap font-sans text-sm">{message}</pre>
@@ -1227,6 +1277,195 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+          {/* Payment Information Card */}
+          {selectedCompany && (
+            <div className="card mb-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <CreditCard className="w-5 h-5" />
+                Betalningsuppgifter
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Dessa uppgifter visas på fakturor för att ange hur kunden ska betala.
+              </p>
+
+              {editingCompany ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Betalningstyp
+                    </label>
+                    <select
+                      value={companyForm.payment_type}
+                      onChange={(e) => setCompanyForm({ ...companyForm, payment_type: e.target.value as PaymentType | '' })}
+                      className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="">Välj betalningstyp...</option>
+                      <option value={PaymentType.BANKGIRO}>Bankgiro</option>
+                      <option value={PaymentType.PLUSGIRO}>Plusgiro</option>
+                      <option value={PaymentType.BANK_ACCOUNT}>Bankkonto</option>
+                    </select>
+                  </div>
+
+                  {/* Bankgiro fields */}
+                  {companyForm.payment_type === PaymentType.BANKGIRO && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Bankgironummer <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={companyForm.bankgiro_number}
+                        onChange={(e) => setCompanyForm({ ...companyForm, bankgiro_number: e.target.value })}
+                        className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="t.ex. 123-4567"
+                      />
+                    </div>
+                  )}
+
+                  {/* Plusgiro fields */}
+                  {companyForm.payment_type === PaymentType.PLUSGIRO && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Plusgironummer <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={companyForm.plusgiro_number}
+                        onChange={(e) => setCompanyForm({ ...companyForm, plusgiro_number: e.target.value })}
+                        className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="t.ex. 12 34 56-7"
+                      />
+                    </div>
+                  )}
+
+                  {/* Bank account fields */}
+                  {companyForm.payment_type === PaymentType.BANK_ACCOUNT && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Clearingnummer <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={companyForm.clearing_number}
+                            onChange={(e) => setCompanyForm({ ...companyForm, clearing_number: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. 1234"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Kontonummer <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={companyForm.account_number}
+                            onChange={(e) => setCompanyForm({ ...companyForm, account_number: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. 12 345 67"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            IBAN <span className="text-gray-400">(valfritt)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={companyForm.iban}
+                            onChange={(e) => setCompanyForm({ ...companyForm, iban: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. SE12 3456 7890 1234 5678 9012"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            BIC/SWIFT <span className="text-gray-400">(valfritt)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={companyForm.bic}
+                            onChange={(e) => setCompanyForm({ ...companyForm, bic: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. NDEASESS"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        IBAN och BIC visas på fakturan om de är ifyllda (för internationella betalningar).
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedCompany.payment_type ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-600">Betalningstyp:</span>
+                        <span className="text-gray-900">
+                          {selectedCompany.payment_type === PaymentType.BANKGIRO ? 'Bankgiro' :
+                           selectedCompany.payment_type === PaymentType.PLUSGIRO ? 'Plusgiro' :
+                           'Bankkonto'}
+                        </span>
+                      </div>
+                      {selectedCompany.payment_type === PaymentType.BANKGIRO && selectedCompany.bankgiro_number && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-600">Bankgironummer:</span>
+                          <span className="text-gray-900 font-mono">{selectedCompany.bankgiro_number}</span>
+                        </div>
+                      )}
+                      {selectedCompany.payment_type === PaymentType.PLUSGIRO && selectedCompany.plusgiro_number && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-600">Plusgironummer:</span>
+                          <span className="text-gray-900 font-mono">{selectedCompany.plusgiro_number}</span>
+                        </div>
+                      )}
+                      {selectedCompany.payment_type === PaymentType.BANK_ACCOUNT && (
+                        <>
+                          {selectedCompany.clearing_number && selectedCompany.account_number && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-600">Kontonummer:</span>
+                              <span className="text-gray-900 font-mono">
+                                {selectedCompany.clearing_number}-{selectedCompany.account_number}
+                              </span>
+                            </div>
+                          )}
+                          {selectedCompany.iban && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-600">IBAN:</span>
+                              <span className="text-gray-900 font-mono">{selectedCompany.iban}</span>
+                            </div>
+                          )}
+                          {selectedCompany.bic && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-600">BIC:</span>
+                              <span className="text-gray-900 font-mono">{selectedCompany.bic}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-yellow-800">
+                        <strong>Inga betalningsuppgifter angivna.</strong> Du måste ange betalningsuppgifter innan du kan skapa fakturor.
+                      </p>
+                      <button
+                        onClick={startEditCompany}
+                        className="mt-2 text-sm text-yellow-700 underline hover:text-yellow-900"
+                      >
+                        Klicka på "Redigera" ovan för att lägga till betalningsuppgifter
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
       {/* VAT Reporting Period Section */}
       <div className="card mb-6">

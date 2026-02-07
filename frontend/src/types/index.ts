@@ -22,6 +22,12 @@ export enum VATReportingPeriod {
   YEARLY = 'yearly',
 }
 
+export enum PaymentType {
+  BANKGIRO = 'bankgiro',
+  PLUSGIRO = 'plusgiro',
+  BANK_ACCOUNT = 'bank_account',
+}
+
 export interface Company {
   id: number
   name: string
@@ -38,6 +44,13 @@ export interface Company {
   vat_reporting_period: VATReportingPeriod
   is_vat_registered: boolean
   logo_filename?: string
+  payment_type?: PaymentType | null
+  bankgiro_number?: string | null
+  plusgiro_number?: string | null
+  clearing_number?: string | null
+  account_number?: string | null
+  iban?: string | null
+  bic?: string | null
 }
 
 export interface FiscalYear {
@@ -357,6 +370,13 @@ export interface Invoice {
   invoice_verification_id?: number
   payment_verification_id?: number
   pdf_path?: string
+  payment_type?: PaymentType
+  bankgiro_number?: string
+  plusgiro_number?: string
+  clearing_number?: string
+  account_number?: string
+  iban?: string
+  bic?: string
   created_at: string
   updated_at: string
   sent_at?: string

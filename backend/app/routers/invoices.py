@@ -76,7 +76,36 @@ async def create_invoice(
             {**line_data.model_dump(), "net_amount": net_amount, "vat_amount": vat_amount, "total_amount": total_amount}
         )
 
-    # Create invoice
+    # Get company for payment info snapshot
+    company = db.query(Company).filter(Company.id == invoice_data.company_id).first()
+
+    # Validate that company has payment information configured
+    if not company or not company.payment_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Betalningsuppgifter saknas. Ange betalningstyp i företagsinställningarna innan du skapar fakturor.",
+        )
+
+    # Validate that required fields for the payment type are configured
+    from app.models.company import PaymentType
+
+    if company.payment_type == PaymentType.BANKGIRO and not company.bankgiro_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bankgironummer saknas. Ange bankgironummer i företagsinställningarna.",
+        )
+    elif company.payment_type == PaymentType.PLUSGIRO and not company.plusgiro_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Plusgironummer saknas. Ange plusgironummer i företagsinställningarna.",
+        )
+    elif company.payment_type == PaymentType.BANK_ACCOUNT and (not company.clearing_number or not company.account_number):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Clearingnummer och kontonummer saknas. Ange båda i företagsinställningarna.",
+        )
+
+    # Create invoice (with payment info snapshot from company)
     invoice = Invoice(
         company_id=invoice_data.company_id,
         customer_id=invoice_data.customer_id,
@@ -92,6 +121,13 @@ async def create_invoice(
         vat_amount=total_vat,
         net_amount=total_net,
         status=InvoiceStatus.DRAFT,
+        payment_type=company.payment_type,
+        bankgiro_number=company.bankgiro_number,
+        plusgiro_number=company.plusgiro_number,
+        clearing_number=company.clearing_number,
+        account_number=company.account_number,
+        iban=company.iban,
+        bic=company.bic,
     )
     db.add(invoice)
     db.flush()

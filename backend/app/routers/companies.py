@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_active_user, get_user_company_ids
 from app.models.account import Account
-from app.models.company import Company
+from app.models.company import Company, PaymentType
 from app.models.default_account import DefaultAccount
 from app.models.fiscal_year import FiscalYear
 from app.models.user import CompanyUser, User
@@ -36,6 +36,25 @@ def create_company(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Company with org number {company.org_number} already exists",
         )
+
+    # Validate payment_type and required fields
+    if company.payment_type:
+        if company.payment_type == PaymentType.BANKGIRO and not company.bankgiro_number:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bankgironummer krävs för betalningstyp Bankgiro.",
+            )
+        elif company.payment_type == PaymentType.PLUSGIRO and not company.plusgiro_number:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plusgironummer krävs för betalningstyp Plusgiro.",
+            )
+        elif company.payment_type == PaymentType.BANK_ACCOUNT:
+            if not company.clearing_number or not company.account_number:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Clearingnummer och kontonummer krävs för betalningstyp Bankkonto.",
+                )
 
     # Create company
     db_company = Company(**company.model_dump())
@@ -137,6 +156,32 @@ def update_company(
         )
 
     update_data = company_update.model_dump(exclude_unset=True)
+
+    # Validate payment_type and required fields
+    final_payment_type = update_data.get("payment_type", company.payment_type)
+    if final_payment_type:
+        # Get final values (from update or existing company)
+        final_bankgiro = update_data.get("bankgiro_number", company.bankgiro_number)
+        final_plusgiro = update_data.get("plusgiro_number", company.plusgiro_number)
+        final_clearing = update_data.get("clearing_number", company.clearing_number)
+        final_account = update_data.get("account_number", company.account_number)
+
+        if final_payment_type == PaymentType.BANKGIRO and not final_bankgiro:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bankgironummer krävs för betalningstyp Bankgiro.",
+            )
+        elif final_payment_type == PaymentType.PLUSGIRO and not final_plusgiro:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plusgironummer krävs för betalningstyp Plusgiro.",
+            )
+        elif final_payment_type == PaymentType.BANK_ACCOUNT:
+            if not final_clearing or not final_account:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Clearingnummer och kontonummer krävs för betalningstyp Bankkonto.",
+                )
 
     # Validate accounting_basis change
     if "accounting_basis" in update_data and update_data["accounting_basis"] != company.accounting_basis:
