@@ -351,7 +351,11 @@
 
     <!-- Footer -->
     <div class="footer">
+        {% if company.is_vat_registered %}
         <p>{{ company.name }} | Org.nr: {{ company.org_number }} | VAT: {{ company.vat_number }}</p>
+        {% else %}
+        <p>{{ company.name }} | Org.nr: {{ company.org_number }} | Ingen moms debiteras</p>
+        {% endif %}
         <p>Denna faktura är skapad elektroniskt och är giltig utan signatur</p>
     </div>
 </body>
