@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi } from '@/services/api'
-import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo } from '@/types'
-import { VATReportingPeriod, AccountingBasis, PaymentType } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi, attachmentApi } from '@/services/api'
+import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo, Attachment } from '@/types'
+import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from '@/types'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
-import { useLayoutSettings } from '@/contexts/LayoutSettingsContext'
+import { useLayoutSettings, ModalType } from '@/contexts/LayoutSettingsContext'
+import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function SettingsPage() {
@@ -40,6 +41,9 @@ export default function SettingsPage() {
   const [creatingBackup, setCreatingBackup] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState<string | null>(null)
   const [showRestoreModal, setShowRestoreModal] = useState(false)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [loadingAttachments, setLoadingAttachments] = useState(false)
+  const [deletingAttachment, setDeletingAttachment] = useState<number | null>(null)
   const [importSummary, setImportSummary] = useState<{
     accounts_created: number
     accounts_updated: number
@@ -98,6 +102,12 @@ export default function SettingsPage() {
       loadBackups()
     }
   }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab === 'layout' && selectedCompany) {
+      loadAttachments()
+    }
+  }, [activeTab, selectedCompany])
 
   // Load company logo as blob URL (img tags can't send auth headers)
   useEffect(() => {
@@ -162,6 +172,58 @@ export default function SettingsPage() {
       setLoading(false)
     }
   }
+
+  const loadAttachments = async () => {
+    if (!selectedCompany) return
+    setLoadingAttachments(true)
+    try {
+      const res = await attachmentApi.list(selectedCompany.id)
+      setAttachments(res.data)
+    } catch (err) {
+      console.error('Failed to load attachments:', err)
+    } finally {
+      setLoadingAttachments(false)
+    }
+  }
+
+  const handleDeleteAttachment = async (id: number) => {
+    setDeletingAttachment(id)
+    try {
+      await attachmentApi.delete(id)
+      setAttachments(prev => prev.filter(a => a.id !== id))
+      showMessage('Bilagan har raderats', 'success')
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || 'Kunde inte radera bilagan'
+      showMessage(detail, 'error')
+    } finally {
+      setDeletingAttachment(null)
+    }
+  }
+
+  // Convert unlinked attachments to EntityAttachment format for preview
+  const unlinkedEntityAttachments = useMemo(() =>
+    attachments
+      .filter(a => a.links?.length === 0)
+      .map(a => ({
+        link_id: 0,
+        attachment_id: a.id,
+        role: AttachmentRole.ORIGINAL,
+        sort_order: 0,
+        created_at: a.created_at,
+        original_filename: a.original_filename,
+        mime_type: a.mime_type,
+        size_bytes: a.size_bytes,
+        status: a.status,
+      })),
+    [attachments]
+  )
+
+  const {
+    openPreview,
+    floatingPreview,
+  } = useAttachmentPreviewController(unlinkedEntityAttachments, {
+    modalType: ModalType.ATTACHMENT_PREVIEW
+  })
 
   const showMessage = (msg: string, type: 'success' | 'error' = 'success') => {
     setMessage(msg)
@@ -909,7 +971,7 @@ export default function SettingsPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Utseende
+            Bilagor
           </button>
         </nav>
       </div>
@@ -2484,8 +2546,88 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
+          {/* Olänkade bilagor */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <Paperclip className="w-5 h-5 text-gray-600" />
+              <h2 className="text-xl font-semibold">Olänkade bilagor</h2>
+            </div>
+
+            <p className="text-gray-600 mb-4">
+              Bilagor som inte är kopplade till någon verifikation, faktura eller utlägg kan tas bort här.
+            </p>
+
+            {loadingAttachments ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Laddar bilagor...
+              </div>
+            ) : (
+              <>
+                {/* Statistik */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="text-2xl font-bold">{attachments.length}</div>
+                    <div className="text-sm text-gray-600">Totalt antal bilagor</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {attachments.filter(a => a.links?.length === 0).length}
+                    </div>
+                    <div className="text-sm text-gray-600">Olänkade</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="text-2xl font-bold">
+                      {(attachments.reduce((sum, a) => sum + a.size_bytes, 0) / 1024 / 1024).toFixed(1)} MB
+                    </div>
+                    <div className="text-sm text-gray-600">Total storlek</div>
+                  </div>
+                </div>
+
+                {/* Lista olänkade */}
+                {attachments.filter(a => a.links?.length === 0).length === 0 ? (
+                  <p className="text-green-600">Inga olänkade bilagor.</p>
+                ) : (
+                  <div className="border rounded divide-y max-h-64 overflow-y-auto">
+                    {attachments
+                      .filter(a => a.links?.length === 0)
+                      .map((attachment, index) => (
+                        <div key={attachment.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                          <div
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() => openPreview(index)}
+                          >
+                            <div className="font-medium truncate text-blue-600 hover:text-blue-800">{attachment.original_filename}</div>
+                            <div className="text-sm text-gray-500">
+                              {(attachment.size_bytes / 1024).toFixed(0)} KB
+                              {' · '}
+                              {new Date(attachment.created_at).toLocaleDateString('sv-SE')}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteAttachment(attachment.id)}
+                            disabled={deletingAttachment === attachment.id}
+                            className="btn btn-danger btn-sm flex items-center gap-1 ml-3"
+                          >
+                            {deletingAttachment === attachment.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                            Radera
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
+
+      {floatingPreview}
 
       {/* Restore Modal */}
       <RestoreModal

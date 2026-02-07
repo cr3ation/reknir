@@ -634,6 +634,12 @@ export enum EntityType {
   VERIFICATION = 'verification',
 }
 
+export interface AttachmentLinkItem {
+  entity_type: EntityType
+  entity_id: number
+  role: AttachmentRole
+}
+
 export interface Attachment {
   id: number
   company_id: number
@@ -646,6 +652,7 @@ export interface Attachment {
   rejection_reason?: string
   created_at: string
   created_by: number
+  links?: AttachmentLinkItem[]
 }
 
 export interface EntityAttachment {
