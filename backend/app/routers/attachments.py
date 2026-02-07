@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
@@ -142,9 +142,10 @@ async def list_attachments(
     current_user: User = Depends(get_current_active_user),
     _: None = Depends(verify_company_access),
 ):
-    """List all attachments for a company"""
+    """List attachments for a company."""
     attachments = (
         db.query(Attachment)
+        .options(joinedload(Attachment.links))
         .filter(Attachment.company_id == company_id)
         .order_by(Attachment.created_at.desc())
         .limit(limit)
