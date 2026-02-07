@@ -287,9 +287,9 @@ async def send_invoice(
     file_path = ATTACHMENTS_DIR / storage_filename
     file_path.write_bytes(pdf_bytes)
 
-    # Filename format: faktura_{companyId}_{series}{number}_{YYYYMMDD}.pdf (sortable, no sensitive data)
+    # Filename format: faktura_{companyId}_{number}_{YYYYMMDD}.pdf (sortable, no sensitive data)
     issue_date_str = invoice.invoice_date.strftime("%Y%m%d")
-    original_filename = f"faktura_{invoice.company_id}_{invoice.invoice_series}{invoice.invoice_number}_{issue_date_str}.pdf"
+    original_filename = f"faktura_{invoice.company_id}_{invoice.invoice_number}_{issue_date_str}.pdf"
 
     attachment = Attachment(
         company_id=invoice.company_id,
@@ -463,9 +463,9 @@ async def download_invoice_pdf(
 
     try:
         pdf_bytes = generate_invoice_pdf(invoice, customer, company)
-        # Filename format: faktura_{companyId}_{series}{number}_{YYYYMMDD}.pdf
+        # Filename format: faktura_{companyId}_{number}_{YYYYMMDD}.pdf
         issue_date_str = invoice.invoice_date.strftime("%Y%m%d")
-        filename = f"faktura_{invoice.company_id}_{invoice.invoice_series}{invoice.invoice_number}_{issue_date_str}.pdf"
+        filename = f"faktura_{invoice.company_id}_{invoice.invoice_number}_{issue_date_str}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

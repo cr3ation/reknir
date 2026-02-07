@@ -60,7 +60,7 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
         series="A",
         transaction_date=invoice.invoice_date,
         description=description
-        or f"Faktura {invoice.invoice_series}{invoice.invoice_number} - {invoice.customer.name}",
+        or f"Faktura {invoice.invoice_number} - {invoice.customer.name}",
         registration_date=date.today(),
     )
     db.add(verification)
@@ -81,7 +81,7 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
         account_id=receivables_account.id,
         debit=invoice.total_amount,
         credit=Decimal("0"),
-        description=f"Faktura {invoice.invoice_series}{invoice.invoice_number}",
+        description=f"Faktura {invoice.invoice_number}",
     )
     db.add(debit_line)
     receivables_account.current_balance += invoice.total_amount
@@ -177,7 +177,7 @@ def create_invoice_payment_verification(
         verification_number=ver_number,
         series="A",
         transaction_date=paid_date,
-        description=f"Betalning faktura {invoice.invoice_series}{invoice.invoice_number} - {invoice.customer.name}",
+        description=f"Betalning faktura {invoice.invoice_number} - {invoice.customer.name}",
         registration_date=date.today(),
     )
     db.add(verification)
@@ -205,7 +205,7 @@ def create_invoice_payment_verification(
         account_id=bank_account.id,
         debit=paid_amount,
         credit=Decimal("0"),
-        description=f"Betalning faktura {invoice.invoice_series}{invoice.invoice_number}",
+        description=f"Betalning faktura {invoice.invoice_number}",
     )
     db.add(debit_line)
     bank_account.current_balance += paid_amount
@@ -275,7 +275,7 @@ def create_invoice_payment_verification(
             account_id=receivables_account.id,
             debit=Decimal("0"),
             credit=paid_amount,
-            description=f"Betalning faktura {invoice.invoice_series}{invoice.invoice_number}",
+            description=f"Betalning faktura {invoice.invoice_number}",
         )
         db.add(credit_line)
         receivables_account.current_balance -= paid_amount

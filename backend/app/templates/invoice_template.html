@@ -354,7 +354,7 @@
         </p>
         {% endif %}
         {% endif %}
-        <p style="margin: 5px 0;">Betalningsreferens: <strong>{{ invoice.invoice_series }}{{ invoice.invoice_number }}</strong></p>
+        <p style="margin: 5px 0;">Vänligen ange fakturanummer <strong>{{ invoice.invoice_number }}</strong> som referens vid betalning.</p>
         <p style="margin: 5px 0;"><strong>Belopp att betala: {{ invoice.total_amount|format_sek }} kr</strong></p>
         {% if invoice.status == 'paid' %}
         <p style="color: green; margin: 5px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
@@ -371,12 +371,22 @@
 
     <!-- Footer -->
     <div class="footer">
-        {% if company.is_vat_registered %}
-        <p>{{ company.name }} | Org.nr: {{ company.org_number }} | VAT: {{ company.vat_number }}</p>
-        {% else %}
-        <p>{{ company.name }} | Org.nr: {{ company.org_number }} | Ingen moms debiteras</p>
-        {% endif %}
-        <p>Denna faktura är skapad elektroniskt och är giltig utan signatur</p>
+        <p>
+            <strong>{{ company.name }}</strong> | Org.nr: {{ company.org_number }}
+            {% if company.is_vat_registered %} | VAT: {{ company.vat_number }}{% endif %}
+        </p>
+        <p>
+            {% if company.address %}{{ company.address }}{% endif %}
+            {% if company.address and (company.postal_code or company.city) %}, {% endif %}
+            {% if company.postal_code %}{{ company.postal_code }}{% endif %}
+            {% if company.city %} {{ company.city }}{% endif %}
+        </p>
+        <p>
+            {% if company.phone %}Tel: {{ company.phone }}{% endif %}
+            {% if company.phone and company.email %} | {% endif %}
+            {% if company.email %}E-post: {{ company.email }}{% endif %}
+        </p>
+        <p style="margin-top: 8px;">Denna faktura är skapad elektroniskt och är giltig utan signatur</p>
     </div>
 </body>
 </html>

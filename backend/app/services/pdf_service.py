@@ -119,7 +119,7 @@ def save_invoice_pdf(invoice: Invoice, customer: Customer, company: Company, out
     os.makedirs(output_dir, exist_ok=True)
 
     # Generate filename
-    filename = f"faktura_{invoice.invoice_series}{invoice.invoice_number}.pdf"
+    filename = f"faktura_{invoice.invoice_number}.pdf"
     filepath = os.path.join(output_dir, filename)
 
     # Save PDF

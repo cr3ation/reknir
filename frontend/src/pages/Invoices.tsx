@@ -115,7 +115,7 @@ export default function Invoices() {
     }
   }
 
-  const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string, series: string) => {
+  const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string) => {
     try {
       // Use axios to download with authentication
       const response = await api.get(`/invoices/${invoiceId}/pdf`, {
@@ -127,7 +127,7 @@ export default function Invoices() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `faktura_${series}${invoiceNumber}.pdf`
+      link.download = `faktura_${invoiceNumber}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -347,7 +347,7 @@ export default function Invoices() {
                 {sortedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium">
-                      {invoice.invoice_series}{invoice.invoice_number}
+                      {invoice.invoice_number}
                     </td>
                     <td className="px-4 py-3 text-sm">{invoice.invoice_date}</td>
                     <td className="px-4 py-3 text-sm">{invoice.customer_name}</td>
@@ -397,7 +397,7 @@ export default function Invoices() {
                           </button>
                         )}
                         <button
-                          onClick={() => downloadInvoicePdf(invoice.id, String(invoice.invoice_number), invoice.invoice_series)}
+                          onClick={() => downloadInvoicePdf(invoice.id, String(invoice.invoice_number))}
                           className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                           title="Ladda ner PDF"
                         >
@@ -594,7 +594,7 @@ export default function Invoices() {
                     Skicka faktura
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {confirmSendInvoice.invoice_series}{confirmSendInvoice.invoice_number} - {confirmSendInvoice.customer_name}
+                    {confirmSendInvoice.invoice_number} - {confirmSendInvoice.customer_name}
                   </p>
                 </div>
               </div>
@@ -742,7 +742,7 @@ export default function Invoices() {
                     Markera faktura som betald
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {confirmPayInvoice.invoice_series}{confirmPayInvoice.invoice_number} - {confirmPayInvoice.customer_name}
+                    {confirmPayInvoice.invoice_number} - {confirmPayInvoice.customer_name}
                   </p>
                 </div>
               </div>

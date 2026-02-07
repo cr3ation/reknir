@@ -124,7 +124,7 @@ export default function InvoiceDetail() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `faktura_${invoice.invoice_series}${invoice.invoice_number}.pdf`
+      link.download = `faktura_${invoice.invoice_number}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -185,7 +185,7 @@ export default function InvoiceDetail() {
           </Link>
           <div>
             <h1 className="text-3xl font-bold">
-              Faktura {invoice.invoice_series}{invoice.invoice_number}
+              Faktura {invoice.invoice_number}
             </h1>
             <p className="text-gray-600">
               {customer?.name}
@@ -211,7 +211,7 @@ export default function InvoiceDetail() {
               <div>
                 <dt className="text-sm font-medium text-gray-500">Fakturanummer</dt>
                 <dd className="mt-1 text-sm text-gray-900">
-                  {invoice.invoice_series}{invoice.invoice_number}
+                  {invoice.invoice_number}
                 </dd>
               </div>
               <div>
@@ -555,7 +555,7 @@ export default function InvoiceDetail() {
                     Markera faktura som betald
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {invoice.invoice_series}{invoice.invoice_number} - {customer?.name}
+                    {invoice.invoice_number} - {customer?.name}
                   </p>
                 </div>
               </div>

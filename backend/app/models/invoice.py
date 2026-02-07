@@ -107,7 +107,7 @@ class Invoice(Base):
     payments = relationship("InvoicePayment", back_populates="invoice", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Invoice {self.invoice_series}{self.invoice_number}>"
+        return f"<Invoice {self.invoice_number}>"
 
 
 class InvoiceLine(Base):
