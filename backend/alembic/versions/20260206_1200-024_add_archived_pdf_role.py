@@ -18,8 +18,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Add archived_pdf to AttachmentRole enum
-    op.execute("ALTER TYPE attachmentrole ADD VALUE 'archived_pdf'")
+    # Add ARCHIVED_PDF to AttachmentRole enum (uppercase to match existing values)
+    op.execute("ALTER TYPE attachmentrole ADD VALUE 'ARCHIVED_PDF'")
 
 
 def downgrade() -> None:

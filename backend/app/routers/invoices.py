@@ -239,7 +239,11 @@ async def send_invoice(
     customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
 
-    # Archive PDF BEFORE status change (immutable snapshot for bookkeeping)
+    # Update status BEFORE generating PDF so it shows correct status
+    invoice.status = InvoiceStatus.ISSUED
+    invoice.sent_at = datetime.now()
+
+    # Generate and archive PDF (immutable snapshot for bookkeeping)
     pdf_bytes = generate_invoice_pdf(invoice, customer, company)
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
 
@@ -278,9 +282,15 @@ async def send_invoice(
         verification = create_invoice_verification(db, invoice)
         invoice.invoice_verification_id = verification.id
 
-    # Update invoice status
-    invoice.status = InvoiceStatus.ISSUED
-    invoice.sent_at = datetime.now()
+        # Link archived PDF to verification as well (bokföringsunderlag)
+        verification_link = AttachmentLink(
+            attachment_id=attachment.id,
+            entity_type=EntityType.VERIFICATION,
+            entity_id=verification.id,
+            role=AttachmentRole.ARCHIVED_PDF,
+            sort_order=0,
+        )
+        db.add(verification_link)
 
     db.commit()
     db.refresh(invoice)
@@ -320,18 +330,14 @@ async def mark_invoice_paid(
     if invoice.status == InvoiceStatus.CANCELLED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot pay cancelled invoice")
 
+    if invoice.status == InvoiceStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fakturan måste vara utfärdad (skickad) innan betalning kan registreras",
+        )
+
     # Get company accounting basis
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
-
-    # Handle draft invoices based on accounting method
-    if invoice.status == InvoiceStatus.DRAFT:
-        if company.accounting_basis == AccountingBasis.ACCRUAL:
-            # Accrual: Create invoice verification first
-            verification = create_invoice_verification(db, invoice)
-            invoice.invoice_verification_id = verification.id
-        # Cash method: Just update status, no verification needed
-        invoice.status = InvoiceStatus.ISSUED
-        invoice.sent_at = datetime.now()
 
     # Determine payment amount
     paid_amount = payment.paid_amount if payment.paid_amount else (invoice.total_amount - invoice.paid_amount)
@@ -340,6 +346,18 @@ async def mark_invoice_paid(
     payment_verification = create_invoice_payment_verification(
         db, invoice, payment.paid_date, paid_amount, payment.bank_account_id, company.accounting_basis
     )
+
+    # Link archived PDF to payment verification (bokföringsunderlag)
+    archived_pdf = get_archived_pdf_attachment(db, invoice.id)
+    if archived_pdf:
+        payment_verification_link = AttachmentLink(
+            attachment_id=archived_pdf.id,
+            entity_type=EntityType.VERIFICATION,
+            entity_id=payment_verification.id,
+            role=AttachmentRole.ARCHIVED_PDF,
+            sort_order=0,
+        )
+        db.add(payment_verification_link)
 
     # Create payment record for history
     invoice_payment = InvoicePayment(
