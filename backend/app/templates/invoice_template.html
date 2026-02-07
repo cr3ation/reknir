@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
     <meta charset="UTF-8">
-    <title>Faktura {{ invoice.invoice_series }}{{ invoice.invoice_number }}</title>
+    <title>Faktura {{ invoice.invoice_number }}</title>
     <style>
         @page {
             size: A4;
@@ -248,7 +248,7 @@
             <table class="invoice-details">
                 <tr>
                     <td>Fakturanummer:</td>
-                    <td>{{ invoice.invoice_series }}{{ invoice.invoice_number }}</td>
+                    <td>{{ invoice.invoice_number }}</td>
                 </tr>
                 <tr>
                     <td>Fakturadatum:</td>
@@ -337,7 +337,7 @@
         {% if invoice.status == 'paid' %}
         <p style="color: green; margin: 3px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
         {% else %}
-        <p style="margin: 3px 0;">Vänligen ange fakturanummer {{ invoice.invoice_series }}{{ invoice.invoice_number }} som referens vid betalning.</p>
+        <p style="margin: 3px 0;">Vänligen ange fakturanummer {{ invoice.invoice_number }} som referens vid betalning.</p>
         {% endif %}
     </div>
 
