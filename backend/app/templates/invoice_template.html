@@ -340,15 +340,14 @@
             {%- elif invoice.payment_type.value == 'bank_account' -%}Bankkonto
             {%- endif -%}
         </strong></p>
-        <p style="margin: 5px 0;">
-            {% if invoice.payment_type.value == 'bankgiro' and invoice.bankgiro_number %}
-            Bankgironr: <strong>{{ invoice.bankgiro_number }}</strong>
-            {% elif invoice.payment_type.value == 'plusgiro' and invoice.plusgiro_number %}
-            Plusgironr: <strong>{{ invoice.plusgiro_number }}</strong>
-            {% elif invoice.payment_type.value == 'bank_account' and invoice.clearing_number and invoice.account_number %}
-            Clearingnr: <strong>{{ invoice.clearing_number }}</strong> Kontonr: <strong>{{ invoice.account_number }}</strong>
-            {% endif %}
-        </p>
+        {% if invoice.payment_type.value == 'bankgiro' and invoice.bankgiro_number %}
+        <p style="margin: 5px 0;">Bankgironr: <strong>{{ invoice.bankgiro_number }}</strong></p>
+        {% elif invoice.payment_type.value == 'plusgiro' and invoice.plusgiro_number %}
+        <p style="margin: 5px 0;">Plusgironr: <strong>{{ invoice.plusgiro_number }}</strong></p>
+        {% elif invoice.payment_type.value == 'bank_account' and invoice.clearing_number and invoice.account_number %}
+        <p style="margin: 5px 0;">Clearingnr: <strong>{{ invoice.clearing_number }}</strong></p>
+        <p style="margin: 5px 0;">Kontonr: <strong>{{ invoice.account_number }}</strong></p>
+        {% endif %}
         {% if invoice.payment_type.value == 'bank_account' and invoice.iban %}
         <p style="margin: 3px 0; font-size: 8pt; color: #555;">
             (IBAN: {{ invoice.iban }}{% if invoice.bic %} BIC: {{ invoice.bic }}{% endif %})

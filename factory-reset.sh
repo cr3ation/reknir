@@ -228,7 +228,10 @@ seed_demo_data() {
         "fiscal_year_start": "2025-01-01",
         "fiscal_year_end": "2025-12-31",
         "accounting_basis": "cash",
-        "vat_reporting_period": "yearly"
+        "vat_reporting_period": "yearly",
+        "payment_type": "bank_account",
+        "clearing_number": "1234",
+        "account_number": "567 890 123-4"
     }')
     COMPANY_ID=$(echo "$company_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     echo "   Created company: Demo Företag AB (ID: ${COMPANY_ID})"
