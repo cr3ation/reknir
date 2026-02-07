@@ -8,6 +8,8 @@ import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useDropZone } from '@/hooks/useDropZone'
+import { useSortableTable } from '@/hooks/useSortableTable'
+import SortableHeader from '@/components/SortableHeader'
 
 // Receipt drop zone component for inline table cell
 function ReceiptDropZone({
@@ -434,6 +436,12 @@ export default function Expenses() {
     return true
   })
 
+  // Sorting
+  const { sortedData: sortedExpenses, sortConfig, requestSort } = useSortableTable(
+    filteredExpenses,
+    { key: 'expense_date', direction: 'desc' }
+  )
+
   const totalAmount = filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0)
   const totalVat = filteredExpenses.reduce((sum, e) => sum + Number(e.vat_amount), 0)
 
@@ -520,25 +528,25 @@ export default function Expenses() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Medarbetare</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beskrivning</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Belopp</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Moms</th>
+                <SortableHeader label="Datum" sortKey="expense_date" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Medarbetare" sortKey="employee_name" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Beskrivning" sortKey="description" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Belopp" sortKey="amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
+                <SortableHeader label="Moms" sortKey="vat_amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Kvitto</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                <SortableHeader label="Status" sortKey="status" sortConfig={sortConfig} onSort={requestSort} align="center" />
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Åtgärder</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {filteredExpenses.length === 0 ? (
+              {sortedExpenses.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     Inga utlägg hittades
                   </td>
                 </tr>
               ) : (
-                filteredExpenses.map((expense) => (
+                sortedExpenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm">{formatDate(expense.expense_date)}</td>
                     <td className="px-4 py-3 text-sm font-medium">{expense.employee_name}</td>

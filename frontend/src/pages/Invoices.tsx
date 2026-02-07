@@ -13,6 +13,8 @@ import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
+import { useSortableTable } from '@/hooks/useSortableTable'
+import SortableHeader from '@/components/SortableHeader'
 
 // Format number with Swedish thousand separators (space)
 const formatNumberWithSeparator = (value: number): string => {
@@ -69,6 +71,18 @@ export default function Invoices() {
   } = useAttachmentPreviewController(supplierInvoiceAttachments, {
     modalType: ModalType.SUPPLIER_INVOICE,
   })
+
+  // Sorting for customer invoices
+  const { sortedData: sortedInvoices, sortConfig: invoiceSortConfig, requestSort: requestInvoiceSort } = useSortableTable(
+    invoices,
+    { key: 'invoice_date', direction: 'desc' }
+  )
+
+  // Sorting for supplier invoices
+  const { sortedData: sortedSupplierInvoices, sortConfig: supplierInvoiceSortConfig, requestSort: requestSupplierInvoiceSort } = useSortableTable(
+    supplierInvoices,
+    { key: 'invoice_date', direction: 'desc' }
+  )
 
   useEffect(() => {
     loadInvoices()
@@ -316,31 +330,21 @@ export default function Invoices() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Fakturanr
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Datum
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Kund
-                  </th>
+                  <SortableHeader label="Fakturanr" sortKey="invoice_number" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} />
+                  <SortableHeader label="Datum" sortKey="invoice_date" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} />
+                  <SortableHeader label="Kund" sortKey="customer_name" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} />
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Belopp
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Betalt
-                  </th>
+                  <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} align="right" />
+                  <SortableHeader label="Betalt" sortKey="paid_amount" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} align="right" />
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Åtgärder
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {invoices.map((invoice) => (
+                {sortedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.invoice_series}{invoice.invoice_number}
@@ -432,31 +436,21 @@ export default function Invoices() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Fakturanr
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Datum
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Leverantör
-                  </th>
+                  <SortableHeader label="Fakturanr" sortKey="supplier_invoice_number" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} />
+                  <SortableHeader label="Datum" sortKey="invoice_date" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} />
+                  <SortableHeader label="Leverantör" sortKey="supplier_name" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} />
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Belopp
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Betalt
-                  </th>
+                  <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} align="right" />
+                  <SortableHeader label="Betalt" sortKey="paid_amount" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} align="right" />
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Åtgärder
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {supplierInvoices.map((invoice) => (
+                {sortedSupplierInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.supplier_invoice_number}

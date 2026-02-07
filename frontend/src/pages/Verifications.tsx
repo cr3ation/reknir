@@ -11,6 +11,8 @@ import { ModalType } from '@/contexts/LayoutSettingsContext'
 import VerificationForm from '@/components/forms/VerificationForm'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
+import { useSortableTable } from '@/hooks/useSortableTable'
+import SortableHeader from '@/components/SortableHeader'
 
 export default function Verifications() {
   const navigate = useNavigate()
@@ -92,6 +94,12 @@ export default function Verifications() {
     filterVerificationsByFiscalYear()
   }, [filterVerificationsByFiscalYear])
 
+  // Sorting
+  const { sortedData: sortedVerifications, sortConfig, requestSort } = useSortableTable(
+    verifications,
+    { key: 'verification_number', direction: 'desc' }
+  )
+
   const handleDelete = async (id: number) => {
     if (!confirm(
       'VARNING: Radering av verifikationer är endast tillåtet i utvecklingsläge!\n\n' +
@@ -144,21 +152,11 @@ export default function Verifications() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Ver.nr
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Serie
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Datum
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Beskrivning
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Belopp
-                </th>
+                <SortableHeader label="Ver.nr" sortKey="verification_number" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Serie" sortKey="series" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Datum" sortKey="transaction_date" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Beskrivning" sortKey="description" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                   Status
                 </th>
@@ -168,7 +166,7 @@ export default function Verifications() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {verifications.map((verification) => (
+              {sortedVerifications.map((verification) => (
                 <tr
                   key={verification.id}
                   className="hover:bg-gray-50 cursor-pointer"
