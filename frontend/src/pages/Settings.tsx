@@ -44,6 +44,16 @@ export default function SettingsPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loadingAttachments, setLoadingAttachments] = useState(false)
   const [deletingAttachment, setDeletingAttachment] = useState<number | null>(null)
+  const [editingPaymentInfo, setEditingPaymentInfo] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({
+    payment_type: '' as PaymentType | '',
+    bankgiro_number: '',
+    plusgiro_number: '',
+    clearing_number: '',
+    account_number: '',
+    iban: '',
+    bic: '',
+  })
   const [importSummary, setImportSummary] = useState<{
     accounts_created: number
     accounts_updated: number
@@ -68,13 +78,6 @@ export default function SettingsPage() {
     accounting_basis: AccountingBasis.ACCRUAL,
     vat_reporting_period: VATReportingPeriod.QUARTERLY,
     is_vat_registered: true,
-    payment_type: '' as PaymentType | '',
-    bankgiro_number: '',
-    plusgiro_number: '',
-    clearing_number: '',
-    account_number: '',
-    iban: '',
-    bic: '',
   })
 
   const getNextFiscalYearDefaults = () => {
@@ -225,6 +228,48 @@ export default function SettingsPage() {
     modalType: ModalType.ATTACHMENT_PREVIEW
   })
 
+  const startEditPaymentInfo = () => {
+    if (!selectedCompany) return
+    setPaymentForm({
+      payment_type: selectedCompany.payment_type || '',
+      bankgiro_number: selectedCompany.bankgiro_number || '',
+      plusgiro_number: selectedCompany.plusgiro_number || '',
+      clearing_number: selectedCompany.clearing_number || '',
+      account_number: selectedCompany.account_number || '',
+      iban: selectedCompany.iban || '',
+      bic: selectedCompany.bic || '',
+    })
+    setEditingPaymentInfo(true)
+  }
+
+  const cancelEditPaymentInfo = () => {
+    setEditingPaymentInfo(false)
+  }
+
+  const handleUpdatePaymentInfo = async () => {
+    if (!selectedCompany) return
+    try {
+      setLoading(true)
+      await companyApi.update(selectedCompany.id, {
+        payment_type: paymentForm.payment_type || null,
+        bankgiro_number: paymentForm.bankgiro_number || null,
+        plusgiro_number: paymentForm.plusgiro_number || null,
+        clearing_number: paymentForm.clearing_number || null,
+        account_number: paymentForm.account_number || null,
+        iban: paymentForm.iban || null,
+        bic: paymentForm.bic || null,
+      })
+      await loadCompanies()
+      setEditingPaymentInfo(false)
+      showMessage('Betalningsuppgifter uppdaterade', 'success')
+    } catch (error: any) {
+      const detail = error.response?.data?.detail || 'Kunde inte uppdatera betalningsuppgifter'
+      showMessage(detail, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const showMessage = (msg: string, type: 'success' | 'error' = 'success') => {
     setMessage(msg)
     setMessageType(type)
@@ -300,13 +345,6 @@ export default function SettingsPage() {
       accounting_basis: selectedCompany.accounting_basis,
       vat_reporting_period: selectedCompany.vat_reporting_period,
       is_vat_registered: selectedCompany.is_vat_registered ?? true,
-      payment_type: selectedCompany.payment_type || '',
-      bankgiro_number: selectedCompany.bankgiro_number || '',
-      plusgiro_number: selectedCompany.plusgiro_number || '',
-      clearing_number: selectedCompany.clearing_number || '',
-      account_number: selectedCompany.account_number || '',
-      iban: selectedCompany.iban || '',
-      bic: selectedCompany.bic || '',
     })
     setEditingCompany(true)
   }
@@ -327,13 +365,6 @@ export default function SettingsPage() {
       accounting_basis: AccountingBasis.ACCRUAL,
       vat_reporting_period: VATReportingPeriod.QUARTERLY,
       is_vat_registered: true,
-      payment_type: '',
-      bankgiro_number: '',
-      plusgiro_number: '',
-      clearing_number: '',
-      account_number: '',
-      iban: '',
-      bic: '',
     })
   }
 
@@ -363,18 +394,7 @@ export default function SettingsPage() {
 
     try {
       setLoading(true)
-      // Send null for empty payment fields so backend can validate properly
-      const formData = {
-        ...companyForm,
-        payment_type: companyForm.payment_type || null,
-        bankgiro_number: companyForm.bankgiro_number || null,
-        plusgiro_number: companyForm.plusgiro_number || null,
-        clearing_number: companyForm.clearing_number || null,
-        account_number: companyForm.account_number || null,
-        iban: companyForm.iban || null,
-        bic: companyForm.bic || null,
-      }
-      const response = await companyApi.update(selectedCompany.id, formData)
+      const response = await companyApi.update(selectedCompany.id, companyForm)
       setSelectedCompany(response.data)
       showMessage('Företagsinformation uppdaterad!', 'success')
       setEditingCompany(false)
@@ -390,18 +410,7 @@ export default function SettingsPage() {
   const handleCreateCompany = async () => {
     try {
       setLoading(true)
-      // Send null for empty payment fields so backend can validate properly
-      const formData = {
-        ...companyForm,
-        payment_type: companyForm.payment_type || null,
-        bankgiro_number: companyForm.bankgiro_number || null,
-        plusgiro_number: companyForm.plusgiro_number || null,
-        clearing_number: companyForm.clearing_number || null,
-        account_number: companyForm.account_number || null,
-        iban: companyForm.iban || null,
-        bic: companyForm.bic || null,
-      }
-      const response = await companyApi.create(formData)
+      const response = await companyApi.create(companyForm)
       showMessage('Nytt företag skapat!', 'success')
       setShowCreateCompany(false)
       setCompanyForm({
@@ -418,13 +427,6 @@ export default function SettingsPage() {
         accounting_basis: AccountingBasis.ACCRUAL,
         vat_reporting_period: VATReportingPeriod.QUARTERLY,
         is_vat_registered: true,
-        payment_type: '',
-        bankgiro_number: '',
-        plusgiro_number: '',
-        clearing_number: '',
-        account_number: '',
-        iban: '',
-        bic: '',
       })
       await loadCompanies()
       setSelectedCompany(response.data)
@@ -1343,23 +1345,34 @@ export default function SettingsPage() {
           {/* Payment Information Card */}
           {selectedCompany && (
             <div className="card mb-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <CreditCard className="w-5 h-5" />
-                Betalningsuppgifter
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  Betalningsuppgifter
+                </h2>
+                {!editingPaymentInfo && !editingCompany && (
+                  <button
+                    onClick={startEditPaymentInfo}
+                    className="btn btn-secondary flex items-center gap-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Redigera
+                  </button>
+                )}
+              </div>
               <p className="text-gray-600 mb-4">
                 Dessa uppgifter visas på fakturor för att ange hur kunden ska betala.
               </p>
 
-              {editingCompany ? (
+              {editingPaymentInfo ? (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Betalningstyp
                     </label>
                     <select
-                      value={companyForm.payment_type}
-                      onChange={(e) => setCompanyForm({ ...companyForm, payment_type: e.target.value as PaymentType | '' })}
+                      value={paymentForm.payment_type}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, payment_type: e.target.value as PaymentType | '' })}
                       className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
                     >
                       <option value="">Välj betalningstyp...</option>
@@ -1370,15 +1383,15 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Bankgiro fields */}
-                  {companyForm.payment_type === PaymentType.BANKGIRO && (
+                  {paymentForm.payment_type === PaymentType.BANKGIRO && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Bankgironummer <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
-                        value={companyForm.bankgiro_number}
-                        onChange={(e) => setCompanyForm({ ...companyForm, bankgiro_number: e.target.value })}
+                        value={paymentForm.bankgiro_number}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, bankgiro_number: e.target.value })}
                         className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
                         placeholder="t.ex. 123-4567"
                       />
@@ -1386,15 +1399,15 @@ export default function SettingsPage() {
                   )}
 
                   {/* Plusgiro fields */}
-                  {companyForm.payment_type === PaymentType.PLUSGIRO && (
+                  {paymentForm.payment_type === PaymentType.PLUSGIRO && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Plusgironummer <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
-                        value={companyForm.plusgiro_number}
-                        onChange={(e) => setCompanyForm({ ...companyForm, plusgiro_number: e.target.value })}
+                        value={paymentForm.plusgiro_number}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, plusgiro_number: e.target.value })}
                         className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
                         placeholder="t.ex. 12 34 56-7"
                       />
@@ -1402,7 +1415,7 @@ export default function SettingsPage() {
                   )}
 
                   {/* Bank account fields */}
-                  {companyForm.payment_type === PaymentType.BANK_ACCOUNT && (
+                  {paymentForm.payment_type === PaymentType.BANK_ACCOUNT && (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -1411,8 +1424,8 @@ export default function SettingsPage() {
                           </label>
                           <input
                             type="text"
-                            value={companyForm.clearing_number}
-                            onChange={(e) => setCompanyForm({ ...companyForm, clearing_number: e.target.value })}
+                            value={paymentForm.clearing_number}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, clearing_number: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md"
                             placeholder="t.ex. 1234"
                           />
@@ -1423,8 +1436,8 @@ export default function SettingsPage() {
                           </label>
                           <input
                             type="text"
-                            value={companyForm.account_number}
-                            onChange={(e) => setCompanyForm({ ...companyForm, account_number: e.target.value })}
+                            value={paymentForm.account_number}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, account_number: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md"
                             placeholder="t.ex. 12 345 67"
                           />
@@ -1437,8 +1450,8 @@ export default function SettingsPage() {
                           </label>
                           <input
                             type="text"
-                            value={companyForm.iban}
-                            onChange={(e) => setCompanyForm({ ...companyForm, iban: e.target.value })}
+                            value={paymentForm.iban}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, iban: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md"
                             placeholder="t.ex. SE12 3456 7890 1234 5678 9012"
                           />
@@ -1449,8 +1462,8 @@ export default function SettingsPage() {
                           </label>
                           <input
                             type="text"
-                            value={companyForm.bic}
-                            onChange={(e) => setCompanyForm({ ...companyForm, bic: e.target.value })}
+                            value={paymentForm.bic}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, bic: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md"
                             placeholder="t.ex. NDEASESS"
                           />
@@ -1460,6 +1473,27 @@ export default function SettingsPage() {
                         IBAN och BIC visas på fakturan om de är ifyllda (för internationella betalningar).
                       </p>
                     </>
+                  )}
+
+                  {editingPaymentInfo && (
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={handleUpdatePaymentInfo}
+                        disabled={loading}
+                        className="btn btn-primary flex items-center gap-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        {loading ? 'Sparar...' : 'Spara'}
+                      </button>
+                      <button
+                        onClick={cancelEditPaymentInfo}
+                        disabled={loading}
+                        className="btn btn-secondary flex items-center gap-2"
+                      >
+                        <X className="w-4 h-4" />
+                        Avbryt
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -1517,10 +1551,10 @@ export default function SettingsPage() {
                         <strong>Inga betalningsuppgifter angivna.</strong> Du måste ange betalningsuppgifter innan du kan skapa fakturor.
                       </p>
                       <button
-                        onClick={startEditCompany}
+                        onClick={startEditPaymentInfo}
                         className="mt-2 text-sm text-yellow-700 underline hover:text-yellow-900"
                       >
-                        Klicka på "Redigera" ovan för att lägga till betalningsuppgifter
+                        Lägg till betalningsuppgifter
                       </button>
                     </div>
                   )}
