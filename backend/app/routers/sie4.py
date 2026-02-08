@@ -36,6 +36,7 @@ class SIE4ExportRequest(BaseModel):
 @router.post("/import/{company_id}", response_model=SIE4ImportResponse)
 async def import_sie4_file(
     company_id: int,
+    fiscal_year_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -71,7 +72,7 @@ async def import_sie4_file(
             raise ValueError("Could not decode SIE4 file. Unsupported encoding.")
 
         # Import
-        stats = sie4_service.import_sie4(db, company_id, file_content)
+        stats = sie4_service.import_sie4(db, company_id, fiscal_year_id, file_content)
 
         return SIE4ImportResponse(
             success=True, message=f"Successfully imported SIE4 file for company {company_id}", **stats
@@ -86,6 +87,7 @@ async def import_sie4_file(
 @router.get("/export/{company_id}", response_class=PlainTextResponse)
 def export_sie4_file(
     company_id: int,
+    fiscal_year_id: int,
     include_verifications: bool = True,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -101,7 +103,7 @@ def export_sie4_file(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this company")
 
     try:
-        sie4_content = sie4_service.export_sie4(db, company_id, include_verifications)
+        sie4_content = sie4_service.export_sie4(db, company_id, fiscal_year_id, include_verifications)
         return PlainTextResponse(
             content=sie4_content,
             media_type="text/plain",

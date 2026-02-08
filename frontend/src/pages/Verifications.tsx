@@ -17,7 +17,6 @@ import SortableHeader from '@/components/SortableHeader'
 export default function Verifications() {
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
-  const [allVerifications, setAllVerifications] = useState<VerificationListItem[]>([])
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,23 +44,25 @@ export default function Verifications() {
   })
 
   const loadData = useCallback(async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
+      setVerifications([])
       return
     }
 
     try {
       setLoading(true)
 
-      // Load verifications
-      const verificationsRes = await verificationApi.list(selectedCompany.id)
-      setAllVerifications(verificationsRes.data)
+      // Load verifications for selected fiscal year
+      const verificationsRes = await verificationApi.list(selectedCompany.id, {
+        fiscal_year_id: selectedFiscalYear.id,
+        limit: 1000,
+      })
+      setVerifications(verificationsRes.data)
 
       // Load accounts for selected fiscal year
-      if (selectedFiscalYear) {
-        const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
-        setAccounts(accountsRes.data)
-      }
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+      setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load verifications:', error)
     } finally {
@@ -69,30 +70,9 @@ export default function Verifications() {
     }
   }, [selectedCompany, selectedFiscalYear])
 
-  const filterVerificationsByFiscalYear = useCallback(() => {
-    if (!selectedFiscalYear) {
-      setVerifications(allVerifications)
-      return
-    }
-
-    // Filter verifications by fiscal year date range
-    const filtered = allVerifications.filter((v) => {
-      const transactionDate = new Date(v.transaction_date)
-      const startDate = new Date(selectedFiscalYear.start_date)
-      const endDate = new Date(selectedFiscalYear.end_date)
-      return transactionDate >= startDate && transactionDate <= endDate
-    })
-
-    setVerifications(filtered)
-  }, [selectedFiscalYear, allVerifications])
-
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  useEffect(() => {
-    filterVerificationsByFiscalYear()
-  }, [filterVerificationsByFiscalYear])
 
   // Sorting
   const { sortedData: sortedVerifications, sortConfig, requestSort } = useSortableTable(

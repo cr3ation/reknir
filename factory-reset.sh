@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # Reknir Reset Script
-# Three reset options:
+# Four reset options:
 #   1) Quick reset (default)
 #   2) Full factory reset
 #   3) Quick reset with pre-populated demo data
+#   4) Quick reset with empty demo company (for SIE4 import testing)
 
 set -e
 
@@ -1097,6 +1098,78 @@ seed_demo_data() {
 }
 
 # ============================================
+# Empty Demo Company (for SIE4 import testing)
+# ============================================
+
+seed_empty_demo_company() {
+    echo ""
+    echo "=========================================="
+    echo "  CREATING EMPTY DEMO COMPANY"
+    echo "=========================================="
+    echo ""
+
+    # Wait for API to be ready
+    wait_for_api
+
+    # Step 1: Register admin user
+    echo "Creating admin user..."
+    api_post "/api/auth/register" "{
+        \"email\": \"${DEMO_EMAIL}\",
+        \"password\": \"${DEMO_PASSWORD}\",
+        \"full_name\": \"${DEMO_NAME}\"
+    }" > /dev/null
+    echo "   Created user: ${DEMO_EMAIL}"
+
+    # Step 2: Login to get token
+    echo "Logging in..."
+    login_response=$(api_post_form "/api/auth/login" "username=${DEMO_EMAIL}&password=${DEMO_PASSWORD}")
+    TOKEN=$(echo "$login_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+    if [ -z "$TOKEN" ]; then
+        echo "ERROR: Failed to get access token"
+        exit 1
+    fi
+    echo "   Login successful"
+
+    # Step 3: Create company
+    echo "Creating company..."
+    company_response=$(api_post "/api/companies" '{
+        "name": "Demo Företag AB",
+        "org_number": "556677-1234",
+        "address": "Demovägen 1",
+        "postal_code": "11122",
+        "city": "Stockholm",
+        "phone": "08-123 45 67",
+        "email": "info@demoforetag.se",
+        "fiscal_year_start": "2025-01-01",
+        "fiscal_year_end": "2025-12-31",
+        "accounting_basis": "cash",
+        "vat_reporting_period": "yearly",
+        "payment_type": "bank_account",
+        "clearing_number": "1234",
+        "account_number": "567 890 123-4"
+    }')
+    COMPANY_ID=$(echo "$company_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created company: Demo Företag AB (ID: ${COMPANY_ID})"
+
+    # Step 4: Create fiscal year 2025
+    echo "Creating fiscal year 2025..."
+    fy_response=$(api_post "/api/fiscal-years" "{
+        \"company_id\": ${COMPANY_ID},
+        \"year\": 2025,
+        \"label\": \"2025\",
+        \"start_date\": \"2025-01-01\",
+        \"end_date\": \"2025-12-31\",
+        \"is_closed\": false
+    }")
+    FISCAL_YEAR_2025_ID=$(echo "$fy_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created fiscal year 2025 (ID: ${FISCAL_YEAR_2025_ID})"
+
+    # NO BAS accounts, NO templates, NO customers/suppliers/invoices/verifications
+    echo ""
+    echo "   Company is empty - ready for SIE4 import!"
+}
+
+# ============================================
 # Main Menu
 # ============================================
 
@@ -1121,10 +1194,16 @@ echo "     - Same as Quick Reset"
 echo "     - Plus: Creates demo company, customers, suppliers, invoices"
 echo "     - Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
 echo ""
+echo "  4) Quick Reset with Empty Demo Company"
+echo "     - Same as Quick Reset"
+echo "     - Creates demo user and company (no BAS, no data)"
+echo "     - Useful for SIE4 import testing"
+echo "     - Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
+echo ""
 read -p "Select option [1]: " RESET_TYPE
 RESET_TYPE=${RESET_TYPE:-1}
 
-if [ "$RESET_TYPE" != "1" ] && [ "$RESET_TYPE" != "2" ] && [ "$RESET_TYPE" != "3" ]; then
+if [ "$RESET_TYPE" != "1" ] && [ "$RESET_TYPE" != "2" ] && [ "$RESET_TYPE" != "3" ] && [ "$RESET_TYPE" != "4" ]; then
     echo "Invalid choice. Aborting."
     exit 1
 fi
@@ -1236,6 +1315,52 @@ elif [ "$RESET_TYPE" = "3" ]; then
     echo "  - Suppliers: 3"
     echo "  - Supplier invoices: 9 (6 in 2025 | 3 in 2026: 1 paid, 1 approved, 1 draft)"
     echo "  - Manual verifications: 14 (3 in 2025, 11 in 2026)"
+
+# ============================================
+# Option 4: Quick Reset with Empty Demo Company
+# ============================================
+elif [ "$RESET_TYPE" = "4" ]; then
+    echo ""
+    echo "=========================================="
+    echo "  QUICK RESET WITH EMPTY DEMO COMPANY"
+    echo "=========================================="
+    echo ""
+    echo "This will:"
+    echo "  ✓ Stop and remove containers"
+    echo "  ✓ Remove database volume (all data deleted)"
+    echo "  ✓ Restart with empty migrated database"
+    echo "  ✓ Create demo user and company (NO BAS accounts, NO data)"
+    echo "  ✗ Keep existing images (no rebuild)"
+    echo ""
+    echo "Use this for testing SIE4 import into an empty company."
+    echo ""
+    read -p "Continue? [Y/n]: " CONFIRM
+    CONFIRM=${CONFIRM:-Y}
+
+    if [ "$CONFIRM" != "Y" ] && [ "$CONFIRM" != "y" ]; then
+        echo "Aborted."
+        exit 0
+    fi
+
+    do_quick_reset
+    seed_empty_demo_company
+
+    echo ""
+    echo "=========================================="
+    echo "  EMPTY DEMO COMPANY CREATED!"
+    echo "=========================================="
+    echo ""
+    echo "Login credentials:"
+    echo "  Email:    ${DEMO_EMAIL}"
+    echo "  Password: ${DEMO_PASSWORD}"
+    echo ""
+    echo "Company: Demo Företag AB"
+    echo "  - Accounting method: Cash (kontantmetoden)"
+    echo "  - VAT reporting: Yearly (årsmoms)"
+    echo "  - Fiscal Year: 2025"
+    echo ""
+    echo "The company has NO accounts and NO data."
+    echo "Use SIE4 import to populate the chart of accounts."
 fi
 
 echo ""
@@ -1244,7 +1369,7 @@ echo "  - Backend:  http://localhost:8000"
 echo "  - Frontend: http://localhost:5173"
 echo "  - Database: localhost:5432"
 echo ""
-if [ "$RESET_TYPE" = "3" ]; then
+if [ "$RESET_TYPE" = "3" ] || [ "$RESET_TYPE" = "4" ]; then
     echo "Open http://localhost:5173 and login with:"
     echo "  ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
 else
