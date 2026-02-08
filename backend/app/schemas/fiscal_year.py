@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FiscalYearBase(BaseModel):
@@ -23,6 +23,12 @@ class FiscalYearCreate(BaseModel):
     end_date: date
     is_closed: bool = False
 
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        return self
+
 
 class FiscalYearUpdate(BaseModel):
     """Schema for updating a fiscal year"""
@@ -31,6 +37,13 @@ class FiscalYearUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     is_closed: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.start_date is not None and self.end_date is not None:
+            if self.end_date < self.start_date:
+                raise ValueError("end_date must be on or after start_date")
+        return self
 
 
 class FiscalYearResponse(FiscalYearBase):

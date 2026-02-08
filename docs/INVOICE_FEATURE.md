@@ -351,6 +351,7 @@ frontend/
 ### Phase 2: PDF Generation ✅
 - [x] Swedish invoice PDF template (invoice_template.html)
 - [x] PDF download endpoint (GET /invoices/{id}/pdf)
+- [x] Archived PDF on send (immutable copy for bookkeeping compliance)
 - [ ] Email sending integration
 
 ### Phase 3: Advanced Features (Future)
@@ -411,6 +412,7 @@ frontend/
 ✅ Full API coverage
 ✅ TypeScript types and API client
 ✅ PDF generation and download
+✅ Archived PDF for bookkeeping compliance
 ✅ Complete UI with create/view/pay workflows
 ✅ Overdue invoice highlighting
 ✅ Fiscal year filtering
@@ -444,6 +446,7 @@ Complete invoice management system implemented with:
 - ✅ Swedish compliance
 - ✅ Complete frontend UI (list, detail, create, pay)
 - ✅ PDF generation with Swedish template
+- ✅ Archived PDF for compliance (immutable copy linked to verification)
 - ✅ Overdue tracking and highlighting
 - ✅ Fiscal year support
 - ✅ Supplier invoice attachments
