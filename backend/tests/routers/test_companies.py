@@ -9,7 +9,6 @@ Covers:
 - Org number validation and uniqueness
 """
 
-import pytest
 
 
 class TestCreateCompany:
@@ -362,9 +361,8 @@ class TestUpdateCompany:
         # Either reject or ignore the change
         if response.status_code == 200:
             # If accepted, org_number should remain unchanged
-            data = response.json()
+            response.json()  # Verify response is valid JSON
             # Implementation may or may not allow this
-            # Just verify the response is valid
 
 
 class TestDeleteCompany:

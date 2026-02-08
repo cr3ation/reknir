@@ -8,8 +8,6 @@ Covers:
 - Date validation
 """
 
-import pytest
-from datetime import date
 
 
 class TestCreateFiscalYear:

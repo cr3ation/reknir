@@ -8,8 +8,9 @@ This module provides:
 - Common test utilities
 """
 
-import pytest
 from datetime import date
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -17,14 +18,12 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models.user import User, CompanyUser
-from app.models.company import Company, PaymentType, AccountingBasis, VATReportingPeriod
-from app.models.fiscal_year import FiscalYear
 from app.models.account import Account
+from app.models.company import AccountingBasis, Company, PaymentType, VATReportingPeriod
 from app.models.customer import Customer, Supplier
-from app.models.verification import Verification
-from app.models.attachment import Attachment, AttachmentStatus
-from app.services.auth_service import get_password_hash, create_access_token
+from app.models.fiscal_year import FiscalYear
+from app.models.user import CompanyUser, User
+from app.services.auth_service import create_access_token, get_password_hash
 
 # Use in-memory SQLite for tests (faster, no external dependencies)
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"

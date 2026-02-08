@@ -9,7 +9,6 @@ Covers:
 - File type validation
 """
 
-import pytest
 from io import BytesIO
 
 

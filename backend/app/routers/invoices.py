@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, AttachmentStatus, EntityType
-from app.services.attachment_service import ATTACHMENTS_DIR
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
 from app.models.fiscal_year import FiscalYear
@@ -19,6 +18,7 @@ from app.models.invoice import Invoice, InvoiceLine, InvoicePayment, InvoiceStat
 from app.models.user import User
 from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
 from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse, InvoiceUpdate, MarkPaidRequest
+from app.services.attachment_service import ATTACHMENTS_DIR
 from app.services.invoice_service import create_invoice_payment_verification, create_invoice_verification
 from app.services.pdf_service import generate_invoice_pdf
 

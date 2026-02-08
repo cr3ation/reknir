@@ -9,7 +9,6 @@ Covers:
 - Protected endpoint access
 """
 
-import pytest
 
 
 class TestUserRegistration:
@@ -179,8 +178,9 @@ class TestCurrentUser:
     def test_get_current_user_expired_token(self, client, db_session):
         """Reject access with expired token."""
         from datetime import timedelta
-        from app.services.auth_service import create_access_token, get_password_hash
+
         from app.models.user import User
+        from app.services.auth_service import create_access_token, get_password_hash
 
         # Create user
         user = User(

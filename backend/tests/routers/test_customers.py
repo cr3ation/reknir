@@ -7,7 +7,6 @@ Covers:
 - Validation
 """
 
-import pytest
 
 
 class TestCreateCustomer:

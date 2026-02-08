@@ -11,13 +11,14 @@ Tests cover:
 - Duplicate verification handling
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.models.account import Account
 from app.models.fiscal_year import FiscalYear
-from app.models.verification import Verification, TransactionLine
+from app.models.verification import Verification
 from app.services import sie4_service
 
 
@@ -84,7 +85,7 @@ class TestSIE4AccountImport:
 #IB 0 1510 50000.00
 #UB 0 1510 75000.00
 """
-        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
+        sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         account = db_session.query(Account).filter(
             Account.company_id == company.id,
@@ -112,7 +113,7 @@ class TestSIE4YearIndexFiltering:
 #IB -1 2099 -46262.20
 #UB -1 2099 -68063.86
 """
-        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
+        sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         account = db_session.query(Account).filter(
             Account.company_id == company.id,
@@ -138,7 +139,7 @@ class TestSIE4YearIndexFiltering:
 #IB -1 1930 100000.00
 #UB -1 1930 150000.00
 """
-        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
+        sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         account = db_session.query(Account).filter(
             Account.company_id == company.id,
