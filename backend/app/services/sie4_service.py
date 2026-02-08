@@ -194,6 +194,16 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
                 if account_number in accounts_cache:
                     account = accounts_cache[account_number]
                     account.opening_balance = balance
+                    account.current_balance = balance  # Default, may be overwritten by UB
+
+        elif command == "UB":
+            # #UB year account_number closing_balance
+            if len(args) >= 3:
+                account_number = int(args[1])
+                balance = Decimal(args[2])
+
+                if account_number in accounts_cache:
+                    account = accounts_cache[account_number]
                     account.current_balance = balance
 
         elif command == "VER":

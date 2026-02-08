@@ -24,6 +24,10 @@ export default function Verifications() {
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
   const { selectedFiscalYear } = useFiscalYear()
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [seriesFilter, setSeriesFilter] = useState<string>('all')
+
   // Track attachments from form for preview controller
   const [formAttachments, setFormAttachments] = useState<EntityAttachment[]>([])
 
@@ -74,9 +78,31 @@ export default function Verifications() {
     loadData()
   }, [loadData])
 
+  // Filter verifications
+  const filteredVerifications = verifications.filter((v) => {
+    const matchesSeries = seriesFilter === 'all' || v.series === seriesFilter
+    // Normalize search: remove spaces for amount matching (4500 matches "4 500")
+    const normalizedQuery = searchQuery.replace(/\s/g, '')
+    const formattedAmount = v.total_amount.toLocaleString('sv-SE')
+    const matchesSearch =
+      searchQuery === '' ||
+      v.verification_number.toString().includes(searchQuery) ||
+      v.transaction_date.includes(searchQuery) ||
+      v.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formattedAmount.includes(searchQuery) ||
+      formattedAmount.replace(/\s/g, '').includes(normalizedQuery)
+    return matchesSeries && matchesSearch
+  })
+
+  // Get unique series for filter dropdown
+  const uniqueSeries = [...new Set(verifications.map((v) => v.series))].sort()
+
+  // Statistics
+  const lockedCount = filteredVerifications.filter((v) => v.locked).length
+
   // Sorting
   const { sortedData: sortedVerifications, sortConfig, requestSort } = useSortableTable(
-    verifications,
+    filteredVerifications,
     { key: 'verification_number', direction: 'desc' }
   )
 
@@ -120,11 +146,62 @@ export default function Verifications() {
         </div>
       </div>
 
-      {verifications.length === 0 ? (
+      {/* Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-500 mb-1">Antal verifikationer</h3>
+          <p className="text-2xl font-bold">{filteredVerifications.length}</p>
+        </div>
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-500 mb-1">Låsta</h3>
+          <p className="text-2xl font-bold">{lockedCount}</p>
+        </div>
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-500 mb-1">Olåsta</h3>
+          <p className="text-2xl font-bold">{filteredVerifications.length - lockedCount}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="card mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sök</label>
+            <input
+              type="text"
+              placeholder="Ver.nr, datum, beskrivning eller belopp..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Serie</label>
+            <select
+              value={seriesFilter}
+              onChange={(e) => setSeriesFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="all">Alla serier ({verifications.length})</option>
+              {uniqueSeries.map((series) => {
+                const count = verifications.filter((v) => v.series === series).length
+                return (
+                  <option key={series} value={series}>
+                    {series} ({count})
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {filteredVerifications.length === 0 ? (
         <div className="card">
           <p className="text-gray-600">
-            Inga verifikationer ännu. Skapa din första verifikation för att registrera
-            transaktioner!
+            {verifications.length === 0
+              ? 'Inga verifikationer ännu. Skapa din första verifikation för att registrera transaktioner!'
+              : 'Inga verifikationer matchar din sökning.'}
           </p>
         </div>
       ) : (
