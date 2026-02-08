@@ -465,15 +465,31 @@ export interface DefaultAccount {
   account_name?: string
 }
 
+export interface SIE4PreviewResponse {
+  can_import: boolean
+  fiscal_year_start: string | null
+  fiscal_year_end: string | null
+  fiscal_year_exists: boolean
+  existing_fiscal_year_id: number | null
+  will_create_fiscal_year: boolean
+  accounts_count: number
+  verifications_count: number
+  blocking_errors: string[]
+  warnings: string[]
+}
+
 export interface SIE4ImportResponse {
   success: boolean
   message: string
   accounts_created: number
   accounts_updated: number
   verifications_created: number
+  verifications_skipped: number
   default_accounts_configured: number
-  errors?: string[]
-  warnings?: string[]
+  fiscal_year_id: number | null
+  fiscal_year_created: boolean
+  errors: string[]
+  warnings: string[]
 }
 
 export interface VATReport {

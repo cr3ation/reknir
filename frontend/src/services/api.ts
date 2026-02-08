@@ -20,6 +20,7 @@ import type {
   SupplierInvoiceListItem,
   SupplierInvoiceCreateData,
   DefaultAccount,
+  SIE4PreviewResponse,
   SIE4ImportResponse,
   VATReport,
   VATPeriodsResponse,
@@ -291,11 +292,16 @@ export const attachmentApi = {
 
 // SIE4 Import/Export
 export const sie4Api = {
-  import: (companyId: number, fiscalYearId: number, file: File) => {
+  preview: (companyId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<SIE4PreviewResponse>(`/sie4/preview/${companyId}`, formData)
+  },
+  import: (companyId: number, file: File, fiscalYearId?: number) => {
     const formData = new FormData()
     formData.append('file', file)
     return api.post<SIE4ImportResponse>(`/sie4/import/${companyId}`, formData, {
-      params: { fiscal_year_id: fiscalYearId },
+      params: fiscalYearId ? { fiscal_year_id: fiscalYearId } : undefined,
     })
   },
   export: (companyId: number, fiscalYearId: number, includeVerifications: boolean = true) => {

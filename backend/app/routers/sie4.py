@@ -25,6 +25,8 @@ class SIE4ImportResponse(BaseModel):
     verifications_created: int
     verifications_skipped: int = 0
     default_accounts_configured: int
+    fiscal_year_id: int | None = None
+    fiscal_year_created: bool = False
     errors: list[str] = []
     warnings: list[str] = []
 
@@ -123,19 +125,28 @@ async def preview_sie4_file(
 @router.post("/import/{company_id}", response_model=SIE4ImportResponse)
 async def import_sie4_file(
     company_id: int,
-    fiscal_year_id: int,
     file: UploadFile = File(...),
+    fiscal_year_id: int | None = None,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """
     Import SIE4 file for a company.
 
+    The fiscal year is determined from the file's #RAR 0 entry. If a matching
+    fiscal year exists, it will be used. If not, a new fiscal year will be created.
+
+    Args:
+        company_id: Company to import to
+        file: SIE4 file (.se or .si)
+        fiscal_year_id: Optional fiscal year ID to use (if None, uses #RAR 0 from file)
+
     This will:
+    - Create or use fiscal year from #RAR 0
     - Import chart of accounts (create new accounts or update existing)
     - Import opening balances
     - Automatically configure default account mappings
-    - Optionally import verifications (if included in file)
+    - Import verifications (if included in file)
     """
     # Verify access
     company_ids = get_user_company_ids(current_user, db)
@@ -159,7 +170,7 @@ async def import_sie4_file(
             raise ValueError("Could not decode SIE4 file. Unsupported encoding.")
 
         # Import
-        stats = sie4_service.import_sie4(db, company_id, fiscal_year_id, file_content)
+        stats = sie4_service.import_sie4(db, company_id, file_content, fiscal_year_id)
 
         return SIE4ImportResponse(
             success=True, message=f"Successfully imported SIE4 file for company {company_id}", **stats

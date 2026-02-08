@@ -268,21 +268,29 @@ def preview_sie4(db: Session, company_id: int, file_content: str) -> dict:
     }
 
 
-def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content: str) -> dict[str, any]:
+def import_sie4(
+    db: Session, company_id: int, file_content: str, fiscal_year_id: int | None = None
+) -> dict[str, any]:
     """
-    Import SIE4 file content into the database for a specific fiscal year.
+    Import SIE4 file content into the database.
+
+    The fiscal year is determined from the file's #RAR 0 entry. If a matching
+    fiscal year exists, it will be used. If not, a new fiscal year will be created.
 
     Args:
         db: Database session
         company_id: Company ID to import to
-        fiscal_year_id: Fiscal year ID to import accounts and verifications to
         file_content: SIE4 file content as string
+        fiscal_year_id: Optional fiscal year ID (if None, uses #RAR 0 from file)
 
     Returns a dict with import statistics:
     - accounts_created: number of accounts created
     - accounts_updated: number of accounts updated
     - verifications_created: number of verifications created
+    - verifications_skipped: number of verifications skipped
     - default_accounts_configured: number of default accounts configured
+    - fiscal_year_id: ID of the fiscal year used/created
+    - fiscal_year_created: whether a new fiscal year was created
     - errors: list of error messages encountered
     - warnings: list of warning messages
     """
@@ -290,40 +298,82 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
     if not company:
         raise ValueError(f"Company {company_id} not found")
 
-    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
-    if not fiscal_year:
-        raise ValueError(f"Fiscal year {fiscal_year_id} not found")
-
-    if fiscal_year.company_id != company_id:
-        raise ValueError(f"Fiscal year {fiscal_year_id} does not belong to company {company_id}")
-
     stats = {
         "accounts_created": 0,
         "accounts_updated": 0,
         "verifications_created": 0,
         "verifications_skipped": 0,
         "default_accounts_configured": 0,
+        "fiscal_year_id": None,
+        "fiscal_year_created": False,
         "errors": [],
         "warnings": [],
     }
 
-    # Parse #RAR 0 from file and validate against selected fiscal year
+    # Parse #RAR 0 from file to get fiscal year dates
     rar_dates = _parse_rar_from_file(file_content)
-    if rar_dates:
-        rar_start, rar_end = rar_dates
+    if not rar_dates:
+        raise ValueError("SIE4-filen saknar räkenskapsårsinformation (#RAR 0)")
+
+    rar_start, rar_end = rar_dates
+
+    # Validate dates
+    if rar_end < rar_start:
+        raise ValueError(f"Ogiltigt räkenskapsår: slutdatum ({rar_end}) är före startdatum ({rar_start})")
+
+    # Find or create fiscal year based on #RAR 0
+    if fiscal_year_id:
+        # Use provided fiscal year but validate it matches #RAR 0
+        fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+        if not fiscal_year:
+            raise ValueError(f"Fiscal year {fiscal_year_id} not found")
+        if fiscal_year.company_id != company_id:
+            raise ValueError(f"Fiscal year {fiscal_year_id} does not belong to company {company_id}")
         if rar_start != fiscal_year.start_date or rar_end != fiscal_year.end_date:
-            stats["warnings"].append(
+            raise ValueError(
                 f"SIE4-filens räkenskapsår ({rar_start} - {rar_end}) matchar inte valt räkenskapsår "
                 f"({fiscal_year.start_date} - {fiscal_year.end_date})"
             )
-
-        # Check for overlapping fiscal years
-        overlapping = _check_overlapping_fiscal_years(db, company_id, rar_start, rar_end, fiscal_year_id)
-        if overlapping:
-            overlap_info = ", ".join(
-                f"ID {fy_id} ({start} - {end})" for fy_id, start, end in overlapping
+    else:
+        # Find existing fiscal year matching #RAR 0 dates
+        fiscal_year = (
+            db.query(FiscalYear)
+            .filter(
+                FiscalYear.company_id == company_id,
+                FiscalYear.start_date == rar_start,
+                FiscalYear.end_date == rar_end,
             )
-            stats["warnings"].append(f"SIE4-filens period överlappar med befintliga räkenskapsår: {overlap_info}")
+            .first()
+        )
+
+        if not fiscal_year:
+            # Check for overlapping fiscal years before creating
+            overlapping = _check_overlapping_fiscal_years(db, company_id, rar_start, rar_end)
+            if overlapping:
+                overlap_info = []
+                for fy_id, start, end in overlapping:
+                    fy = db.query(FiscalYear).filter(FiscalYear.id == fy_id).first()
+                    label = fy.label if fy else f"{start.year}"
+                    overlap_info.append(f"{label} ({start} - {end})")
+                raise ValueError(
+                    f"Räkenskapsåret ({rar_start} - {rar_end}) överlappar med befintliga: {', '.join(overlap_info)}"
+                )
+
+            # Create new fiscal year
+            fiscal_year = FiscalYear(
+                company_id=company_id,
+                year=rar_start.year,
+                label=str(rar_start.year),
+                start_date=rar_start,
+                end_date=rar_end,
+                is_closed=False,
+            )
+            db.add(fiscal_year)
+            db.flush()  # Get the ID
+            stats["fiscal_year_created"] = True
+
+    stats["fiscal_year_id"] = fiscal_year.id
+    fiscal_year_id = fiscal_year.id  # Update variable for use in rest of function
 
     lines = file_content.splitlines()  # Handle all line ending types
     accounts_cache = {}  # Cache account number -> Account object

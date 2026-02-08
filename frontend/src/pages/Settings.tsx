@@ -4,6 +4,7 @@ import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupI
 import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from '@/types'
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
+import SIE4ImportModal from '@/components/SIE4ImportModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useLayoutSettings, ModalType } from '@/contexts/LayoutSettingsContext'
@@ -33,7 +34,6 @@ export default function SettingsPage() {
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [activeTab, setActiveTab] = useState<'company' | 'fiscal' | 'templates' | 'import' | 'layout'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
-  const [showImportSummary, setShowImportSummary] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [backups, setBackups] = useState<BackupInfo[]>([])
@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [creatingBackup, setCreatingBackup] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState<string | null>(null)
   const [showRestoreModal, setShowRestoreModal] = useState(false)
+  const [showSIE4ImportModal, setShowSIE4ImportModal] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loadingAttachments, setLoadingAttachments] = useState(false)
   const [deletingAttachment, setDeletingAttachment] = useState<number | null>(null)
@@ -54,14 +55,6 @@ export default function SettingsPage() {
     iban: '',
     bic: '',
   })
-  const [importSummary, setImportSummary] = useState<{
-    accounts_created: number
-    accounts_updated: number
-    verifications_created: number
-    default_accounts_configured: number
-    errors?: string[]
-    warnings?: string[]
-  } | null>(null)
   const [editingCompany, setEditingCompany] = useState(false)
   const [showCreateCompany, setShowCreateCompany] = useState(false)
   const [companyForm, setCompanyForm] = useState({
@@ -435,41 +428,6 @@ export default function SettingsPage() {
       showMessage(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCompany || !selectedFiscalYear) {
-      showMessage('Välj ett räkenskapsår först', 'error')
-      return
-    }
-
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    try {
-      setLoading(true)
-      const response = await sie4Api.import(selectedCompany.id, selectedFiscalYear.id, file)
-
-      // Show modal with import summary
-      setImportSummary({
-        accounts_created: response.data.accounts_created,
-        accounts_updated: response.data.accounts_updated,
-        verifications_created: response.data.verifications_created,
-        default_accounts_configured: response.data.default_accounts_configured,
-        errors: response.data.errors || [],
-        warnings: response.data.warnings || [],
-      })
-      setShowImportSummary(true)
-
-      await loadData()
-    } catch (error: any) {
-      console.error('SIE4 import failed:', error)
-      showMessage(error.response?.data?.detail || 'Import misslyckades', 'error')
-    } finally {
-      setLoading(false)
-      // Reset input
-      event.target.value = ''
     }
   }
 
@@ -1879,21 +1837,16 @@ export default function SettingsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Importera SIE4-fil
             </label>
-            <input
-              type="file"
-              accept=".se,.si"
-              onChange={handleSIE4Import}
-              disabled={loading}
-              className="block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100
-                disabled:opacity-50"
-            />
-            <p className="mt-1 text-sm text-gray-500">
-              Konton och ingående balanser kommer importeras och standardkonton konfigureras automatiskt.
+            <button
+              onClick={() => setShowSIE4ImportModal(true)}
+              disabled={loading || !selectedCompany}
+              className="btn btn-primary inline-flex items-center"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Importera SIE4-fil
+            </button>
+            <p className="mt-2 text-sm text-gray-500">
+              Räkenskapsår skapas automatiskt från filen. Konton och verifikationer importeras med förhandsgranskning.
             </p>
           </div>
 
@@ -1905,19 +1858,24 @@ export default function SettingsPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => handleSIE4Export(true)}
-                disabled={loading}
+                disabled={loading || !selectedFiscalYear}
                 className="btn btn-primary"
               >
                 Exportera med verifikationer
               </button>
               <button
                 onClick={() => handleSIE4Export(false)}
-                disabled={loading}
+                disabled={loading || !selectedFiscalYear}
                 className="btn btn-secondary"
               >
                 Endast kontoplan
               </button>
             </div>
+            {!selectedFiscalYear && (
+              <p className="mt-2 text-sm text-amber-600">
+                Välj ett räkenskapsår för att exportera.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -2189,86 +2147,6 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
-        </div>
-      )}
-
-      {/* Import Summary Modal */}
-      {showImportSummary && importSummary && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="ml-4 text-lg font-semibold text-gray-900">Import Lyckades!</h3>
-              </div>
-
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Importsammanfattning:</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">Konton skapade:</span>
-                    <span className="text-sm font-semibold text-gray-900">{importSummary.accounts_created}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">Konton uppdaterade:</span>
-                    <span className="text-sm font-semibold text-gray-900">{importSummary.accounts_updated}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
-                    <span className="text-sm text-gray-700">Verifikationer importerade:</span>
-                    <span className="text-sm font-semibold text-blue-900">{importSummary.verifications_created}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">Standardkonton konfigurerade:</span>
-                    <span className="text-sm font-semibold text-gray-900">{importSummary.default_accounts_configured}</span>
-                  </div>
-                </div>
-
-                {/* Errors */}
-                {importSummary.errors && importSummary.errors.length > 0 && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-                    <h5 className="text-sm font-medium text-red-900 mb-2">Fel:</h5>
-                    <ul className="list-disc list-inside space-y-1">
-                      {importSummary.errors.map((error, idx) => (
-                        <li key={idx} className="text-sm text-red-800">{error}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Warnings */}
-                {importSummary.warnings && importSummary.warnings.length > 0 && (
-                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <h5 className="text-sm font-medium text-yellow-900 mb-2">Varningar:</h5>
-                    <ul className="list-disc list-inside space-y-1">
-                      {importSummary.warnings.map((warning, idx) => (
-                        <li key={idx} className="text-sm text-yellow-800">{warning}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {importSummary.verifications_created > 0 && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-sm text-blue-800">
-                      <strong>Tips:</strong> Glöm inte att tilldela verifikationerna till räkenskapsår!
-                      Scrolla ner till "Räkenskapsår" och klicka "Tilldela verifikationer".
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => setShowImportSummary(false)}
-                className="w-full btn btn-primary"
-              >
-                Stäng
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -2669,6 +2547,16 @@ export default function SettingsPage() {
         onClose={() => setShowRestoreModal(false)}
         backups={backups}
       />
+
+      {/* SIE4 Import Modal */}
+      {selectedCompany && (
+        <SIE4ImportModal
+          isOpen={showSIE4ImportModal}
+          onClose={() => setShowSIE4ImportModal(false)}
+          companyId={selectedCompany.id}
+          onSuccess={loadData}
+        />
+      )}
 
     </div>
   )

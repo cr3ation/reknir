@@ -37,7 +37,7 @@ class TestSIE4AccountImport:
 #KONTO 1930 "Företagskonto"
 #KONTO 3000 "Försäljning"
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         assert stats["accounts_created"] == 3
         assert stats["errors"] == []
@@ -62,7 +62,7 @@ class TestSIE4AccountImport:
 #KONTO 1510 "Kundfordringar"
 #IB 0 1510 50000.00
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         assert stats["accounts_created"] == 1
 
@@ -84,7 +84,7 @@ class TestSIE4AccountImport:
 #IB 0 1510 50000.00
 #UB 0 1510 75000.00
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         account = db_session.query(Account).filter(
             Account.company_id == company.id,
@@ -112,7 +112,7 @@ class TestSIE4YearIndexFiltering:
 #IB -1 2099 -46262.20
 #UB -1 2099 -68063.86
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         account = db_session.query(Account).filter(
             Account.company_id == company.id,
@@ -138,7 +138,7 @@ class TestSIE4YearIndexFiltering:
 #IB -1 1930 100000.00
 #UB -1 1930 150000.00
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         account = db_session.query(Account).filter(
             Account.company_id == company.id,
@@ -153,8 +153,8 @@ class TestSIE4YearIndexFiltering:
 class TestSIE4FiscalYearValidation:
     """Tests for fiscal year validation (#RAR 0)."""
 
-    def test_warning_when_rar_does_not_match_fiscal_year(self, db_session, test_company_with_fiscal_year):
-        """Warn when SIE4 file's #RAR 0 doesn't match selected fiscal year."""
+    def test_error_when_rar_does_not_match_fiscal_year(self, db_session, test_company_with_fiscal_year):
+        """Raise error when SIE4 file's #RAR 0 doesn't match provided fiscal year."""
         company, fiscal_year = test_company_with_fiscal_year
 
         # File is for 2024, but fiscal year is 2025
@@ -163,15 +163,13 @@ class TestSIE4FiscalYearValidation:
 #RAR 0 20240101 20241231
 #KONTO 1510 "Kundfordringar"
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        with pytest.raises(ValueError) as exc_info:
+            sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
-        # Should have a warning about mismatch
-        assert len(stats["warnings"]) >= 1
-        warning_found = any("matchar inte" in w for w in stats["warnings"])
-        assert warning_found, f"Expected mismatch warning, got: {stats['warnings']}"
+        assert "matchar inte" in str(exc_info.value)
 
-    def test_no_warning_when_rar_matches_fiscal_year(self, db_session, test_company_with_fiscal_year):
-        """No warning when SIE4 file's #RAR 0 matches selected fiscal year."""
+    def test_no_error_when_rar_matches_fiscal_year(self, db_session, test_company_with_fiscal_year):
+        """No error when SIE4 file's #RAR 0 matches selected fiscal year."""
         company, fiscal_year = test_company_with_fiscal_year
 
         sie4_content = """#FLAGGA 0
@@ -179,14 +177,14 @@ class TestSIE4FiscalYearValidation:
 #RAR 0 20250101 20251231
 #KONTO 1510 "Kundfordringar"
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
-        # Should NOT have a mismatch warning
+        # Should NOT have a mismatch warning/error
         mismatch_warnings = [w for w in stats["warnings"] if "matchar inte" in w]
         assert len(mismatch_warnings) == 0
 
-    def test_overlapping_fiscal_years_warning(self, db_session, test_company_with_fiscal_year):
-        """Warn when SIE4 file's period overlaps with existing fiscal years."""
+    def test_overlapping_fiscal_years_error(self, db_session, test_company_with_fiscal_year):
+        """Raise error when creating fiscal year would overlap with existing."""
         company, fiscal_year = test_company_with_fiscal_year
 
         # Create another fiscal year that would overlap
@@ -202,16 +200,51 @@ class TestSIE4FiscalYearValidation:
         db_session.commit()
 
         # SIE4 file that spans 2024-07-01 to 2025-06-30 (overlaps both years)
+        # Don't pass fiscal_year_id to trigger auto-creation
         sie4_content = """#FLAGGA 0
 #SIETYP 4
 #RAR 0 20240701 20250630
 #KONTO 1510 "Kundfordringar"
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        with pytest.raises(ValueError) as exc_info:
+            sie4_service.import_sie4(db_session, company.id, sie4_content)
 
-        # Should have overlap warning
-        overlap_warnings = [w for w in stats["warnings"] if "överlappar" in w]
-        assert len(overlap_warnings) >= 1, f"Expected overlap warning, got: {stats['warnings']}"
+        assert "överlappar" in str(exc_info.value)
+
+    def test_auto_create_fiscal_year_from_rar(self, db_session, test_company):
+        """Automatically create fiscal year from #RAR 0 when not provided."""
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#RAR 0 20260101 20261231
+#KONTO 1510 "Kundfordringar"
+"""
+        # Don't pass fiscal_year_id
+        stats = sie4_service.import_sie4(db_session, test_company.id, sie4_content)
+
+        assert stats["fiscal_year_created"] is True
+        assert stats["fiscal_year_id"] is not None
+
+        # Verify fiscal year was created
+        fy = db_session.query(FiscalYear).filter(FiscalYear.id == stats["fiscal_year_id"]).first()
+        assert fy is not None
+        assert fy.start_date == date(2026, 1, 1)
+        assert fy.end_date == date(2026, 12, 31)
+        assert fy.year == 2026
+
+    def test_use_existing_fiscal_year_from_rar(self, db_session, test_company_with_fiscal_year):
+        """Use existing fiscal year when #RAR 0 matches."""
+        company, fiscal_year = test_company_with_fiscal_year
+
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#RAR 0 20250101 20251231
+#KONTO 1510 "Kundfordringar"
+"""
+        # Don't pass fiscal_year_id
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content)
+
+        assert stats["fiscal_year_created"] is False
+        assert stats["fiscal_year_id"] == fiscal_year.id
 
 
 class TestSIE4VerificationImport:
@@ -232,7 +265,7 @@ class TestSIE4VerificationImport:
 #TRANS 3000 {} -10000.00
 }
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         assert stats["verifications_created"] == 1
         assert stats["errors"] == []
@@ -262,7 +295,7 @@ class TestSIE4VerificationImport:
 """
         # Note: Account 3000 is NOT defined in the file
 
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
         # Verification should be skipped entirely
         assert stats["verifications_created"] == 0
@@ -295,11 +328,11 @@ class TestSIE4VerificationImport:
 }
 """
         # First import
-        stats1 = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats1 = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
         assert stats1["verifications_created"] == 1
 
         # Second import with same verification
-        stats2 = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        stats2 = sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
         assert stats2["verifications_created"] == 0  # Already exists
 
         # Check for duplicate warning
@@ -310,34 +343,26 @@ class TestSIE4VerificationImport:
 class TestSIE4EmptyAndInvalidFiles:
     """Tests for empty and invalid SIE4 files."""
 
-    def test_empty_file(self, db_session, test_company_with_fiscal_year):
-        """Handle empty file gracefully."""
-        company, fiscal_year = test_company_with_fiscal_year
-
+    def test_empty_file(self, db_session, test_company):
+        """Empty file should raise ValueError (missing #RAR 0)."""
         sie4_content = ""
 
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        with pytest.raises(ValueError) as exc_info:
+            sie4_service.import_sie4(db_session, test_company.id, sie4_content)
 
-        assert stats["accounts_created"] == 0
-        assert stats["verifications_created"] == 0
-        # Should have error about no commands
-        error_found = any("No SIE4 commands" in e for e in stats["errors"])
-        assert error_found
+        assert "#RAR 0" in str(exc_info.value)
 
-    def test_file_with_only_comments(self, db_session, test_company_with_fiscal_year):
-        """Handle file with only comments/whitespace."""
-        company, fiscal_year = test_company_with_fiscal_year
-
+    def test_file_with_only_comments(self, db_session, test_company):
+        """File with only comments should raise ValueError (missing #RAR 0)."""
         sie4_content = """
 # This is a comment
 # Another comment
 
 """
-        stats = sie4_service.import_sie4(db_session, company.id, fiscal_year.id, sie4_content)
+        with pytest.raises(ValueError) as exc_info:
+            sie4_service.import_sie4(db_session, test_company.id, sie4_content)
 
-        assert stats["accounts_created"] == 0
-        error_found = any("No SIE4 commands" in e for e in stats["errors"])
-        assert error_found
+        assert "#RAR 0" in str(exc_info.value)
 
 
 class TestSIE4Export:
