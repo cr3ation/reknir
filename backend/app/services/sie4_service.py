@@ -22,6 +22,47 @@ from app.models.verification import TransactionLine, Verification
 from app.services import default_account_service
 
 
+def _parse_rar_from_file(file_content: str) -> tuple[date, date] | None:
+    """
+    Parse #RAR 0 (current fiscal year) from SIE4 file content.
+
+    Returns:
+        Tuple of (start_date, end_date) if found, None otherwise
+    """
+    for line in file_content.splitlines():
+        command, args = _parse_sie_line(line)
+        if command == "RAR" and len(args) >= 3 and args[0] == "0":
+            try:
+                start = datetime.strptime(args[1], "%Y%m%d").date()
+                end = datetime.strptime(args[2], "%Y%m%d").date()
+                return (start, end)
+            except ValueError:
+                return None
+    return None
+
+
+def _check_overlapping_fiscal_years(
+    db: Session, company_id: int, start_date: date, end_date: date, exclude_fiscal_year_id: int | None = None
+) -> list[tuple[int, date, date]]:
+    """
+    Check if the given date range overlaps with any existing fiscal years.
+
+    Returns:
+        List of tuples (fiscal_year_id, start_date, end_date) for overlapping years
+    """
+    fiscal_years = db.query(FiscalYear).filter(FiscalYear.company_id == company_id).all()
+
+    overlapping = []
+    for fy in fiscal_years:
+        if exclude_fiscal_year_id and fy.id == exclude_fiscal_year_id:
+            continue
+        # Check for overlap: periods overlap if one starts before the other ends
+        if start_date <= fy.end_date and end_date >= fy.start_date:
+            overlapping.append((fy.id, fy.start_date, fy.end_date))
+
+    return overlapping
+
+
 def _determine_account_type(account_number: int) -> AccountType:
     """Determine account type based on account number (BAS kontoplan structure)"""
     if 1000 <= account_number <= 1999:
@@ -124,10 +165,29 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
         "accounts_created": 0,
         "accounts_updated": 0,
         "verifications_created": 0,
+        "verifications_skipped": 0,
         "default_accounts_configured": 0,
         "errors": [],
         "warnings": [],
     }
+
+    # Parse #RAR 0 from file and validate against selected fiscal year
+    rar_dates = _parse_rar_from_file(file_content)
+    if rar_dates:
+        rar_start, rar_end = rar_dates
+        if rar_start != fiscal_year.start_date or rar_end != fiscal_year.end_date:
+            stats["warnings"].append(
+                f"SIE4-filens räkenskapsår ({rar_start} - {rar_end}) matchar inte valt räkenskapsår "
+                f"({fiscal_year.start_date} - {fiscal_year.end_date})"
+            )
+
+        # Check for overlapping fiscal years
+        overlapping = _check_overlapping_fiscal_years(db, company_id, rar_start, rar_end, fiscal_year_id)
+        if overlapping:
+            overlap_info = ", ".join(
+                f"ID {fy_id} ({start} - {end})" for fy_id, start, end in overlapping
+            )
+            stats["warnings"].append(f"SIE4-filens period överlappar med befintliga räkenskapsår: {overlap_info}")
 
     lines = file_content.splitlines()  # Handle all line ending types
     accounts_cache = {}  # Cache account number -> Account object
@@ -320,11 +380,26 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
                 skipped_duplicates += 1
                 continue
 
-            # Get fiscal year for this transaction date
-            # For now, use the provided fiscal_year_id (assumes all verifications are in same fiscal year)
-            # In the future, this could be enhanced to support multiple fiscal years in one import
+            # Check for missing accounts BEFORE creating verification
+            # Skip entire verification if any account is missing to prevent unbalanced entries
+            missing_accounts_in_ver = []
+            for line_data in ver_data["lines"]:
+                account_number = line_data["account_number"]
+                if account_number not in accounts_by_number:
+                    missing_accounts_in_ver.append(account_number)
+                    if account_number not in skipped_missing_accounts:
+                        skipped_missing_accounts.append(account_number)
 
-            # Create verification
+            if missing_accounts_in_ver:
+                # Skip entire verification to prevent unbalanced entries
+                stats["verifications_skipped"] += 1
+                stats["warnings"].append(
+                    f"Verifikation {ver_data['series']}-{ver_data['number']} hoppades över - "
+                    f"saknade konton: {', '.join(map(str, sorted(missing_accounts_in_ver)))}"
+                )
+                continue
+
+            # Create verification (all accounts exist)
             verification = Verification(
                 company_id=company_id,
                 fiscal_year_id=fiscal_year_id,
@@ -337,15 +412,8 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
             db.flush()  # Get the ID
 
             # Create transaction lines
-            lines_created = 0
             for line_data in ver_data["lines"]:
                 account_number = line_data["account_number"]
-                if account_number not in accounts_by_number:
-                    # Track missing account
-                    if account_number not in skipped_missing_accounts:
-                        skipped_missing_accounts.append(account_number)
-                    continue
-
                 account = accounts_by_number[account_number]
                 amount = line_data["amount"]
 
@@ -361,16 +429,8 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
                     description=line_data["description"],
                 )
                 db.add(trans_line)
-                lines_created += 1
 
-            if lines_created > 0:
-                stats["verifications_created"] += 1
-            else:
-                # Verification has no lines, remove it
-                db.rollback()
-                stats["warnings"].append(
-                    f"Verification {ver_data['series']}-{ver_data['number']} has no transaction lines (all accounts missing)"
-                )
+            stats["verifications_created"] += 1
 
         except Exception as e:
             # Log error but continue with other verifications
@@ -381,10 +441,10 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
 
     # Add summary warnings
     if skipped_duplicates > 0:
-        stats["warnings"].append(f"Skipped {skipped_duplicates} duplicate verifications")
+        stats["warnings"].append(f"Hoppade över {skipped_duplicates} duplicerade verifikationer")
     if skipped_missing_accounts:
         stats["warnings"].append(
-            f"Missing accounts prevented some transactions: {', '.join(map(str, sorted(skipped_missing_accounts)))}"
+            f"Saknade konton (totalt): {', '.join(map(str, sorted(skipped_missing_accounts)))}"
         )
 
     # Commit verifications

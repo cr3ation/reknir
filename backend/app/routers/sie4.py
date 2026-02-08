@@ -21,6 +21,7 @@ class SIE4ImportResponse(BaseModel):
     accounts_created: int
     accounts_updated: int
     verifications_created: int
+    verifications_skipped: int = 0
     default_accounts_configured: int
     errors: list[str] = []
     warnings: list[str] = []
