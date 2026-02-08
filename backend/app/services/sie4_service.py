@@ -132,6 +132,142 @@ def _parse_sie_line(line: str) -> tuple[str, list[str]]:
     return command, args
 
 
+def preview_sie4(db: Session, company_id: int, file_content: str) -> dict:
+    """
+    Preview SIE4 file import without making changes.
+
+    Analyzes the file and returns what would happen if imported.
+    This is a read-only operation.
+
+    Returns:
+        Dict with preview information:
+        - can_import: bool (False if there are blocking errors)
+        - fiscal_year_start/end: dates from #RAR 0
+        - fiscal_year_exists: bool
+        - existing_fiscal_year_id: int or None
+        - will_create_fiscal_year: bool
+        - accounts_count: int
+        - verifications_count: int
+        - blocking_errors: list[str]
+        - warnings: list[str]
+    """
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        return {
+            "can_import": False,
+            "fiscal_year_start": None,
+            "fiscal_year_end": None,
+            "fiscal_year_exists": False,
+            "existing_fiscal_year_id": None,
+            "will_create_fiscal_year": False,
+            "accounts_count": 0,
+            "verifications_count": 0,
+            "blocking_errors": [f"Företag med ID {company_id} hittades inte"],
+            "warnings": [],
+        }
+
+    blocking_errors = []
+    warnings = []
+
+    # Parse #RAR 0 to get fiscal year dates
+    rar_dates = _parse_rar_from_file(file_content)
+    if not rar_dates:
+        blocking_errors.append("SIE4-filen saknar räkenskapsårsinformation (#RAR 0)")
+        return {
+            "can_import": False,
+            "fiscal_year_start": None,
+            "fiscal_year_end": None,
+            "fiscal_year_exists": False,
+            "existing_fiscal_year_id": None,
+            "will_create_fiscal_year": False,
+            "accounts_count": 0,
+            "verifications_count": 0,
+            "blocking_errors": blocking_errors,
+            "warnings": warnings,
+        }
+
+    rar_start, rar_end = rar_dates
+
+    # Validate dates
+    if rar_end < rar_start:
+        blocking_errors.append(f"Ogiltigt räkenskapsår: slutdatum ({rar_end}) är före startdatum ({rar_start})")
+
+    # Check if fiscal year already exists (exact match)
+    existing_fy = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date == rar_start,
+            FiscalYear.end_date == rar_end,
+        )
+        .first()
+    )
+
+    fiscal_year_exists = existing_fy is not None
+    existing_fiscal_year_id = existing_fy.id if existing_fy else None
+    will_create_fiscal_year = not fiscal_year_exists
+
+    # Check for overlapping fiscal years (if we need to create one)
+    if will_create_fiscal_year:
+        overlapping = _check_overlapping_fiscal_years(db, company_id, rar_start, rar_end)
+        if overlapping:
+            # Get labels for better error message
+            for fy_id, start, end in overlapping:
+                fy = db.query(FiscalYear).filter(FiscalYear.id == fy_id).first()
+                label = fy.label if fy else f"{start.year}"
+                blocking_errors.append(
+                    f"Räkenskapsåret ({rar_start} - {rar_end}) överlappar med befintligt: {label} ({start} - {end})"
+                )
+
+    # Count accounts and verifications in the file
+    accounts_count = 0
+    verifications_count = 0
+    existing_account_numbers = set()
+    accounts_in_file = set()
+
+    # Get existing accounts for this fiscal year if it exists
+    if fiscal_year_exists:
+        existing_accounts = (
+            db.query(Account.account_number)
+            .filter(Account.company_id == company_id, Account.fiscal_year_id == existing_fiscal_year_id)
+            .all()
+        )
+        existing_account_numbers = {a.account_number for a in existing_accounts}
+
+    for line in file_content.splitlines():
+        command, args = _parse_sie_line(line)
+
+        if command == "KONTO" and len(args) >= 2:
+            try:
+                account_number = int(args[0])
+                accounts_in_file.add(account_number)
+                accounts_count += 1
+            except ValueError:
+                pass
+
+        elif command == "VER" and len(args) >= 3:
+            verifications_count += 1
+
+    # Check for accounts that will be updated vs created
+    if existing_account_numbers:
+        accounts_to_update = accounts_in_file & existing_account_numbers
+        if accounts_to_update:
+            warnings.append(f"{len(accounts_to_update)} konton finns redan och kommer uppdateras")
+
+    return {
+        "can_import": len(blocking_errors) == 0,
+        "fiscal_year_start": rar_start,
+        "fiscal_year_end": rar_end,
+        "fiscal_year_exists": fiscal_year_exists,
+        "existing_fiscal_year_id": existing_fiscal_year_id,
+        "will_create_fiscal_year": will_create_fiscal_year,
+        "accounts_count": accounts_count,
+        "verifications_count": verifications_count,
+        "blocking_errors": blocking_errors,
+        "warnings": warnings,
+    }
+
+
 def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content: str) -> dict[str, any]:
     """
     Import SIE4 file content into the database for a specific fiscal year.

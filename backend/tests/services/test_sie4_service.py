@@ -405,3 +405,107 @@ class TestSIE4HelperFunctions:
         assert sie4_service._determine_account_type(6000).value == "cost_other"
         assert sie4_service._determine_account_type(7000).value == "cost_personnel"
         assert sie4_service._determine_account_type(8000).value == "cost_misc"
+
+
+class TestSIE4Preview:
+    """Tests for SIE4 preview functionality."""
+
+    def test_preview_basic(self, db_session, test_company):
+        """Preview a basic SIE4 file."""
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#RAR 0 20250101 20251231
+#KONTO 1510 "Kundfordringar"
+#KONTO 1930 "Företagskonto"
+#KONTO 3000 "Försäljning"
+#VER "A" 1 20250115 "Faktura 1"
+{
+#TRANS 1510 {} 10000.00
+#TRANS 3000 {} -10000.00
+}
+"""
+        preview = sie4_service.preview_sie4(db_session, test_company.id, sie4_content)
+
+        assert preview["can_import"] is True
+        assert preview["fiscal_year_start"] == date(2025, 1, 1)
+        assert preview["fiscal_year_end"] == date(2025, 12, 31)
+        assert preview["fiscal_year_exists"] is False
+        assert preview["will_create_fiscal_year"] is True
+        assert preview["accounts_count"] == 3
+        assert preview["verifications_count"] == 1
+        assert len(preview["blocking_errors"]) == 0
+
+    def test_preview_missing_rar(self, db_session, test_company):
+        """Preview should fail if #RAR 0 is missing."""
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#KONTO 1510 "Kundfordringar"
+"""
+        preview = sie4_service.preview_sie4(db_session, test_company.id, sie4_content)
+
+        assert preview["can_import"] is False
+        assert len(preview["blocking_errors"]) >= 1
+        assert any("#RAR 0" in e for e in preview["blocking_errors"])
+
+    def test_preview_existing_fiscal_year(self, db_session, test_company_with_fiscal_year):
+        """Preview should detect existing fiscal year."""
+        company, fiscal_year = test_company_with_fiscal_year
+
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#RAR 0 20250101 20251231
+#KONTO 1510 "Kundfordringar"
+"""
+        preview = sie4_service.preview_sie4(db_session, company.id, sie4_content)
+
+        assert preview["can_import"] is True
+        assert preview["fiscal_year_exists"] is True
+        assert preview["existing_fiscal_year_id"] == fiscal_year.id
+        assert preview["will_create_fiscal_year"] is False
+
+    def test_preview_overlapping_fiscal_year(self, db_session, test_company_with_fiscal_year):
+        """Preview should block if fiscal year overlaps."""
+        company, fiscal_year = test_company_with_fiscal_year
+
+        # Try to import a file with overlapping dates (July 2024 to June 2025)
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#RAR 0 20240701 20250630
+#KONTO 1510 "Kundfordringar"
+"""
+        preview = sie4_service.preview_sie4(db_session, company.id, sie4_content)
+
+        assert preview["can_import"] is False
+        assert len(preview["blocking_errors"]) >= 1
+        assert any("överlappar" in e for e in preview["blocking_errors"])
+
+    def test_preview_counts_accounts_and_verifications(self, db_session, test_company):
+        """Preview should correctly count accounts and verifications."""
+        sie4_content = """#FLAGGA 0
+#SIETYP 4
+#RAR 0 20250101 20251231
+#KONTO 1510 "Kundfordringar"
+#KONTO 1930 "Företagskonto"
+#KONTO 2440 "Leverantörsskulder"
+#KONTO 3000 "Försäljning"
+#KONTO 6100 "Kontorsmaterial"
+#VER "A" 1 20250115 "Faktura 1"
+{
+#TRANS 1510 {} 10000.00
+#TRANS 3000 {} -10000.00
+}
+#VER "A" 2 20250116 "Faktura 2"
+{
+#TRANS 1510 {} 5000.00
+#TRANS 3000 {} -5000.00
+}
+#VER "B" 1 20250117 "Betalning"
+{
+#TRANS 1930 {} 10000.00
+#TRANS 1510 {} -10000.00
+}
+"""
+        preview = sie4_service.preview_sie4(db_session, test_company.id, sie4_content)
+
+        assert preview["accounts_count"] == 5
+        assert preview["verifications_count"] == 3

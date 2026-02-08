@@ -1,5 +1,7 @@
 """SIE4 Import/Export Router"""
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
@@ -32,6 +34,90 @@ class SIE4ExportRequest(BaseModel):
 
     company_id: int
     include_verifications: bool = True
+
+
+class SIE4PreviewResponse(BaseModel):
+    """Response model for SIE4 preview"""
+
+    can_import: bool
+    fiscal_year_start: date | None
+    fiscal_year_end: date | None
+    fiscal_year_exists: bool
+    existing_fiscal_year_id: int | None
+    will_create_fiscal_year: bool
+    accounts_count: int
+    verifications_count: int
+    blocking_errors: list[str] = []
+    warnings: list[str] = []
+
+
+@router.post("/preview/{company_id}", response_model=SIE4PreviewResponse)
+async def preview_sie4_file(
+    company_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Preview SIE4 file import without making changes.
+
+    Analyzes the file and returns:
+    - Fiscal year from #RAR 0
+    - Whether fiscal year exists or will be created
+    - Count of accounts and verifications to import
+    - Any blocking errors or warnings
+
+    This is a read-only operation.
+    """
+    # Verify access
+    company_ids = get_user_company_ids(current_user, db)
+    if company_id not in company_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this company")
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Try different encodings (SIE files can use various encodings)
+        file_content = None
+        for encoding in ["cp437", "iso-8859-1", "windows-1252", "utf-8"]:
+            try:
+                file_content = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if file_content is None:
+            return SIE4PreviewResponse(
+                can_import=False,
+                fiscal_year_start=None,
+                fiscal_year_end=None,
+                fiscal_year_exists=False,
+                existing_fiscal_year_id=None,
+                will_create_fiscal_year=False,
+                accounts_count=0,
+                verifications_count=0,
+                blocking_errors=["Kunde inte avkoda SIE4-filen. Okänd teckenkodning."],
+                warnings=[],
+            )
+
+        # Preview
+        preview = sie4_service.preview_sie4(db, company_id, file_content)
+        return SIE4PreviewResponse(**preview)
+
+    except Exception as e:
+        return SIE4PreviewResponse(
+            can_import=False,
+            fiscal_year_start=None,
+            fiscal_year_end=None,
+            fiscal_year_exists=False,
+            existing_fiscal_year_id=None,
+            will_create_fiscal_year=False,
+            accounts_count=0,
+            verifications_count=0,
+            blocking_errors=[f"Förhandsvisning misslyckades: {str(e)}"],
+            warnings=[],
+        )
 
 
 @router.post("/import/{company_id}", response_model=SIE4ImportResponse)
