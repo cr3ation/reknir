@@ -8,16 +8,19 @@ Covers:
 """
 
 
-
 class TestCreateCustomer:
     """Tests for POST /api/customers/"""
 
     def test_create_customer_success_minimal(self, client, auth_headers, test_company):
         """Create customer with minimal required fields."""
-        response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "Minimal Customer AB",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "Minimal Customer AB",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Minimal Customer AB"
@@ -26,19 +29,23 @@ class TestCreateCustomer:
 
     def test_create_customer_success_full(self, client, auth_headers, test_company):
         """Create customer with all fields populated."""
-        response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "Full Customer AB",
-            "org_number": "556677-8899",
-            "email": "info@fullcustomer.se",
-            "phone": "08-111 22 33",
-            "address": "Kundvägen 1",
-            "postal_code": "12345",
-            "city": "Stockholm",
-            "country": "Sverige",
-            "contact_person": "Anna Andersson",
-            "notes": "Important customer",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "Full Customer AB",
+                "org_number": "556677-8899",
+                "email": "info@fullcustomer.se",
+                "phone": "08-111 22 33",
+                "address": "Kundvägen 1",
+                "postal_code": "12345",
+                "city": "Stockholm",
+                "country": "Sverige",
+                "contact_person": "Anna Andersson",
+                "notes": "Important customer",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Full Customer AB"
@@ -48,10 +55,14 @@ class TestCreateCustomer:
 
     def test_create_customer_missing_name(self, client, auth_headers, test_company):
         """Reject customer without name."""
-        response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "email": "noname@customer.se",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "email": "noname@customer.se",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 422
 
     def test_create_customer_no_company_access(self, client, auth_headers, factory):
@@ -60,18 +71,25 @@ class TestCreateCustomer:
             name="Other Company",
             org_number="111100-0000",
         )
-        response = client.post("/api/customers/", json={
-            "company_id": other_company.id,
-            "name": "Unauthorized Customer",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": other_company.id,
+                "name": "Unauthorized Customer",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 403
 
     def test_create_customer_unauthenticated(self, client, test_company):
         """Reject creating customer without authentication."""
-        response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "Unauthenticated Customer",
-        })
+        response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "Unauthenticated Customer",
+            },
+        )
         assert response.status_code == 401
 
 
@@ -90,10 +108,14 @@ class TestListCustomers:
     def test_list_customers_with_items(self, client, auth_headers, test_company):
         """List customers after creating some."""
         for i in range(3):
-            client.post("/api/customers/", json={
-                "company_id": test_company.id,
-                "name": f"Customer {i}",
-            }, headers=auth_headers)
+            client.post(
+                "/api/customers/",
+                json={
+                    "company_id": test_company.id,
+                    "name": f"Customer {i}",
+                },
+                headers=auth_headers,
+            )
 
         response = client.get(
             f"/api/customers/?company_id={test_company.id}",
@@ -121,10 +143,14 @@ class TestGetCustomer:
 
     def test_get_customer_success(self, client, auth_headers, test_company):
         """Get a specific customer."""
-        create_response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "Get Test Customer",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "Get Test Customer",
+            },
+            headers=auth_headers,
+        )
         customer_id = create_response.json()["id"]
 
         response = client.get(
@@ -145,10 +171,14 @@ class TestUpdateCustomer:
 
     def test_update_customer_name(self, client, auth_headers, test_company):
         """Update customer name."""
-        create_response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "Original Name",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "Original Name",
+            },
+            headers=auth_headers,
+        )
         customer_id = create_response.json()["id"]
 
         response = client.patch(
@@ -161,10 +191,14 @@ class TestUpdateCustomer:
 
     def test_update_customer_contact_info(self, client, auth_headers, test_company):
         """Update customer contact information."""
-        create_response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "Contact Update Customer",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "Contact Update Customer",
+            },
+            headers=auth_headers,
+        )
         customer_id = create_response.json()["id"]
 
         response = client.patch(
@@ -188,10 +222,14 @@ class TestDeleteCustomer:
 
     def test_delete_customer_success(self, client, auth_headers, test_company):
         """Delete a customer."""
-        create_response = client.post("/api/customers/", json={
-            "company_id": test_company.id,
-            "name": "To Delete Customer",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/customers/",
+            json={
+                "company_id": test_company.id,
+                "name": "To Delete Customer",
+            },
+            headers=auth_headers,
+        )
         customer_id = create_response.json()["id"]
 
         response = client.delete(

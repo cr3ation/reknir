@@ -35,7 +35,7 @@ class TestUploadAttachment:
     def test_upload_image_success(self, client, auth_headers, test_company):
         """Successfully upload an image file."""
         # Minimal PNG header
-        png_content = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'
+        png_content = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         files = {
             "file": ("receipt.png", BytesIO(png_content), "image/png"),
         }
@@ -52,7 +52,7 @@ class TestUploadAttachment:
     def test_upload_jpeg_success(self, client, auth_headers, test_company):
         """Successfully upload a JPEG file."""
         # Minimal JPEG header
-        jpeg_content = b'\xff\xd8\xff\xe0\x00\x10JFIF'
+        jpeg_content = b"\xff\xd8\xff\xe0\x00\x10JFIF"
         files = {
             "file": ("photo.jpg", BytesIO(jpeg_content), "image/jpeg"),
         }

@@ -40,6 +40,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 # Database Fixtures
 # =============================================================================
 
+
 @pytest.fixture(scope="function")
 def db_session():
     """Create a fresh database for each test."""
@@ -71,6 +72,7 @@ def client(db_session):
 # =============================================================================
 # User Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def test_user(db_session) -> User:
@@ -124,42 +126,50 @@ def inactive_user(db_session) -> User:
 # Authentication Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def auth_headers(test_user) -> dict:
     """Get authentication headers for the regular test user."""
-    token = create_access_token({
-        "sub": str(test_user.id),
-        "email": test_user.email,
-        "is_admin": test_user.is_admin,
-    })
+    token = create_access_token(
+        {
+            "sub": str(test_user.id),
+            "email": test_user.email,
+            "is_admin": test_user.is_admin,
+        }
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 def admin_auth_headers(admin_user) -> dict:
     """Get authentication headers for the admin user."""
-    token = create_access_token({
-        "sub": str(admin_user.id),
-        "email": admin_user.email,
-        "is_admin": admin_user.is_admin,
-    })
+    token = create_access_token(
+        {
+            "sub": str(admin_user.id),
+            "email": admin_user.email,
+            "is_admin": admin_user.is_admin,
+        }
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
 def inactive_auth_headers(inactive_user) -> dict:
     """Get authentication headers for the inactive user."""
-    token = create_access_token({
-        "sub": str(inactive_user.id),
-        "email": inactive_user.email,
-        "is_admin": inactive_user.is_admin,
-    })
+    token = create_access_token(
+        {
+            "sub": str(inactive_user.id),
+            "email": inactive_user.email,
+            "is_admin": inactive_user.is_admin,
+        }
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
 # =============================================================================
 # Company Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def test_company(db_session, test_user) -> Company:
@@ -213,6 +223,7 @@ def test_company_with_fiscal_year(db_session, test_company) -> tuple[Company, Fi
 # Account Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def basic_accounts(db_session, test_company) -> list[Account]:
     """Create basic chart of accounts for testing."""
@@ -258,6 +269,7 @@ def basic_accounts(db_session, test_company) -> list[Account]:
 # Customer & Supplier Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def test_customer(db_session, test_company) -> Customer:
     """Create a test customer."""
@@ -297,6 +309,7 @@ def test_supplier(db_session, test_company) -> Supplier:
 # =============================================================================
 # Test Data Factories
 # =============================================================================
+
 
 class TestDataFactory:
     """Factory for creating test data entities."""
@@ -408,6 +421,7 @@ def factory(db_session) -> TestDataFactory:
 # =============================================================================
 # Utility Functions
 # =============================================================================
+
 
 def assert_error_response(response, status_code: int, detail_contains: str | None = None):
     """Assert that a response is an error with expected status and optional detail."""

@@ -10,18 +10,21 @@ Covers:
 """
 
 
-
 class TestCreateCompany:
     """Tests for POST /api/companies/"""
 
     def test_create_company_success_minimal(self, client, auth_headers):
         """Create company with minimal required fields."""
-        response = client.post("/api/companies/", json={
-            "name": "Minimal Company AB",
-            "org_number": "556677-8899",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Minimal Company AB",
+                "org_number": "556677-8899",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Minimal Company AB"
@@ -30,23 +33,27 @@ class TestCreateCompany:
 
     def test_create_company_success_full(self, client, auth_headers):
         """Create company with all fields populated."""
-        response = client.post("/api/companies/", json={
-            "name": "Full Company AB",
-            "org_number": "112233-4455",
-            "address": "Fullgatan 99",
-            "postal_code": "12345",
-            "city": "Stockholm",
-            "phone": "08-111 22 33",
-            "email": "info@fullcompany.se",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "vat_number": "SE1122334455",
-            "accounting_basis": "accrual",
-            "vat_reporting_period": "quarterly",
-            "is_vat_registered": True,
-            "payment_type": "bankgiro",
-            "bankgiro_number": "999-8888",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Full Company AB",
+                "org_number": "112233-4455",
+                "address": "Fullgatan 99",
+                "postal_code": "12345",
+                "city": "Stockholm",
+                "phone": "08-111 22 33",
+                "email": "info@fullcompany.se",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "vat_number": "SE1122334455",
+                "accounting_basis": "accrual",
+                "vat_reporting_period": "quarterly",
+                "is_vat_registered": True,
+                "payment_type": "bankgiro",
+                "bankgiro_number": "999-8888",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Full Company AB"
@@ -56,41 +63,56 @@ class TestCreateCompany:
 
     def test_create_company_missing_name(self, client, auth_headers):
         """Reject company creation without name."""
-        response = client.post("/api/companies/", json={
-            "org_number": "123456-7890",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "org_number": "123456-7890",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 422
 
     def test_create_company_missing_org_number(self, client, auth_headers):
         """Reject company creation without org_number."""
-        response = client.post("/api/companies/", json={
-            "name": "No Org Number AB",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "No Org Number AB",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 422
 
     def test_create_company_duplicate_org_number(self, client, auth_headers, test_company):
         """Reject company with duplicate org_number."""
-        response = client.post("/api/companies/", json={
-            "name": "Duplicate Org AB",
-            "org_number": test_company.org_number,  # Already exists
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Duplicate Org AB",
+                "org_number": test_company.org_number,  # Already exists
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"].lower()
 
     def test_create_company_unauthenticated(self, client):
         """Reject company creation without authentication."""
-        response = client.post("/api/companies/", json={
-            "name": "Unauthenticated Company AB",
-            "org_number": "999999-9999",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-        })
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Unauthenticated Company AB",
+                "org_number": "999999-9999",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+            },
+        )
         assert response.status_code == 401
 
 
@@ -99,98 +121,126 @@ class TestPaymentTypeValidation:
 
     def test_create_company_bankgiro_without_number(self, client, auth_headers):
         """Reject bankgiro payment type without bankgiro number."""
-        response = client.post("/api/companies/", json={
-            "name": "No Bankgiro Number AB",
-            "org_number": "111111-2222",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "bankgiro",
-            # Missing bankgiro_number
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "No Bankgiro Number AB",
+                "org_number": "111111-2222",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "bankgiro",
+                # Missing bankgiro_number
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
         assert "bankgironummer" in response.json()["detail"].lower()
 
     def test_create_company_plusgiro_without_number(self, client, auth_headers):
         """Reject plusgiro payment type without plusgiro number."""
-        response = client.post("/api/companies/", json={
-            "name": "No Plusgiro Number AB",
-            "org_number": "222222-3333",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "plusgiro",
-            # Missing plusgiro_number
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "No Plusgiro Number AB",
+                "org_number": "222222-3333",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "plusgiro",
+                # Missing plusgiro_number
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
         assert "plusgironummer" in response.json()["detail"].lower()
 
     def test_create_company_bank_account_without_clearing(self, client, auth_headers):
         """Reject bank_account payment type without clearing number."""
-        response = client.post("/api/companies/", json={
-            "name": "No Clearing Number AB",
-            "org_number": "333333-4444",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "bank_account",
-            "account_number": "12345678",
-            # Missing clearing_number
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "No Clearing Number AB",
+                "org_number": "333333-4444",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "bank_account",
+                "account_number": "12345678",
+                # Missing clearing_number
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
         assert "clearingnummer" in response.json()["detail"].lower()
 
     def test_create_company_bank_account_without_account_number(self, client, auth_headers):
         """Reject bank_account payment type without account number."""
-        response = client.post("/api/companies/", json={
-            "name": "No Account Number AB",
-            "org_number": "444444-5555",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "bank_account",
-            "clearing_number": "1234",
-            # Missing account_number
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "No Account Number AB",
+                "org_number": "444444-5555",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "bank_account",
+                "clearing_number": "1234",
+                # Missing account_number
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
         assert "kontonummer" in response.json()["detail"].lower()
 
     def test_create_company_bankgiro_success(self, client, auth_headers):
         """Successfully create company with bankgiro payment."""
-        response = client.post("/api/companies/", json={
-            "name": "Bankgiro Company AB",
-            "org_number": "555555-6666",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "bankgiro",
-            "bankgiro_number": "123-4567",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Bankgiro Company AB",
+                "org_number": "555555-6666",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "bankgiro",
+                "bankgiro_number": "123-4567",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         assert response.json()["payment_type"] == "bankgiro"
         assert response.json()["bankgiro_number"] == "123-4567"
 
     def test_create_company_plusgiro_success(self, client, auth_headers):
         """Successfully create company with plusgiro payment."""
-        response = client.post("/api/companies/", json={
-            "name": "Plusgiro Company AB",
-            "org_number": "666666-7777",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "plusgiro",
-            "plusgiro_number": "12 34 56-7",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Plusgiro Company AB",
+                "org_number": "666666-7777",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "plusgiro",
+                "plusgiro_number": "12 34 56-7",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         assert response.json()["payment_type"] == "plusgiro"
 
     def test_create_company_bank_account_success(self, client, auth_headers):
         """Successfully create company with bank account payment."""
-        response = client.post("/api/companies/", json={
-            "name": "Bank Account Company AB",
-            "org_number": "777777-8888",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "payment_type": "bank_account",
-            "clearing_number": "1234",
-            "account_number": "567 890 123-4",
-            "iban": "SE1234567890123456789012",
-            "bic": "NDEASESS",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Bank Account Company AB",
+                "org_number": "777777-8888",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "payment_type": "bank_account",
+                "clearing_number": "1234",
+                "account_number": "567 890 123-4",
+                "iban": "SE1234567890123456789012",
+                "bic": "NDEASESS",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["payment_type"] == "bank_account"
@@ -399,37 +449,49 @@ class TestAccountingBasisValidation:
 
     def test_create_company_accrual_basis(self, client, auth_headers):
         """Create company with accrual accounting basis."""
-        response = client.post("/api/companies/", json={
-            "name": "Accrual Company AB",
-            "org_number": "555500-6666",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "accounting_basis": "accrual",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Accrual Company AB",
+                "org_number": "555500-6666",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "accounting_basis": "accrual",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         assert response.json()["accounting_basis"] == "accrual"
 
     def test_create_company_cash_basis(self, client, auth_headers):
         """Create company with cash accounting basis."""
-        response = client.post("/api/companies/", json={
-            "name": "Cash Basis Company AB",
-            "org_number": "666600-7777",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "accounting_basis": "cash",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Cash Basis Company AB",
+                "org_number": "666600-7777",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "accounting_basis": "cash",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         assert response.json()["accounting_basis"] == "cash"
 
     def test_create_company_invalid_accounting_basis(self, client, auth_headers):
         """Reject invalid accounting basis value."""
-        response = client.post("/api/companies/", json={
-            "name": "Invalid Basis Company AB",
-            "org_number": "777700-8888",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "accounting_basis": "invalid_basis",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "Invalid Basis Company AB",
+                "org_number": "777700-8888",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "accounting_basis": "invalid_basis",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 422
 
 
@@ -438,15 +500,19 @@ class TestVATSettings:
 
     def test_create_company_vat_registered(self, client, auth_headers):
         """Create VAT-registered company."""
-        response = client.post("/api/companies/", json={
-            "name": "VAT Company AB",
-            "org_number": "888800-9999",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "is_vat_registered": True,
-            "vat_number": "SE8888009999",
-            "vat_reporting_period": "monthly",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "VAT Company AB",
+                "org_number": "888800-9999",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "is_vat_registered": True,
+                "vat_number": "SE8888009999",
+                "vat_reporting_period": "monthly",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["is_vat_registered"] is True
@@ -454,13 +520,17 @@ class TestVATSettings:
 
     def test_create_company_not_vat_registered(self, client, auth_headers):
         """Create non-VAT-registered company."""
-        response = client.post("/api/companies/", json={
-            "name": "No VAT Company AB",
-            "org_number": "999900-0000",
-            "fiscal_year_start": "2025-01-01",
-            "fiscal_year_end": "2025-12-31",
-            "is_vat_registered": False,
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/companies/",
+            json={
+                "name": "No VAT Company AB",
+                "org_number": "999900-0000",
+                "fiscal_year_start": "2025-01-01",
+                "fiscal_year_end": "2025-12-31",
+                "is_vat_registered": False,
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         assert response.json()["is_vat_registered"] is False
 
@@ -468,13 +538,17 @@ class TestVATSettings:
         """Test different VAT reporting periods."""
         periods = ["monthly", "quarterly", "yearly"]
         for i, period in enumerate(periods):
-            response = client.post("/api/companies/", json={
-                "name": f"VAT Period {period} AB",
-                "org_number": f"00000{i}-1111",
-                "fiscal_year_start": "2025-01-01",
-                "fiscal_year_end": "2025-12-31",
-                "is_vat_registered": True,
-                "vat_reporting_period": period,
-            }, headers=auth_headers)
+            response = client.post(
+                "/api/companies/",
+                json={
+                    "name": f"VAT Period {period} AB",
+                    "org_number": f"00000{i}-1111",
+                    "fiscal_year_start": "2025-01-01",
+                    "fiscal_year_end": "2025-12-31",
+                    "is_vat_registered": True,
+                    "vat_reporting_period": period,
+                },
+                headers=auth_headers,
+            )
             assert response.status_code == 201
             assert response.json()["vat_reporting_period"] == period

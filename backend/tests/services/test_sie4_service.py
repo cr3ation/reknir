@@ -44,10 +44,11 @@ class TestSIE4AccountImport:
         assert stats["errors"] == []
 
         # Verify accounts exist
-        accounts = db_session.query(Account).filter(
-            Account.company_id == company.id,
-            Account.fiscal_year_id == fiscal_year.id
-        ).all()
+        accounts = (
+            db_session.query(Account)
+            .filter(Account.company_id == company.id, Account.fiscal_year_id == fiscal_year.id)
+            .all()
+        )
         account_numbers = [a.account_number for a in accounts]
         assert 1510 in account_numbers
         assert 1930 in account_numbers
@@ -67,10 +68,9 @@ class TestSIE4AccountImport:
 
         assert stats["accounts_created"] == 1
 
-        account = db_session.query(Account).filter(
-            Account.company_id == company.id,
-            Account.account_number == 1510
-        ).first()
+        account = (
+            db_session.query(Account).filter(Account.company_id == company.id, Account.account_number == 1510).first()
+        )
         assert account is not None
         assert account.opening_balance == Decimal("50000.00")
 
@@ -87,10 +87,9 @@ class TestSIE4AccountImport:
 """
         sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
-        account = db_session.query(Account).filter(
-            Account.company_id == company.id,
-            Account.account_number == 1510
-        ).first()
+        account = (
+            db_session.query(Account).filter(Account.company_id == company.id, Account.account_number == 1510).first()
+        )
         assert account.opening_balance == Decimal("50000.00")
         assert account.current_balance == Decimal("75000.00")
 
@@ -115,10 +114,9 @@ class TestSIE4YearIndexFiltering:
 """
         sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
-        account = db_session.query(Account).filter(
-            Account.company_id == company.id,
-            Account.account_number == 2099
-        ).first()
+        account = (
+            db_session.query(Account).filter(Account.company_id == company.id, Account.account_number == 2099).first()
+        )
 
         # Should have year 0 balances, NOT year -1 balances
         assert account.opening_balance == Decimal("-68063.86")
@@ -141,10 +139,9 @@ class TestSIE4YearIndexFiltering:
 """
         sie4_service.import_sie4(db_session, company.id, sie4_content, fiscal_year.id)
 
-        account = db_session.query(Account).filter(
-            Account.company_id == company.id,
-            Account.account_number == 1930
-        ).first()
+        account = (
+            db_session.query(Account).filter(Account.company_id == company.id, Account.account_number == 1930).first()
+        )
 
         # No balances should be set since only -1 was provided
         assert account.opening_balance == Decimal("0")
@@ -271,11 +268,13 @@ class TestSIE4VerificationImport:
         assert stats["verifications_created"] == 1
         assert stats["errors"] == []
 
-        ver = db_session.query(Verification).filter(
-            Verification.company_id == company.id,
-            Verification.series == "A",
-            Verification.verification_number == 1
-        ).first()
+        ver = (
+            db_session.query(Verification)
+            .filter(
+                Verification.company_id == company.id, Verification.series == "A", Verification.verification_number == 1
+            )
+            .first()
+        )
         assert ver is not None
         assert ver.description == "Faktura 1"
         assert len(ver.transaction_lines) == 2
@@ -308,9 +307,7 @@ class TestSIE4VerificationImport:
         assert "3000" in skip_warnings[0]
 
         # Verify no verification was created
-        ver = db_session.query(Verification).filter(
-            Verification.company_id == company.id
-        ).first()
+        ver = db_session.query(Verification).filter(Verification.company_id == company.id).first()
         assert ver is None
 
     def test_skip_duplicate_verifications(self, db_session, test_company_with_fiscal_year):

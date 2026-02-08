@@ -268,9 +268,7 @@ def preview_sie4(db: Session, company_id: int, file_content: str) -> dict:
     }
 
 
-def import_sie4(
-    db: Session, company_id: int, file_content: str, fiscal_year_id: int | None = None
-) -> dict[str, any]:
+def import_sie4(db: Session, company_id: int, file_content: str, fiscal_year_id: int | None = None) -> dict[str, any]:
     """
     Import SIE4 file content into the database.
 
@@ -629,9 +627,7 @@ def import_sie4(
     if skipped_duplicates > 0:
         stats["warnings"].append(f"Hoppade över {skipped_duplicates} duplicerade verifikationer")
     if skipped_missing_accounts:
-        stats["warnings"].append(
-            f"Saknade konton (totalt): {', '.join(map(str, sorted(skipped_missing_accounts)))}"
-        )
+        stats["warnings"].append(f"Saknade konton (totalt): {', '.join(map(str, sorted(skipped_missing_accounts)))}")
 
     # Commit verifications
     db.commit()

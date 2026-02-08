@@ -99,7 +99,9 @@ async def create_invoice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Plusgironummer saknas. Ange plusgironummer i företagsinställningarna.",
         )
-    elif company.payment_type == PaymentType.BANK_ACCOUNT and (not company.clearing_number or not company.account_number):
+    elif company.payment_type == PaymentType.BANK_ACCOUNT and (
+        not company.clearing_number or not company.account_number
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Clearingnummer och kontonummer saknas. Ange båda i företagsinställningarna.",

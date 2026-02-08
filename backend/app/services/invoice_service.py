@@ -59,8 +59,7 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
         verification_number=ver_number,
         series="A",
         transaction_date=invoice.invoice_date,
-        description=description
-        or f"Faktura {invoice.invoice_number} - {invoice.customer.name}",
+        description=description or f"Faktura {invoice.invoice_number} - {invoice.customer.name}",
         registration_date=date.today(),
     )
     db.add(verification)

@@ -9,19 +9,22 @@ Covers:
 """
 
 
-
 class TestCreateFiscalYear:
     """Tests for POST /api/fiscal-years/"""
 
     def test_create_fiscal_year_success(self, client, auth_headers, test_company):
         """Successfully create a fiscal year."""
-        response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2025,
-            "label": "2025",
-            "start_date": "2025-01-01",
-            "end_date": "2025-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2025,
+                "label": "2025",
+                "start_date": "2025-01-01",
+                "end_date": "2025-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
         data = response.json()
         assert data["year"] == 2025
@@ -30,34 +33,46 @@ class TestCreateFiscalYear:
 
     def test_create_fiscal_year_broken_year(self, client, auth_headers, test_company):
         """Create a broken fiscal year (not calendar year)."""
-        response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2025,
-            "label": "2024/2025",
-            "start_date": "2024-09-01",
-            "end_date": "2025-08-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2025,
+                "label": "2024/2025",
+                "start_date": "2024-09-01",
+                "end_date": "2025-08-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 201
 
     def test_create_fiscal_year_duplicate(self, client, auth_headers, test_company):
         """Reject creating duplicate fiscal year for same company and year."""
         # Create first
-        client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2026,
-            "label": "2026",
-            "start_date": "2026-01-01",
-            "end_date": "2026-12-31",
-        }, headers=auth_headers)
+        client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2026,
+                "label": "2026",
+                "start_date": "2026-01-01",
+                "end_date": "2026-12-31",
+            },
+            headers=auth_headers,
+        )
 
         # Try to create duplicate
-        response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2026,
-            "label": "2026 duplicate",
-            "start_date": "2026-01-01",
-            "end_date": "2026-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2026,
+                "label": "2026 duplicate",
+                "start_date": "2026-01-01",
+                "end_date": "2026-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 400
 
     def test_create_fiscal_year_no_company_access(self, client, auth_headers, factory):
@@ -66,24 +81,32 @@ class TestCreateFiscalYear:
             name="Other Company",
             org_number="111111-0000",
         )
-        response = client.post("/api/fiscal-years/", json={
-            "company_id": other_company.id,
-            "year": 2025,
-            "label": "2025",
-            "start_date": "2025-01-01",
-            "end_date": "2025-12-31",
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": other_company.id,
+                "year": 2025,
+                "label": "2025",
+                "start_date": "2025-01-01",
+                "end_date": "2025-12-31",
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 403
 
     def test_create_fiscal_year_invalid_dates_rejected(self, client, auth_headers, test_company):
         """Reject fiscal year where end_date is before start_date."""
-        response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2025,
-            "label": "2025",
-            "start_date": "2025-12-31",
-            "end_date": "2025-01-01",  # Before start - should be rejected
-        }, headers=auth_headers)
+        response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2025,
+                "label": "2025",
+                "start_date": "2025-12-31",
+                "end_date": "2025-01-01",  # Before start - should be rejected
+            },
+            headers=auth_headers,
+        )
         assert response.status_code == 422
 
 
@@ -94,13 +117,17 @@ class TestListFiscalYears:
         """List fiscal years for a company."""
         # Create some fiscal years
         for year in [2024, 2025, 2026]:
-            client.post("/api/fiscal-years/", json={
-                "company_id": test_company.id,
-                "year": year,
-                "label": str(year),
-                "start_date": f"{year}-01-01",
-                "end_date": f"{year}-12-31",
-            }, headers=auth_headers)
+            client.post(
+                "/api/fiscal-years/",
+                json={
+                    "company_id": test_company.id,
+                    "year": year,
+                    "label": str(year),
+                    "start_date": f"{year}-01-01",
+                    "end_date": f"{year}-12-31",
+                },
+                headers=auth_headers,
+            )
 
         response = client.get(
             f"/api/fiscal-years/?company_id={test_company.id}",
@@ -121,13 +148,17 @@ class TestCloseFiscalYear:
     def test_close_fiscal_year_success(self, client, auth_headers, test_company):
         """Successfully close a fiscal year."""
         # Create fiscal year
-        create_response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2024,
-            "label": "2024",
-            "start_date": "2024-01-01",
-            "end_date": "2024-12-31",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2024,
+                "label": "2024",
+                "start_date": "2024-01-01",
+                "end_date": "2024-12-31",
+            },
+            headers=auth_headers,
+        )
         fy_id = create_response.json()["id"]
 
         # Close it via PATCH
@@ -141,13 +172,17 @@ class TestCloseFiscalYear:
 
     def test_close_already_closed_fiscal_year(self, client, auth_headers, test_company):
         """Handle closing an already closed fiscal year (idempotent)."""
-        create_response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2023,
-            "label": "2023",
-            "start_date": "2023-01-01",
-            "end_date": "2023-12-31",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2023,
+                "label": "2023",
+                "start_date": "2023-01-01",
+                "end_date": "2023-12-31",
+            },
+            headers=auth_headers,
+        )
         fy_id = create_response.json()["id"]
 
         # Close once
@@ -173,13 +208,17 @@ class TestReopenFiscalYear:
     def test_reopen_fiscal_year_success(self, client, auth_headers, test_company):
         """Successfully reopen a closed fiscal year."""
         # Create and close
-        create_response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2022,
-            "label": "2022",
-            "start_date": "2022-01-01",
-            "end_date": "2022-12-31",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2022,
+                "label": "2022",
+                "start_date": "2022-01-01",
+                "end_date": "2022-12-31",
+            },
+            headers=auth_headers,
+        )
         fy_id = create_response.json()["id"]
         client.patch(
             f"/api/fiscal-years/{fy_id}",
@@ -202,13 +241,17 @@ class TestDeleteFiscalYear:
 
     def test_delete_empty_fiscal_year_success(self, client, auth_headers, test_company):
         """Delete a fiscal year with no transactions."""
-        create_response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2020,
-            "label": "2020",
-            "start_date": "2020-01-01",
-            "end_date": "2020-12-31",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2020,
+                "label": "2020",
+                "start_date": "2020-01-01",
+                "end_date": "2020-12-31",
+            },
+            headers=auth_headers,
+        )
         fy_id = create_response.json()["id"]
 
         response = client.delete(
@@ -220,13 +263,17 @@ class TestDeleteFiscalYear:
 
     def test_delete_closed_fiscal_year_allowed(self, client, auth_headers, test_company):
         """Deleting a closed fiscal year is allowed (verifications are detached)."""
-        create_response = client.post("/api/fiscal-years/", json={
-            "company_id": test_company.id,
-            "year": 2019,
-            "label": "2019",
-            "start_date": "2019-01-01",
-            "end_date": "2019-12-31",
-        }, headers=auth_headers)
+        create_response = client.post(
+            "/api/fiscal-years/",
+            json={
+                "company_id": test_company.id,
+                "year": 2019,
+                "label": "2019",
+                "start_date": "2019-01-01",
+                "end_date": "2019-12-31",
+            },
+            headers=auth_headers,
+        )
         fy_id = create_response.json()["id"]
 
         # Close it
