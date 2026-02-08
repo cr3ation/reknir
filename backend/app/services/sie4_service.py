@@ -186,25 +186,31 @@ def import_sie4(db: Session, company_id: int, fiscal_year_id: int, file_content:
                     stats["errors"].append(f"Failed to parse KONTO line: {e}")
 
         elif command == "IB":
-            # #IB year account_number opening_balance
+            # #IB year_index account_number opening_balance
+            # year_index: 0 = current fiscal year, -1 = previous year, etc.
             if len(args) >= 3:
-                account_number = int(args[1])
-                balance = Decimal(args[2])
+                year_index = int(args[0])
+                if year_index == 0:  # Only import current year's balances
+                    account_number = int(args[1])
+                    balance = Decimal(args[2])
 
-                if account_number in accounts_cache:
-                    account = accounts_cache[account_number]
-                    account.opening_balance = balance
-                    account.current_balance = balance  # Default, may be overwritten by UB
+                    if account_number in accounts_cache:
+                        account = accounts_cache[account_number]
+                        account.opening_balance = balance
+                        account.current_balance = balance  # Default, may be overwritten by UB
 
         elif command == "UB":
-            # #UB year account_number closing_balance
+            # #UB year_index account_number closing_balance
+            # year_index: 0 = current fiscal year, -1 = previous year, etc.
             if len(args) >= 3:
-                account_number = int(args[1])
-                balance = Decimal(args[2])
+                year_index = int(args[0])
+                if year_index == 0:  # Only import current year's balances
+                    account_number = int(args[1])
+                    balance = Decimal(args[2])
 
-                if account_number in accounts_cache:
-                    account = accounts_cache[account_number]
-                    account.current_balance = balance
+                    if account_number in accounts_cache:
+                        account = accounts_cache[account_number]
+                        account.current_balance = balance
 
         elif command == "VER":
             # Save previous verification if exists
