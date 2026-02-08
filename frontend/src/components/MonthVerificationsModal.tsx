@@ -94,10 +94,10 @@ export default function MonthVerificationsModal({
                     <Link
                       key={verification.id}
                       to={`/verifications/${verification.id}`}
-                      className="block bg-green-50 hover:bg-green-100 rounded-lg p-3 transition-colors"
+                      className="block bg-green-50 hover:bg-green-100 rounded-lg p-3 transition-colors overflow-hidden"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-2 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
                           <FileText className="w-4 h-4 text-green-600 mt-0.5" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
@@ -111,7 +111,7 @@ export default function MonthVerificationsModal({
                             </p>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold text-green-700 ml-2">
+                        <span className="text-sm font-semibold text-green-700 ml-2 flex-shrink-0 whitespace-nowrap">
                           {formatCurrency(verification.amount)}
                         </span>
                       </div>
@@ -140,10 +140,10 @@ export default function MonthVerificationsModal({
                     <Link
                       key={verification.id}
                       to={`/verifications/${verification.id}`}
-                      className="block bg-red-50 hover:bg-red-100 rounded-lg p-3 transition-colors"
+                      className="block bg-red-50 hover:bg-red-100 rounded-lg p-3 transition-colors overflow-hidden"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-2 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
                           <FileText className="w-4 h-4 text-red-600 mt-0.5" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
@@ -157,7 +157,7 @@ export default function MonthVerificationsModal({
                             </p>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold text-red-700 ml-2">
+                        <span className="text-sm font-semibold text-red-700 ml-2 flex-shrink-0 whitespace-nowrap">
                           {formatCurrency(verification.amount)}
                         </span>
                       </div>
