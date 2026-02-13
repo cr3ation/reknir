@@ -218,8 +218,8 @@ export const reportApi = {
       params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
     }),
   balanceSheetPdf: (companyId: number, fiscalYearId: number) =>
-    api.get('/reports/balance-sheet-pdf', {
-      params: { company_id: companyId, fiscal_year_id: fiscalYearId },
+    api.get('/reports/balance-sheet', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
       responseType: 'blob',
     }),
 }

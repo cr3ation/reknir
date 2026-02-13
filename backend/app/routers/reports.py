@@ -222,27 +222,44 @@ async def get_general_ledger(
 async def get_balance_sheet(
     company_id: int = Query(..., description="Company ID"),
     fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
+    format: str = Query("json", description="Response format: json or pdf"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Generate Balance Sheet (Balansräkning)
-    Assets = Liabilities + Equity + Current Year Result
+    Generate Balance Sheet (Balansräkning).
+    Returns JSON by default, or PDF when format=pdf.
     """
-    # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
 
-    # Get fiscal year date range
-    date_start, date_end = get_fiscal_year_dates(db, company_id, fiscal_year_id)
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
 
-    # Get all active accounts for this company
+    fiscal_year = (
+        db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
+    )
+    if not fiscal_year:
+        raise HTTPException(status_code=404, detail="Fiscal year not found")
+
+    if format == "pdf":
+        pdf_bytes = generate_balance_sheet_pdf(db, company, fiscal_year)
+        filename = f"balansrapport_{company.org_number}_{fiscal_year.label}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # JSON format (default)
+    date_start, date_end = fiscal_year.start_date, fiscal_year.end_date
+
     accounts = (
         db.query(Account)
         .filter(Account.company_id == company_id, Account.fiscal_year_id == fiscal_year_id, Account.active.is_(True))
         .all()
     )
 
-    # Group by account type and calculate balances from transactions
     assets = []
     liabilities = []
     equity = []
@@ -250,13 +267,11 @@ async def get_balance_sheet(
     expenses_total = 0.0
 
     for account in accounts:
-        # Calculate transactions within the fiscal year
         year_transactions = calculate_account_balance_from_transactions(
             db, account.id, company_id, date_start, date_end
         )
 
         if account.account_type == AccountType.ASSET:
-            # Asset accounts: opening_balance + transactions within year
             balance = float(account.opening_balance) + year_transactions
             if balance == 0:
                 continue
@@ -269,8 +284,6 @@ async def get_balance_sheet(
             )
 
         elif account.account_type == AccountType.EQUITY_LIABILITY:
-            # Equity/Liability accounts have credit balance (negative in debit - credit)
-            # Negate to show as positive in balance sheet
             balance = -(float(account.opening_balance) + year_transactions)
             if balance == 0:
                 continue
@@ -279,17 +292,12 @@ async def get_balance_sheet(
                 "name": account.name,
                 "balance": balance,
             }
-            # Determine if equity or liability based on account number
-            # 2000-2099: Equity (Eget kapital)
-            # 2100-2999: Liabilities (Skulder)
             if 2000 <= account.account_number < 2100:
                 equity.append(item)
             else:
                 liabilities.append(item)
 
         elif account.account_type == AccountType.REVENUE:
-            # Revenue accounts: only transactions within year (for årets resultat)
-            # Revenue accounts have negative balance (credits), negate to get positive
             if year_transactions != 0:
                 revenue_total += -year_transactions
 
@@ -300,8 +308,6 @@ async def get_balance_sheet(
             AccountType.COST_PERSONNEL,
             AccountType.COST_MISC,
         ]:
-            # Expense accounts: only transactions within year (for årets resultat)
-            # Expense accounts have positive balance (debits)
             if year_transactions != 0:
                 expenses_total += year_transactions
 
@@ -320,36 +326,6 @@ async def get_balance_sheet(
         "total_liabilities_and_equity": total_liabilities + total_equity + current_year_result,
         "balanced": abs(total_assets - (total_liabilities + total_equity + current_year_result)) < 0.01,
     }
-
-
-@router.get("/balance-sheet-pdf")
-async def get_balance_sheet_pdf(
-    company_id: int = Query(..., description="Company ID"),
-    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-):
-    """Generate Balance Sheet (Balansrapport) as a downloadable PDF."""
-    await verify_company_access(company_id, current_user, db)
-
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    fiscal_year = (
-        db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
-    )
-    if not fiscal_year:
-        raise HTTPException(status_code=404, detail="Fiscal year not found")
-
-    pdf_bytes = generate_balance_sheet_pdf(db, company, fiscal_year)
-    filename = f"balansrapport_{company.org_number}_{fiscal_year.label}.pdf"
-
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 @router.get("/income-statement")
