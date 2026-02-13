@@ -45,7 +45,7 @@ export default function Reports() {
     } finally {
       setLoading(false)
     }
-  }, [selectedCompany])
+  }, [selectedCompany, selectedFiscalYear])
 
   const loadVatPeriods = useCallback(async () => {
     if (!selectedCompany || !selectedFiscalYear) return
