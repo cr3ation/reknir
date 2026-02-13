@@ -217,6 +217,11 @@ export const reportApi = {
     api.get<MonthlyStatistics>('/reports/monthly-statistics', {
       params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
     }),
+  balanceSheetPdf: (companyId: number, fiscalYearId: number) =>
+    api.get('/reports/balance-sheet-pdf', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId },
+      responseType: 'blob',
+    }),
 }
 
 // Customers

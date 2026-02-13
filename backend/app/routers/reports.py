@@ -13,6 +13,7 @@ from app.models.company import Company, VATReportingPeriod
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
+from app.services.report_pdf_service import generate_balance_sheet_pdf
 
 router = APIRouter()
 
@@ -319,6 +320,36 @@ async def get_balance_sheet(
         "total_liabilities_and_equity": total_liabilities + total_equity + current_year_result,
         "balanced": abs(total_assets - (total_liabilities + total_equity + current_year_result)) < 0.01,
     }
+
+
+@router.get("/balance-sheet-pdf")
+async def get_balance_sheet_pdf(
+    company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Generate Balance Sheet (Balansrapport) as a downloadable PDF."""
+    await verify_company_access(company_id, current_user, db)
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    fiscal_year = (
+        db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
+    )
+    if not fiscal_year:
+        raise HTTPException(status_code=404, detail="Fiscal year not found")
+
+    pdf_bytes = generate_balance_sheet_pdf(db, company, fiscal_year)
+    filename = f"balansrapport_{company.org_number}_{fiscal_year.label}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/income-statement")
