@@ -73,13 +73,13 @@
 
 ### 1.3 Data & Säkerhet
 - [x] **Backup-funktionalitet** (v1.3.0)
-  - Automatiska backuper (cron-baserat)
-  - Manuell backup/restore via GUI
-  - Export av hela databasen (databas + bilagor i .tar.gz)
-  - Kalenderbaserad backup-väljare
-  - Restore från server eller filuppladdning
-  - CLI-stöd (`backup create`, `backup list`, `backup restore`)
-  - Metadata per backup (version, schema, storlek)
+  - [x] Automatiska backuper (cron-baserat) *(enbart databas, ej bilagor)*
+  - [x] Manuell backup/restore via GUI
+  - [x] Export av hela databasen (databas + bilagor i .tar.gz)
+  - [x] Kalenderbaserad backup-väljare
+  - [x] Restore från server eller filuppladdning
+  - [x] CLI-stöd (`backup create`, `backup list`, `backup restore`)
+  - [x] Metadata per backup (version, schema, storlek)
 
 - [ ] **Audit log** (v1.3.1)
   - Logga alla ändringar
