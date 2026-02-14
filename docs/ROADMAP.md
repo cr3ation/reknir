@@ -1,13 +1,13 @@
 # REKNIR - Utvecklingsplan
 
-## Nuläge (v1.3 - Februari 2026)
+## Nuläge (v1.3.2 - Februari 2026)
 ✅ Komplett bokföringssystem med dubbel bokföring
 ✅ Kundfakturor med PDF och betalningshantering
 ✅ Leverantörsfakturor med bilagor och betalning
 ✅ Personalutlägg med godkännandeflöde och kvittouppladdning
-✅ Verifikationer med automatisk numrering
+✅ Verifikationer med automatisk numrering och sökfiltrering
 ✅ Momsrapportering med XML-export till Skatteverket
-✅ SIE4 import/export
+✅ SIE4 import/export med förhandsvisning och validering
 ✅ BAS-kontoplan (BAS 2024, 45 konton)
 ✅ Kund- och leverantörsregister
 ✅ Konteringsmallar med formelstöd
@@ -19,6 +19,11 @@
 ✅ Balansräkning och resultaträkning
 ✅ Månatlig statistik och rapporter
 ✅ Backup och restore med GUI (kalendervy, uppladdning, server-restore)
+✅ PDF-export av rapporter (Balansrapport, Resultaträkning, Huvudbok — momsrapport saknas)
+✅ Sorterbara kolumner i listor
+✅ Strukturerad betalningsinformation på företag och faktura
+✅ Arkiverade PDF:er för bokföringscompliance
+✅ Hantering av olänkade bilagor
 
 ---
 
@@ -36,7 +41,8 @@
 - [ ] **Förbättrad sökning & filtrering**
   - Globalsök över fakturor, verifikationer, kunder
   - Sparade filter/vyer
-  - Sortering på alla kolumner
+  - [x] Sortering på alla kolumner
+  - [x] Sökfiltrering på verifikationer
   - Datumintervall-väljare
 
 - [ ] **Batch-operationer**
@@ -56,9 +62,10 @@
   - Jämförelse mellan perioder
   - XML-export till Skatteverket
 - [ ] **PDF-export av rapporter**
-  - Momsrapport som PDF
-  - Balansräkning som PDF
-  - Resultaträkning som PDF
+  - [ ] Momsrapport som PDF
+  - [x] Balansräkning som PDF
+  - [x] Resultaträkning som PDF
+  - [x] Huvudbok som PDF
 - [ ] **Excel-export**
   - Verifikationslista
   - Fakturalistor
@@ -294,8 +301,8 @@
 
 ### Q1 2025 - Stabilisering (v1.1)
 1. ~~Dashboard med verkliga siffror~~ ✅
-2. Förbättrad sökning & filtrering
-3. PDF-export av rapporter
+2. Förbättrad sökning & filtrering (delvis ✅ - sortering + verifikationssök)
+3. PDF-export av rapporter (delvis ✅ - Balansrapport, Resultaträkning, Huvudbok; kvar: Momsrapport)
 4. ~~Backup-funktionalitet~~ ✅ (v1.3.0)
 5. Audit log (v1.3.1)
 
@@ -313,13 +320,13 @@
 4. Bankintegration (basic)
 
 ### Q4 2025 - Tillväxt (v2.5)
-1. Multi-user support
-2. Roller och behörigheter
+1. ~~Multi-user support~~ ✅ (implementerat)
+2. ~~Roller och behörigheter~~ ✅ (implementerat)
 3. Projekt & uppdrag
 4. Produktregister
 
 ### 2026 - Expansion
-- Multi-company
+- ~~Multi-company~~ ✅ (implementerat)
 - Lön & personal (basic)
 - Budgetering
 - Årsbokslut
@@ -345,7 +352,7 @@
 - [ ] Årsöversikt på dashboard
 - [ ] Kundreskontra
 - [ ] Leverantörsreskontra
-- [x] Huvudbok per konto
+- [x] Huvudbok per konto (inkl. PDF-export)
 
 ### Export
 - [ ] CSV-export för alla listor
@@ -357,9 +364,9 @@
 ## Teknisk skuld att adressera
 
 1. **Tester**
-   - Enhetstester för services
-   - Integrationstester för API
-   - E2E-tester för kritiska flöden
+   - [x] Enhetstester för services (grundläggande)
+   - [x] Integrationstester för API (grundläggande)
+   - [ ] E2E-tester för kritiska flöden
 
 2. **Dokumentation**
    - API-dokumentation (Swagger/OpenAPI)
@@ -424,6 +431,6 @@
 
 ---
 
-**Senast uppdaterad:** 2026-02-05
-**Version:** 1.3 (under utveckling)
+**Senast uppdaterad:** 2026-02-13
+**Version:** 1.3.2 (under utveckling)
 **Status:** Funktionell MVP - lämplig för testning och utveckling, ej för produktionsdrift ännu
