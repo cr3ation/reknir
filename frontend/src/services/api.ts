@@ -209,9 +209,9 @@ export const reportApi = {
         exclude_vat_settlements: excludeVatSettlements,
       },
     }),
-  vatPeriods: (companyId: number, year: number, fiscalYearId?: number) =>
+  vatPeriods: (companyId: number, year: number) =>
     api.get<VATPeriodsResponse>('/reports/vat-periods', {
-      params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
+      params: { company_id: companyId, year },
     }),
   monthlyStatistics: (companyId: number, fiscalYearId: number, year: number) =>
     api.get<MonthlyStatistics>('/reports/monthly-statistics', {
@@ -219,6 +219,11 @@ export const reportApi = {
     }),
   balanceSheetPdf: (companyId: number, fiscalYearId: number) =>
     api.get('/reports/balance-sheet', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
+      responseType: 'blob',
+    }),
+  incomeStatementPdf: (companyId: number, fiscalYearId: number) =>
+    api.get('/reports/income-statement', {
       params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
       responseType: 'blob',
     }),

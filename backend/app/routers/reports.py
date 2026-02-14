@@ -13,7 +13,7 @@ from app.models.company import Company, VATReportingPeriod
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
-from app.services.report_pdf_service import generate_balance_sheet_pdf
+from app.services.report_pdf_service import generate_balance_sheet_pdf, generate_income_statement_pdf
 
 router = APIRouter()
 
@@ -332,20 +332,38 @@ async def get_balance_sheet(
 async def get_income_statement(
     company_id: int = Query(..., description="Company ID"),
     fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
+    format: str = Query("json", description="Response format: json or pdf"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Generate Income Statement (Resultaträkning)
-    Revenue - Expenses = Profit/Loss
+    Generate Income Statement (Resultaträkning).
+    Returns JSON by default, or PDF when format=pdf.
     """
-    # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
 
-    # Get fiscal year date range
+    if format == "pdf":
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        fiscal_year = (
+            db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
+        )
+        if not fiscal_year:
+            raise HTTPException(status_code=404, detail="Fiscal year not found")
+
+        pdf_bytes = generate_income_statement_pdf(db, company, fiscal_year)
+        filename = f"resultatrapport_{company.org_number}_{fiscal_year.label}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # JSON format (default)
     date_start, date_end = get_fiscal_year_dates(db, company_id, fiscal_year_id)
 
-    # Get all revenue and expense accounts
     accounts = (
         db.query(Account)
         .filter(
@@ -369,10 +387,8 @@ async def get_income_statement(
     expenses = []
 
     for account in accounts:
-        # Calculate balance from transactions within the fiscal year
         balance = calculate_account_balance_from_transactions(db, account.id, company_id, date_start, date_end)
 
-        # Skip accounts with zero balance
         if balance == 0:
             continue
 
@@ -387,9 +403,7 @@ async def get_income_statement(
         else:
             expenses.append(item)
 
-    # Revenue accounts have negative balance (credits), so negate to get positive revenue
     total_revenue = -sum(r["balance"] for r in revenue)
-    # Expense accounts have positive balance (debits)
     total_expenses = sum(e["balance"] for e in expenses)
     profit_loss = total_revenue - total_expenses
 

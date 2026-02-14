@@ -305,10 +305,285 @@ def generate_balance_sheet_pdf(
         "fiscal_year": fiscal_year,
         "company_logo": logo_data,
         "data": data,
-        "period_start": fiscal_year.start_date.strftime("%y-%m-%d"),
-        "period_end": fiscal_year.end_date.strftime("%y-%m-%d"),
-        "generated_date": date.today().strftime("%y-%m-%d"),
+        "period_start": fiscal_year.start_date.strftime("%Y-%m-%d"),
+        "period_end": fiscal_year.end_date.strftime("%Y-%m-%d"),
+        "generated_date": date.today().strftime("%Y-%m-%d"),
         "generated_time": date.today().strftime("%H:%M") if False else "",
     }
 
     return _render_report_pdf("balance_sheet_template.html", context)
+
+
+# ── Income Statement (Resultaträkning) ──────────────────────────────────────
+
+INCOME_GROUPS = {
+    "nettoomsattning": ("Nettoomsättning", 3000, 3799),
+    "ovriga_intakter": ("Övriga rörelseintäkter", 3800, 3999),
+    "ravaror": ("Råvaror och förnödenheter mm", 4000, 4999),
+    "ovriga_externa": ("Övriga externa kostnader", 5000, 6999),
+    "personal": ("Personalkostnader", 7000, 7699),
+    "avskrivningar": ("Av- och nedskrivningar", 7700, 7899),
+    "ovriga_rorelsekostnader": ("Övriga rörelsekostnader", 7900, 7999),
+    "fin_intakter": ("Övriga ränteintäkter och liknande resultatposter", 8000, 8399),
+    "fin_kostnader": ("Räntekostnader och liknande resultatposter", 8400, 8499),
+    "extraordinara": ("Extraordinära poster", 8500, 8699),
+    "bokslutsdispositioner": ("Bokslutsdispositioner", 8700, 8899),
+    "skatt": ("Skatt", 8900, 8989),
+    "arets_resultat_konto": ("Årets resultat", 8990, 8999),
+}
+
+
+def _get_pl_amounts(db: Session, company_id: int, fiscal_year: FiscalYear) -> dict[int, dict]:
+    """Get P&L accounts (3000-8999) with negated amounts for income statement display.
+
+    Negation makes revenue positive and expenses negative, matching Swedish convention.
+    Returns dict keyed by account_number.
+    """
+    accounts = (
+        db.query(Account)
+        .filter(
+            Account.company_id == company_id,
+            Account.fiscal_year_id == fiscal_year.id,
+            Account.active.is_(True),
+        )
+        .order_by(Account.account_number)
+        .all()
+    )
+
+    result = {}
+    for account in accounts:
+        if account.account_number < 3000 or account.account_number > 8999:
+            continue
+        raw = _get_account_period_change(db, account.id, company_id, fiscal_year.start_date, fiscal_year.end_date)
+        amount = -raw  # Negate: revenue positive, expenses negative
+        if amount == 0:
+            continue
+        result[account.account_number] = {
+            "account_number": account.account_number,
+            "name": account.name,
+            "amount": amount,
+        }
+    return result
+
+
+def _extract_group(
+    current: dict[int, dict],
+    prev: dict[int, dict],
+    r_min: int,
+    r_max: int,
+) -> tuple[list[dict], float, float]:
+    """Extract accounts in range from current/prev data.
+
+    Returns (accounts_list, current_total, prev_total).
+    Each account dict includes period, accumulated, and prev_year.
+    """
+    accounts = []
+    for num in sorted(current):
+        if r_min <= num <= r_max:
+            acc = current[num]
+            accounts.append(
+                {
+                    "account_number": acc["account_number"],
+                    "name": acc["name"],
+                    "period": acc["amount"],
+                    "accumulated": acc["amount"],
+                    "prev_year": prev.get(num, {}).get("amount", 0.0),
+                }
+            )
+
+    cur_total = sum(a["period"] for a in accounts)
+    prev_total = sum(a["prev_year"] for a in accounts)
+    return accounts, cur_total, prev_total
+
+
+def build_income_statement_data(
+    db: Session,
+    company_id: int,
+    fiscal_year: FiscalYear,
+) -> dict:
+    """Build structured income statement data with row-based layout for PDF."""
+    current = _get_pl_amounts(db, company_id, fiscal_year)
+
+    # Previous fiscal year for comparison column
+    prev_fy = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == company_id,
+            FiscalYear.end_date < fiscal_year.start_date,
+        )
+        .order_by(FiscalYear.end_date.desc())
+        .first()
+    )
+    prev = _get_pl_amounts(db, company_id, prev_fy) if prev_fy else {}
+
+    # Build group data
+    groups = {}
+    for key, (title, r_min, r_max) in INCOME_GROUPS.items():
+        accs, cur_total, prev_total = _extract_group(current, prev, r_min, r_max)
+        groups[key] = {
+            "title": title,
+            "accounts": accs,
+            "period": cur_total,
+            "accumulated": cur_total,
+            "prev_year": prev_total,
+        }
+
+    # Helper to make amount dict
+    def amt(period, prev_year):
+        return {"period": period, "accumulated": period, "prev_year": prev_year}
+
+    # Build rows
+    rows = []
+
+    def sep():
+        rows.append({"type": "separator"})
+
+    def add_group(g):
+        if not g["accounts"]:
+            return
+        rows.append({"type": "group_header", "title": g["title"]})
+        for acc in g["accounts"]:
+            rows.append({"type": "account", **acc})
+        rows.append({"type": "group_sum", "title": f"S:a {g['title']}", **amt(g["period"], g["prev_year"])})
+        sep()
+
+    # === Rörelsens intäkter mm ===
+    rows.append({"type": "section_header", "title": "Rörelsens intäkter mm"})
+    add_group(groups["nettoomsattning"])
+    add_group(groups["ovriga_intakter"])
+
+    rev = groups["nettoomsattning"]["period"] + groups["ovriga_intakter"]["period"]
+    rev_prev = groups["nettoomsattning"]["prev_year"] + groups["ovriga_intakter"]["prev_year"]
+    rows.append({"type": "section_sum", "title": "S:a Rörelseintäkter mm", **amt(rev, rev_prev)})
+    sep()
+
+    # === Rörelsens kostnader ===
+    rows.append({"type": "section_header", "title": "Rörelsens kostnader"})
+    add_group(groups["ravaror"])
+
+    # Bruttovinst (only if COGS exists)
+    if groups["ravaror"]["accounts"]:
+        bv = rev + groups["ravaror"]["period"]
+        bv_prev = rev_prev + groups["ravaror"]["prev_year"]
+        rows.append({"type": "intermediate", "title": "Bruttovinst", **amt(bv, bv_prev)})
+        sep()
+
+    add_group(groups["ovriga_externa"])
+    add_group(groups["personal"])
+
+    # S:a Rörelsens kostnader (before depreciation, excl övriga rörelsekostnader)
+    costs_pre_depr = groups["ravaror"]["period"] + groups["ovriga_externa"]["period"] + groups["personal"]["period"]
+    costs_pre_depr_prev = (
+        groups["ravaror"]["prev_year"] + groups["ovriga_externa"]["prev_year"] + groups["personal"]["prev_year"]
+    )
+    rows.append(
+        {
+            "type": "section_sum",
+            "title": "S:a Rörelsens kostnader inkl råvaror mm",
+            **amt(costs_pre_depr, costs_pre_depr_prev),
+        }
+    )
+    sep()
+
+    # Rörelseresultat före avskrivningar
+    rr_fore = rev + costs_pre_depr
+    rr_fore_prev = rev_prev + costs_pre_depr_prev
+    rows.append({"type": "intermediate", "title": "Rörelseresultat före avskrivningar", **amt(rr_fore, rr_fore_prev)})
+    sep()
+
+    # Av- och nedskrivningar
+    add_group(groups["avskrivningar"])
+
+    # Övriga rörelsekostnader (7900-7999) — per ÅRL placeras efter avskrivningar
+    add_group(groups["ovriga_rorelsekostnader"])
+
+    # Rörelseresultat
+    rr = rr_fore + groups["avskrivningar"]["period"] + groups["ovriga_rorelsekostnader"]["period"]
+    rr_prev = rr_fore_prev + groups["avskrivningar"]["prev_year"] + groups["ovriga_rorelsekostnader"]["prev_year"]
+    rows.append({"type": "intermediate", "title": "Rörelseresultat", **amt(rr, rr_prev)})
+    sep()
+
+    # === Resultat från finansiella investeringar ===
+    if groups["fin_intakter"]["accounts"] or groups["fin_kostnader"]["accounts"]:
+        rows.append({"type": "section_header", "title": "Resultat från finansiella investeringar"})
+        add_group(groups["fin_intakter"])
+        add_group(groups["fin_kostnader"])
+        fin = groups["fin_intakter"]["period"] + groups["fin_kostnader"]["period"]
+        fin_prev = groups["fin_intakter"]["prev_year"] + groups["fin_kostnader"]["prev_year"]
+        rows.append(
+            {"type": "section_sum", "title": "S:a Resultat från finansiella investeringar", **amt(fin, fin_prev)}
+        )
+        sep()
+    else:
+        fin, fin_prev = 0.0, 0.0
+
+    # Resultat efter finansiella poster
+    res_efter_fin = rr + fin
+    res_efter_fin_prev = rr_prev + fin_prev
+    rows.append(
+        {
+            "type": "intermediate",
+            "title": "Resultat efter finansiella poster",
+            **amt(res_efter_fin, res_efter_fin_prev),
+        }
+    )
+    sep()
+
+    # Extraordinära poster / Bokslutsdispositioner
+    bokslut = groups["bokslutsdispositioner"]["period"] + groups["extraordinara"]["period"]
+    bokslut_prev = groups["bokslutsdispositioner"]["prev_year"] + groups["extraordinara"]["prev_year"]
+    if groups["extraordinara"]["accounts"]:
+        add_group(groups["extraordinara"])
+    if groups["bokslutsdispositioner"]["accounts"]:
+        add_group(groups["bokslutsdispositioner"])
+
+    # Resultat före skatt
+    res_fore_skatt = res_efter_fin + bokslut
+    res_fore_skatt_prev = res_efter_fin_prev + bokslut_prev
+
+    rows.append({"type": "intermediate", "title": "Resultat före skatt", **amt(res_fore_skatt, res_fore_skatt_prev)})
+    sep()
+
+    # Skatt
+    if groups["skatt"]["accounts"]:
+        rows.append({"type": "section_header", "title": "Skatt"})
+        for acc in groups["skatt"]["accounts"]:
+            rows.append({"type": "account", **acc})
+        rows.append(
+            {"type": "group_sum", "title": "S:a Skatt", **amt(groups["skatt"]["period"], groups["skatt"]["prev_year"])}
+        )
+        sep()
+
+    # Beräknat resultat
+    beraknat = res_fore_skatt + groups["skatt"]["period"]
+    beraknat_prev = res_fore_skatt_prev + groups["skatt"]["prev_year"]
+    rows.append({"type": "final_result", "title": "Beräknat resultat", **amt(beraknat, beraknat_prev)})
+    sep()
+
+    # 8999 Årets resultat
+    for acc in groups["arets_resultat_konto"]["accounts"]:
+        rows.append({"type": "account", **acc})
+
+    return {"rows": rows, "has_prev_year": prev_fy is not None}
+
+
+def generate_income_statement_pdf(
+    db: Session,
+    company: Company,
+    fiscal_year: FiscalYear,
+) -> bytes:
+    """Generate Income Statement (Resultaträkning) PDF."""
+    data = build_income_statement_data(db, company.id, fiscal_year)
+    logo_data = _load_company_logo(company)
+
+    context = {
+        "company": company,
+        "fiscal_year": fiscal_year,
+        "company_logo": logo_data,
+        "data": data,
+        "period_start": fiscal_year.start_date.strftime("%Y-%m-%d"),
+        "period_end": fiscal_year.end_date.strftime("%Y-%m-%d"),
+        "generated_date": date.today().strftime("%Y-%m-%d"),
+    }
+
+    return _render_report_pdf("income_statement_template.html", context)
