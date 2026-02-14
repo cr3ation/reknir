@@ -227,6 +227,11 @@ export const reportApi = {
       params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
       responseType: 'blob',
     }),
+  generalLedgerPdf: (companyId: number, fiscalYearId: number) =>
+    api.get('/reports/general-ledger', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
+      responseType: 'blob',
+    }),
 }
 
 // Customers

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Huvudbok - {{ company.name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm 1.5cm 2cm 1.5cm;
+            @top-right {
+                content: "";
+            }
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 7pt;
+            line-height: 1.4;
+            color: #222;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* === LEDGER TABLE === */
+        table.ledger-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table.ledger-table thead {
+            display: table-header-group;
+        }
+
+        /* --- Page header inside thead --- */
+        .page-header-cell {
+            padding: 0 0 6px 0;
+            border: none;
+        }
+
+        .header-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0;
+        }
+
+        .header-left {
+            flex: 1;
+        }
+
+        .company-name {
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .header-center {
+            text-align: center;
+            flex: 1;
+        }
+
+        .report-title {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #0066cc;
+        }
+
+        .report-subtitle {
+            font-size: 8pt;
+            color: #444;
+            margin-top: 2px;
+        }
+
+        .header-right {
+            flex: 1;
+            font-size: 7pt;
+            color: #444;
+        }
+
+        .header-right table {
+            margin-left: auto;
+        }
+
+        .header-right td:first-child {
+            padding-right: 12px;
+        }
+
+        .header-right td:last-child {
+            text-align: right;
+        }
+
+        .page-current::after {
+            content: counter(page);
+        }
+
+        .page-total::after {
+            content: counter(pages);
+        }
+
+        .company-org {
+            font-size: 7pt;
+            color: #444;
+            margin-top: 1px;
+        }
+
+        .report-info {
+            font-size: 7pt;
+            color: #444;
+            margin: 2px 0 6px 0;
+            line-height: 1.5;
+        }
+
+        /* Column headers */
+        table.ledger-table th {
+            font-size: 6.5pt;
+            font-weight: bold;
+            padding: 3px 4px 4px 0;
+            color: #0066cc;
+            border-bottom: 2px solid #0066cc;
+            vertical-align: bottom;
+            text-align: left;
+        }
+
+        table.ledger-table th.col-amount {
+            text-align: right;
+            padding-right: 0;
+        }
+
+        /* Column widths */
+        col.col-konto { width: 5%; }
+        col.col-vernr { width: 6%; }
+        col.col-datum { width: 7%; }
+        col.col-text { width: 39%; }
+        col.col-debet { width: 13%; }
+        col.col-kredit { width: 13%; }
+        col.col-saldo { width: 17%; }
+
+        /* --- Account header row --- */
+        tr.account-header td {
+            font-weight: bold;
+            font-size: 7.5pt;
+            padding: 10px 0 2px 0;
+            border: none;
+        }
+
+        tr.account-header td:first-child {
+            color: #0066cc;
+        }
+
+        /* --- IB rows (Ingående balans / saldo) --- */
+        tr.ib-row td {
+            padding: 1px 0;
+            border: none;
+            font-size: 7pt;
+            color: #444;
+        }
+
+        tr.ib-spacer td {
+            padding: 4px 0;
+            border: none;
+        }
+
+        /* --- Omslutning --- */
+        tr.omslutning-row td {
+            padding: 2px 0 1px 0;
+            border-top: 1px solid #999;
+            font-size: 7pt;
+        }
+
+        /* --- Utgående saldo --- */
+        tr.ub-row td {
+            padding: 2px 0 4px 0;
+            border-bottom: 1px solid #4a90c4;
+            font-size: 7pt;
+        }
+
+        /* --- Transaction rows --- */
+        tr.tx-row td {
+            padding: 1px 0;
+            border: none;
+            font-size: 7pt;
+        }
+
+        td.vernr {
+            font-family: 'Courier New', monospace;
+            font-size: 6.5pt;
+            color: #666;
+        }
+
+        td.tx-date {
+            font-family: 'Courier New', monospace;
+            font-size: 6.5pt;
+        }
+
+        td.tx-text {
+            font-size: 7pt;
+        }
+
+        /* Transinfo row (invoice/supplier reference) */
+        tr.transinfo-row td {
+            padding: 0 0 1px 0;
+            border: none;
+            font-size: 6pt;
+            color: #666;
+        }
+
+        td.amount {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-size: 7pt;
+            white-space: nowrap;
+        }
+
+        /* --- Huvudboksomslutning --- */
+        tr.grand-total-row td {
+            padding: 6px 0 3px 0;
+            border-top: 2px solid #0066cc;
+            border-bottom: 2px solid #0066cc;
+            font-weight: bold;
+            font-size: 7.5pt;
+            color: #0066cc;
+        }
+
+        /* === FOOTER === */
+        .footer {
+            margin-top: 16px;
+            padding-top: 6px;
+            border-top: 1px solid #ddd;
+            font-size: 6.5pt;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <table class="ledger-table">
+        <colgroup>
+            <col class="col-konto">
+            <col class="col-vernr">
+            <col class="col-datum">
+            <col class="col-text">
+            <col class="col-debet">
+            <col class="col-kredit">
+            <col class="col-saldo">
+        </colgroup>
+        <thead>
+            <!-- Full page header (repeats on every page) -->
+            <tr>
+                <td class="page-header-cell" colspan="7">
+                    <div class="header-grid">
+                        <div class="header-left">
+                            <div class="company-name">{{ company.name }}</div>
+                            <div class="company-org">{{ company.org_number }}</div>
+                        </div>
+                        <div class="header-center">
+                            <div class="report-title">Huvudbok</div>
+                            <div class="report-subtitle">Preliminär</div>
+                        </div>
+                        <div class="header-right">
+                            <table>
+                                <tr><td>Sida:</td><td><span class="page-current"></span>(<span class="page-total"></span>)</td></tr>
+                                <tr><td>Utskrivet:</td><td>{{ generated_date }}</td></tr>
+                                <tr><td>Senaste vernr:</td><td>{{ data.max_vernr }}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="report-info">
+                        Räkenskapsår: {{ period_start }} – {{ period_end }}<br>
+                        Hela företaget<br>
+                        Konto: {{ data.min_account }} - {{ data.max_account }}<br>
+                        Period: {{ period_start }} – {{ period_end }}
+                    </div>
+                </td>
+            </tr>
+            <!-- Column headers -->
+            <tr>
+                <th>Konto</th>
+                <th>Vernr</th>
+                <th><br>Datum</th>
+                <th>Transaktionsinfo</th>
+                <th class="col-amount">Debet</th>
+                <th class="col-amount">Kredit</th>
+                <th class="col-amount">Saldo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in data.accounts %}
+            <!-- Account header -->
+            <tr class="account-header">
+                <td>{{ account.account_number }}</td>
+                <td colspan="6">{{ account.name }}</td>
+            </tr>
+
+            <!-- Ingående balans (only for balance sheet accounts with stored IB) -->
+            {% if account.opening_balance != 0 %}
+            <tr class="ib-row">
+                <td></td>
+                <td></td>
+                <td colspan="2">Ingående balans:</td>
+                <td></td>
+                <td></td>
+                <td class="amount">{{ account.opening_balance|format_sek }}</td>
+            </tr>
+            {% endif %}
+
+            <!-- Ingående saldo -->
+            <tr class="ib-row">
+                <td></td>
+                <td></td>
+                <td colspan="2">Ingående saldo:</td>
+                <td></td>
+                <td></td>
+                <td class="amount">{{ account.opening_balance|format_sek }}</td>
+            </tr>
+
+            <!-- Spacer between IB and transactions -->
+            <tr class="ib-spacer"><td colspan="7"></td></tr>
+
+            {% for tx in account.transactions %}
+            <!-- Transaction row -->
+            <tr class="tx-row">
+                <td></td>
+                <td class="vernr">{{ tx.vernr }}</td>
+                <td class="tx-date">{{ tx.date }}</td>
+                <td class="tx-text">{{ tx.text }}</td>
+                <td class="amount">{% if tx.debit %}{{ tx.debit|format_sek }}{% endif %}</td>
+                <td class="amount">{% if tx.credit %}{{ tx.credit|format_sek }}{% endif %}</td>
+                <td class="amount">{{ tx.balance|format_sek }}</td>
+            </tr>
+            {% if tx.transinfo %}
+            <tr class="transinfo-row">
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>{{ tx.transinfo }}</td>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+
+            <!-- Omslutning -->
+            <tr class="omslutning-row">
+                <td></td>
+                <td></td>
+                <td colspan="2">Omslutning:</td>
+                <td class="amount">{% if account.total_debit %}{{ account.total_debit|format_sek }}{% endif %}</td>
+                <td class="amount">{% if account.total_credit %}{{ account.total_credit|format_sek }}{% endif %}</td>
+                <td></td>
+            </tr>
+
+            <!-- Utgående saldo -->
+            <tr class="ub-row">
+                <td></td>
+                <td></td>
+                <td colspan="2">Utgående saldo:</td>
+                <td></td>
+                <td></td>
+                <td class="amount">{{ account.closing_balance|format_sek }}</td>
+            </tr>
+            {% endfor %}
+
+            <!-- Huvudboksomslutning -->
+            <tr class="grand-total-row">
+                <td></td>
+                <td></td>
+                <td colspan="2">Huvudboksomslutning:</td>
+                <td class="amount">{{ data.grand_total_debit|format_sek }}</td>
+                <td class="amount">{{ data.grand_total_credit|format_sek }}</td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Footer -->
+    <div class="footer">
+        {{ company.name }} | Org.nr: {{ company.org_number }}
+        {% if company.is_vat_registered %} | Momsreg: {{ company.vat_number }}{% endif %}
+    </div>
+</body>
+</html>

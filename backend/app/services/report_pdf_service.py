@@ -11,7 +11,9 @@ from weasyprint import HTML
 
 from app.models.account import Account, AccountType
 from app.models.company import Company
+from app.models.customer import Customer, Supplier
 from app.models.fiscal_year import FiscalYear
+from app.models.invoice import Invoice, SupplierInvoice
 from app.models.verification import TransactionLine, Verification
 from app.services.pdf_service import format_sek
 
@@ -587,3 +589,221 @@ def generate_income_statement_pdf(
     }
 
     return _render_report_pdf("income_statement_template.html", context)
+
+
+# ── General Ledger (Huvudbok) ────────────────────────────────────────────────
+
+
+def _build_verification_invoice_map(db: Session, verification_ids: list[int]) -> dict[int, str]:
+    """Build a map of verification_id -> transinfo string for invoice references."""
+    if not verification_ids:
+        return {}
+
+    result = {}
+
+    # Customer invoices (Kundfakturor)
+    invoices = (
+        db.query(Invoice, Customer)
+        .join(Customer, Invoice.customer_id == Customer.id)
+        .filter(Invoice.invoice_verification_id.in_(verification_ids))
+        .all()
+    )
+    for inv, cust in invoices:
+        result[inv.invoice_verification_id] = f"Faktnr: {inv.invoice_number}, Namn: {cust.name}"
+
+    # Customer invoice payments
+    payment_invoices = (
+        db.query(Invoice, Customer)
+        .join(Customer, Invoice.customer_id == Customer.id)
+        .filter(Invoice.payment_verification_id.in_(verification_ids))
+        .all()
+    )
+    for inv, cust in payment_invoices:
+        if inv.payment_verification_id not in result:
+            result[inv.payment_verification_id] = f"Faktnr: {inv.invoice_number}, Namn: {cust.name}"
+
+    # Supplier invoices (Leverantörsfakturor)
+    supplier_invoices = (
+        db.query(SupplierInvoice, Supplier)
+        .join(Supplier, SupplierInvoice.supplier_id == Supplier.id)
+        .filter(SupplierInvoice.invoice_verification_id.in_(verification_ids))
+        .all()
+    )
+    for sinv, supp in supplier_invoices:
+        result[sinv.invoice_verification_id] = (
+            f"LevFktnr: {sinv.our_invoice_number or sinv.supplier_invoice_number}, Namn: {supp.name}"
+        )
+
+    # Supplier invoice payments
+    supplier_payments = (
+        db.query(SupplierInvoice, Supplier)
+        .join(Supplier, SupplierInvoice.supplier_id == Supplier.id)
+        .filter(SupplierInvoice.payment_verification_id.in_(verification_ids))
+        .all()
+    )
+    for sinv, supp in supplier_payments:
+        if sinv.payment_verification_id not in result:
+            result[sinv.payment_verification_id] = (
+                f"LevFktnr: {sinv.our_invoice_number or sinv.supplier_invoice_number}, Namn: {supp.name}"
+            )
+
+    return result
+
+
+def build_general_ledger_data(
+    db: Session,
+    company_id: int,
+    fiscal_year: FiscalYear,
+) -> dict:
+    """Build detailed general ledger data with per-account transactions."""
+    date_start = fiscal_year.start_date
+    date_end = fiscal_year.end_date
+
+    # Get all active accounts for this fiscal year
+    accounts = (
+        db.query(Account)
+        .filter(
+            Account.company_id == company_id,
+            Account.fiscal_year_id == fiscal_year.id,
+            Account.active.is_(True),
+        )
+        .order_by(Account.account_number)
+        .all()
+    )
+
+    # Collect all verification IDs across all accounts for batch invoice lookup
+    all_verification_ids = set()
+    account_transactions_raw = {}
+
+    for account in accounts:
+        transactions = (
+            db.query(TransactionLine, Verification)
+            .join(Verification, TransactionLine.verification_id == Verification.id)
+            .filter(
+                TransactionLine.account_id == account.id,
+                Verification.company_id == company_id,
+                Verification.transaction_date >= date_start,
+                Verification.transaction_date <= date_end,
+            )
+            .order_by(Verification.transaction_date, Verification.verification_number)
+            .all()
+        )
+
+        # Calculate opening balance
+        is_balance_account = account.account_number < 3000
+        if is_balance_account:
+            opening_balance = float(account.opening_balance or Decimal(0))
+        else:
+            opening_balance = 0.0
+
+        # Skip accounts with no transactions and no opening balance
+        if not transactions and opening_balance == 0:
+            continue
+
+        for _tl, ver in transactions:
+            all_verification_ids.add(ver.id)
+
+        account_transactions_raw[account.id] = {
+            "account": account,
+            "opening_balance": opening_balance,
+            "transactions": transactions,
+        }
+
+    # Batch lookup invoice references
+    invoice_map = _build_verification_invoice_map(db, list(all_verification_ids))
+
+    # Build structured data
+    account_data = []
+    min_account = None
+    max_account = None
+    max_vernr = None
+
+    for _account_id, raw in account_transactions_raw.items():
+        account = raw["account"]
+        opening_balance = raw["opening_balance"]
+        transactions = raw["transactions"]
+
+        if min_account is None or account.account_number < min_account:
+            min_account = account.account_number
+        if max_account is None or account.account_number > max_account:
+            max_account = account.account_number
+
+        # Build transaction rows with running balance
+        running_balance = opening_balance
+        total_debit = 0.0
+        total_credit = 0.0
+        tx_rows = []
+
+        for tl, ver in transactions:
+            debit = float(tl.debit or Decimal(0))
+            credit = float(tl.credit or Decimal(0))
+            running_balance += debit - credit
+            total_debit += debit
+            total_credit += credit
+
+            vernr = f"{ver.series}{ver.verification_number}"
+            if max_vernr is None:
+                max_vernr = vernr
+            else:
+                max_vernr = vernr  # Last one processed is highest
+
+            tx_rows.append(
+                {
+                    "vernr": vernr,
+                    "date": ver.transaction_date.strftime("%y-%m-%d"),
+                    "text": ver.description or "",
+                    "transinfo": invoice_map.get(ver.id),
+                    "debit": debit,
+                    "credit": credit,
+                    "balance": running_balance,
+                }
+            )
+
+        closing_balance = opening_balance + total_debit - total_credit
+
+        account_data.append(
+            {
+                "account_number": account.account_number,
+                "name": account.name,
+                "opening_balance": opening_balance,
+                "transactions": tx_rows,
+                "total_debit": total_debit,
+                "total_credit": total_credit,
+                "closing_balance": closing_balance,
+            }
+        )
+
+    grand_total_debit = sum(a["total_debit"] for a in account_data)
+    grand_total_credit = sum(a["total_credit"] for a in account_data)
+
+    return {
+        "accounts": account_data,
+        "account_count": len(account_data),
+        "min_account": min_account or 1010,
+        "max_account": max_account or 8999,
+        "max_vernr": max_vernr or "",
+        "grand_total_debit": grand_total_debit,
+        "grand_total_credit": grand_total_credit,
+    }
+
+
+def generate_general_ledger_pdf(
+    db: Session,
+    company: Company,
+    fiscal_year: FiscalYear,
+) -> bytes:
+    """Generate General Ledger (Huvudbok) PDF."""
+    data = build_general_ledger_data(db, company.id, fiscal_year)
+    logo_data = _load_company_logo(company)
+
+    context = {
+        "company": company,
+        "fiscal_year": fiscal_year,
+        "company_logo": logo_data,
+        "data": data,
+        "period_start": fiscal_year.start_date.strftime("%Y-%m-%d"),
+        "period_end": fiscal_year.end_date.strftime("%Y-%m-%d"),
+        "generated_date": date.today().strftime("%Y-%m-%d"),
+    }
+
+    return _render_report_pdf("general_ledger_template.html", context)

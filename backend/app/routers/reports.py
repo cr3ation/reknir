@@ -13,7 +13,11 @@ from app.models.company import Company, VATReportingPeriod
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
-from app.services.report_pdf_service import generate_balance_sheet_pdf, generate_income_statement_pdf
+from app.services.report_pdf_service import (
+    generate_balance_sheet_pdf,
+    generate_general_ledger_pdf,
+    generate_income_statement_pdf,
+)
 
 router = APIRouter()
 
@@ -63,15 +67,37 @@ async def get_general_ledger(
     start_date: str | None = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: str | None = Query(None, description="End date (YYYY-MM-DD)"),
     account_numbers: str | None = Query(None, description="Comma-separated account numbers to filter"),
+    format: str = Query("json", description="Response format: json or pdf"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Generate General Ledger (Huvudbok) - summary per account with opening/closing balances
-    Shows each account with IB (opening balance), transactions, and UB (closing balance)
+    Generate General Ledger (Huvudbok).
+    Returns JSON summary by default, or detailed PDF when format=pdf.
     """
-    # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
+
+    if format == "pdf":
+        if not fiscal_year_id:
+            raise HTTPException(status_code=400, detail="fiscal_year_id is required for PDF export")
+
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        fiscal_year = (
+            db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id, FiscalYear.company_id == company_id).first()
+        )
+        if not fiscal_year:
+            raise HTTPException(status_code=404, detail="Fiscal year not found")
+
+        pdf_bytes = generate_general_ledger_pdf(db, company, fiscal_year)
+        filename = f"huvudbok_{company.org_number}_{fiscal_year.label}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     # Determine date range
     if fiscal_year_id:
