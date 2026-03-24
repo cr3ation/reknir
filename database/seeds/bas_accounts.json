@@ -48,6 +48,12 @@
     "description": "Eget kapital - aktier"
   },
   {
+    "account_number": 2018,
+    "name": "Övriga egna insättningar",
+    "account_type": "equity_liability",
+    "description": "Tillskott av eget kapital från ägare"
+  },
+  {
     "account_number": 2091,
     "name": "Balanserad vinst eller förlust",
     "account_type": "equity_liability",
