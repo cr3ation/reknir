@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # Reknir Reset Script
-# Three reset options:
+# Four reset options:
 #   1) Quick reset (default)
 #   2) Full factory reset
 #   3) Quick reset with pre-populated demo data
+#   4) Quick reset with empty demo company (for SIE4 import testing)
 
 set -e
 
@@ -228,7 +229,10 @@ seed_demo_data() {
         "fiscal_year_start": "2025-01-01",
         "fiscal_year_end": "2025-12-31",
         "accounting_basis": "cash",
-        "vat_reporting_period": "yearly"
+        "vat_reporting_period": "yearly",
+        "payment_type": "bank_account",
+        "clearing_number": "1234",
+        "account_number": "567 890 123-4"
     }')
     COMPANY_ID=$(echo "$company_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     echo "   Created company: Demo Företag AB (ID: ${COMPANY_ID})"
@@ -539,7 +543,7 @@ seed_demo_data() {
     echo "Creating supplier invoices..."
 
     # Supplier Invoice 1 - Draft (not registered)
-    sinv1=$(api_post "/api/supplier-invoices" "{
+    sinv1=$(api_post "/api/supplier-invoices/" "{
         \"company_id\": ${COMPANY_ID},
         \"supplier_id\": ${SUPPLIER1_ID},
         \"supplier_invoice_number\": \"KM-2025-001\",
@@ -565,7 +569,7 @@ seed_demo_data() {
     echo "   Created supplier invoice 1 (11 500 SEK) - Draft"
 
     # Supplier Invoice 2 - Registered, unpaid
-    sinv2=$(api_post "/api/supplier-invoices" "{
+    sinv2=$(api_post "/api/supplier-invoices/" "{
         \"company_id\": ${COMPANY_ID},
         \"supplier_id\": ${SUPPLIER2_ID},
         \"supplier_invoice_number\": \"IT-2025-042\",
@@ -592,7 +596,7 @@ seed_demo_data() {
     echo "   Created supplier invoice 2 (14 500 SEK) - Registered, unpaid"
 
     # Supplier Invoice 3 - Registered, partially paid
-    sinv3=$(api_post "/api/supplier-invoices" "{
+    sinv3=$(api_post "/api/supplier-invoices/" "{
         \"company_id\": ${COMPANY_ID},
         \"supplier_id\": ${SUPPLIER3_ID},
         \"supplier_invoice_number\": \"FS-2025-118\",
@@ -620,7 +624,7 @@ seed_demo_data() {
     echo "   Created supplier invoice 3 (28 750 SEK) - Partially paid (15 000 SEK)"
 
     # Supplier Invoice 4 - Registered, fully paid
-    sinv4=$(api_post "/api/supplier-invoices" "{
+    sinv4=$(api_post "/api/supplier-invoices/" "{
         \"company_id\": ${COMPANY_ID},
         \"supplier_id\": ${SUPPLIER1_ID},
         \"supplier_invoice_number\": \"KM-2025-002\",
@@ -642,7 +646,7 @@ seed_demo_data() {
     echo "   Created supplier invoice 4 (5 625 SEK) - Fully paid"
 
     # Supplier Invoice 5 - Registered, unpaid, overdue
-    sinv5=$(api_post "/api/supplier-invoices" "{
+    sinv5=$(api_post "/api/supplier-invoices/" "{
         \"company_id\": ${COMPANY_ID},
         \"supplier_id\": ${SUPPLIER2_ID},
         \"supplier_invoice_number\": \"IT-2025-015\",
@@ -669,7 +673,7 @@ seed_demo_data() {
     echo "   Created supplier invoice 5 (6 250 SEK) - Registered, unpaid (overdue)"
 
     # Supplier Invoice 6 - Cancelled
-    sinv6=$(api_post "/api/supplier-invoices" "{
+    sinv6=$(api_post "/api/supplier-invoices/" "{
         \"company_id\": ${COMPANY_ID},
         \"supplier_id\": ${SUPPLIER3_ID},
         \"supplier_invoice_number\": \"FS-2025-099\",
@@ -758,14 +762,183 @@ seed_demo_data() {
     api_post "/api/fiscal-years/${FISCAL_YEAR_2026_ID}/copy-chart-of-accounts?source_fiscal_year_id=${FISCAL_YEAR_2025_ID}" "{}" > /dev/null
     echo "   Chart of accounts copied"
 
-    # Step 15: Create 3 manual verifications for 2026
+    # Step 15: Create customer invoices for 2026
+    echo "Creating customer invoices for 2026..."
+
+    invoice2026_1=$(api_post "/api/invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"customer_id\": ${CUSTOMER1_ID},
+        \"invoice_series\": \"F\",
+        \"invoice_date\": \"2026-01-10\",
+        \"due_date\": \"2026-02-10\",
+        \"reference\": \"Konsulttjänster januari\",
+        \"invoice_lines\": [
+            {
+                \"description\": \"Projektledning\",
+                \"quantity\": 40,
+                \"unit\": \"h\",
+                \"unit_price\": 1200,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    INVOICE2026_1_ID=$(echo "$invoice2026_1" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created invoice 2026-1 (60 000 SEK)"
+
+    invoice2026_2=$(api_post "/api/invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"customer_id\": ${CUSTOMER2_ID},
+        \"invoice_series\": \"F\",
+        \"invoice_date\": \"2026-01-20\",
+        \"due_date\": \"2026-02-20\",
+        \"reference\": \"Revision Q4 2025\",
+        \"invoice_lines\": [
+            {
+                \"description\": \"Bokslutsgranskning\",
+                \"quantity\": 16,
+                \"unit\": \"h\",
+                \"unit_price\": 1500,
+                \"vat_rate\": 25
+            },
+            {
+                \"description\": \"Årsredovisning\",
+                \"quantity\": 8,
+                \"unit\": \"h\",
+                \"unit_price\": 1500,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    INVOICE2026_2_ID=$(echo "$invoice2026_2" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created invoice 2026-2 (45 000 SEK)"
+
+    invoice2026_3=$(api_post "/api/invoices" "{
+        \"company_id\": ${COMPANY_ID},
+        \"customer_id\": ${CUSTOMER3_ID},
+        \"invoice_series\": \"F\",
+        \"invoice_date\": \"2026-02-01\",
+        \"due_date\": \"2026-03-01\",
+        \"reference\": \"Support februari\",
+        \"invoice_lines\": [
+            {
+                \"description\": \"IT-support månadspris\",
+                \"quantity\": 1,
+                \"unit\": \"st\",
+                \"unit_price\": 8500,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    INVOICE2026_3_ID=$(echo "$invoice2026_3" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created invoice 2026-3 (10 625 SEK)"
+
+    # Send 2026 invoices
+    echo "Sending 2026 invoices..."
+    api_post "/api/invoices/${INVOICE2026_1_ID}/send" "{}" > /dev/null
+    api_post "/api/invoices/${INVOICE2026_2_ID}/send" "{}" > /dev/null
+    api_post "/api/invoices/${INVOICE2026_3_ID}/send" "{}" > /dev/null
+    echo "   All 2026 invoices sent"
+
+    # Mark first 2026 invoice as paid
+    echo "Registering payment for 2026 invoice..."
+    api_post "/api/invoices/${INVOICE2026_1_ID}/mark-paid" "{\"paid_date\": \"2026-02-05\", \"paid_amount\": 60000}" > /dev/null
+    echo "   Invoice 2026-1 paid"
+
+    # Step 16: Create supplier invoices for 2026
+    echo "Creating supplier invoices for 2026..."
+
+    sinv2026_1=$(api_post "/api/supplier-invoices/" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER1_ID},
+        \"supplier_invoice_number\": \"KM-2026-001\",
+        \"invoice_date\": \"2026-01-15\",
+        \"due_date\": \"2026-02-15\",
+        \"reference\": \"Kontorsartiklar januari\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Skrivarpapper A4\",
+                \"quantity\": 10,
+                \"unit_price\": 350,
+                \"vat_rate\": 25
+            },
+            {
+                \"description\": \"Kontorsstolar\",
+                \"quantity\": 2,
+                \"unit_price\": 2500,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV2026_1_ID=$(echo "$sinv2026_1" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created supplier invoice 2026-1 (10 625 SEK)"
+
+    sinv2026_2=$(api_post "/api/supplier-invoices/" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER2_ID},
+        \"supplier_invoice_number\": \"IT-2026-008\",
+        \"invoice_date\": \"2026-01-31\",
+        \"due_date\": \"2026-02-28\",
+        \"reference\": \"Molntjänster januari\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Azure hosting\",
+                \"quantity\": 1,
+                \"unit_price\": 4500,
+                \"vat_rate\": 25
+            },
+            {
+                \"description\": \"Microsoft 365\",
+                \"quantity\": 5,
+                \"unit_price\": 150,
+                \"vat_rate\": 25
+            }
+        ]
+    }")
+    SINV2026_2_ID=$(echo "$sinv2026_2" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created supplier invoice 2026-2 (6 562 SEK)"
+
+    sinv2026_3=$(api_post "/api/supplier-invoices/" "{
+        \"company_id\": ${COMPANY_ID},
+        \"supplier_id\": ${SUPPLIER3_ID},
+        \"supplier_invoice_number\": \"FS-2026-015\",
+        \"invoice_date\": \"2026-02-01\",
+        \"due_date\": \"2026-03-01\",
+        \"reference\": \"Hyra februari 2026\",
+        \"supplier_invoice_lines\": [
+            {
+                \"description\": \"Lokalhyra\",
+                \"quantity\": 1,
+                \"unit_price\": 15000,
+                \"vat_rate\": 0
+            }
+        ]
+    }")
+    SINV2026_3_ID=$(echo "$sinv2026_3" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created supplier invoice 2026-3 (15 000 SEK) - Rent"
+
+    # Register and pay first supplier invoice
+    api_post "/api/supplier-invoices/${SINV2026_1_ID}/register" "{}" > /dev/null
+    api_post "/api/supplier-invoices/${SINV2026_1_ID}/mark-paid" "{\"paid_date\": \"2026-02-10\", \"paid_amount\": 10625}" > /dev/null
+    echo "   Supplier invoice 2026-1 registered and paid"
+
+    # Register second (unpaid)
+    api_post "/api/supplier-invoices/${SINV2026_2_ID}/register" "{}" > /dev/null
+    echo "   Supplier invoice 2026-2 registered (unpaid)"
+
+    # Step 17: Create manual verifications for 2026
     echo "Creating manual verifications for 2026..."
 
     # Get account IDs for 2026
-    ACC_5010_2026=$(get_account_id 5010 $FISCAL_YEAR_2026_ID)
+    ACC_5010_2026=$(get_account_id 5010 $FISCAL_YEAR_2026_ID)  # Lokalhyra
     ACC_6570_2026=$(get_account_id 6570 $FISCAL_YEAR_2026_ID)  # Bankkostnader
     ACC_6540_2026=$(get_account_id 6540 $FISCAL_YEAR_2026_ID)  # IT-tjänster
-    ACC_1930_2026=$(get_account_id 1930 $FISCAL_YEAR_2026_ID)
+    ACC_6110_2026=$(get_account_id 6110 $FISCAL_YEAR_2026_ID)  # Kontorsmaterial
+    ACC_6211_2026=$(get_account_id 6211 $FISCAL_YEAR_2026_ID)  # Telefon
+    ACC_6230_2026=$(get_account_id 6230 $FISCAL_YEAR_2026_ID)  # Mobiltelefon
+    ACC_5410_2026=$(get_account_id 5410 $FISCAL_YEAR_2026_ID)  # Förbrukningsinventarier
+    ACC_7210_2026=$(get_account_id 7210 $FISCAL_YEAR_2026_ID)  # Löner
+    ACC_7510_2026=$(get_account_id 7510 $FISCAL_YEAR_2026_ID)  # Arbetsgivaravgifter
+    ACC_1930_2026=$(get_account_id 1930 $FISCAL_YEAR_2026_ID)  # Bank
 
     # Verification 1: January rent 2026
     api_post "/api/verifications" "{
@@ -781,7 +954,7 @@ seed_demo_data() {
     }" > /dev/null
     echo "   Created: Hyra januari 2026 (15 000 SEK)"
 
-    # Verification 2: Bank fees 2026
+    # Verification 2: Bank fees January
     api_post "/api/verifications" "{
         \"company_id\": ${COMPANY_ID},
         \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
@@ -793,21 +966,207 @@ seed_demo_data() {
             {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 250, \"description\": \"Betalning via bank\"}
         ]
     }" > /dev/null
-    echo "   Created: Bankavgifter (250 SEK)"
+    echo "   Created: Bankavgifter januari (250 SEK)"
 
-    # Verification 3: IT services 2026
+    # Verification 3: Salary January
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-01-25\",
+        \"description\": \"Lön januari 2026\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_7210_2026}, \"debit\": 35000, \"credit\": 0, \"description\": \"Bruttolön\"},
+            {\"account_id\": ${ACC_7510_2026}, \"debit\": 10990, \"credit\": 0, \"description\": \"Arbetsgivaravgifter 31.42%\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 45990, \"description\": \"Utbetalning\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Lön januari (45 990 SEK)"
+
+    # Verification 4: Office supplies
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-01-20\",
+        \"description\": \"Kontorsmaterial Staples\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_6110_2026}, \"debit\": 1850, \"credit\": 0, \"description\": \"Papper, pennor, pärmar\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 1850, \"description\": \"Kortbetalning\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Kontorsmaterial (1 850 SEK)"
+
+    # Verification 5: Phone bill
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-01-28\",
+        \"description\": \"Telefonräkning januari\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_6211_2026}, \"debit\": 899, \"credit\": 0, \"description\": \"Mobilabonnemang\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 899, \"description\": \"Autogiro\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Telefonräkning (899 SEK)"
+
+    # Verification 6: Internet February
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-02-05\",
+        \"description\": \"Bredband februari\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_6230_2026}, \"debit\": 599, \"credit\": 0, \"description\": \"Fiber 100/100\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 599, \"description\": \"Autogiro\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Bredband (599 SEK)"
+
+    # Verification 7: IT services February
     api_post "/api/verifications" "{
         \"company_id\": ${COMPANY_ID},
         \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
         \"series\": \"A\",
         \"transaction_date\": \"2026-02-10\",
-        \"description\": \"IT-tjänster februari\",
+        \"description\": \"IT-support februari\",
         \"transaction_lines\": [
-            {\"account_id\": ${ACC_6540_2026}, \"debit\": 5000, \"credit\": 0, \"description\": \"IT-tjänster\"},
+            {\"account_id\": ${ACC_6540_2026}, \"debit\": 5000, \"credit\": 0, \"description\": \"IT-konsulttjänster\"},
             {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 5000, \"description\": \"Betalning via bank\"}
         ]
     }" > /dev/null
-    echo "   Created: IT-tjänster (5 000 SEK)"
+    echo "   Created: IT-support (5 000 SEK)"
+
+    # Verification 8: Salary February
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-02-25\",
+        \"description\": \"Lön februari 2026\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_7210_2026}, \"debit\": 35000, \"credit\": 0, \"description\": \"Bruttolön\"},
+            {\"account_id\": ${ACC_7510_2026}, \"debit\": 10990, \"credit\": 0, \"description\": \"Arbetsgivaravgifter 31.42%\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 45990, \"description\": \"Utbetalning\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Lön februari (45 990 SEK)"
+
+    # Verification 9: February rent
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-02-28\",
+        \"description\": \"Hyra februari 2026\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_5010_2026}, \"debit\": 15000, \"credit\": 0, \"description\": \"Lokalhyra februari\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 15000, \"description\": \"Betalning via bank\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Hyra februari (15 000 SEK)"
+
+    # Verification 10: Equipment purchase
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-02-20\",
+        \"description\": \"Datormus och tangentbord\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_5410_2026}, \"debit\": 1299, \"credit\": 0, \"description\": \"Logitech MX Keys + Master 3\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 1299, \"description\": \"Kortbetalning\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Förbrukningsinventarier (1 299 SEK)"
+
+    # Verification 12: Bank fees February
+    api_post "/api/verifications" "{
+        \"company_id\": ${COMPANY_ID},
+        \"fiscal_year_id\": ${FISCAL_YEAR_2026_ID},
+        \"series\": \"A\",
+        \"transaction_date\": \"2026-02-28\",
+        \"description\": \"Bankavgifter februari\",
+        \"transaction_lines\": [
+            {\"account_id\": ${ACC_6570_2026}, \"debit\": 250, \"credit\": 0, \"description\": \"Månadsavgift\"},
+            {\"account_id\": ${ACC_1930_2026}, \"debit\": 0, \"credit\": 250, \"description\": \"Betalning via bank\"}
+        ]
+    }" > /dev/null
+    echo "   Created: Bankavgifter februari (250 SEK)"
+}
+
+# ============================================
+# Empty Demo Company (for SIE4 import testing)
+# ============================================
+
+seed_empty_demo_company() {
+    echo ""
+    echo "=========================================="
+    echo "  CREATING EMPTY DEMO COMPANY"
+    echo "=========================================="
+    echo ""
+
+    # Wait for API to be ready
+    wait_for_api
+
+    # Step 1: Register admin user
+    echo "Creating admin user..."
+    api_post "/api/auth/register" "{
+        \"email\": \"${DEMO_EMAIL}\",
+        \"password\": \"${DEMO_PASSWORD}\",
+        \"full_name\": \"${DEMO_NAME}\"
+    }" > /dev/null
+    echo "   Created user: ${DEMO_EMAIL}"
+
+    # Step 2: Login to get token
+    echo "Logging in..."
+    login_response=$(api_post_form "/api/auth/login" "username=${DEMO_EMAIL}&password=${DEMO_PASSWORD}")
+    TOKEN=$(echo "$login_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+    if [ -z "$TOKEN" ]; then
+        echo "ERROR: Failed to get access token"
+        exit 1
+    fi
+    echo "   Login successful"
+
+    # Step 3: Create company
+    echo "Creating company..."
+    company_response=$(api_post "/api/companies" '{
+        "name": "Demo Företag AB",
+        "org_number": "556677-1234",
+        "address": "Demovägen 1",
+        "postal_code": "11122",
+        "city": "Stockholm",
+        "phone": "08-123 45 67",
+        "email": "info@demoforetag.se",
+        "fiscal_year_start": "2025-01-01",
+        "fiscal_year_end": "2025-12-31",
+        "accounting_basis": "cash",
+        "vat_reporting_period": "yearly",
+        "payment_type": "bank_account",
+        "clearing_number": "1234",
+        "account_number": "567 890 123-4"
+    }')
+    COMPANY_ID=$(echo "$company_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created company: Demo Företag AB (ID: ${COMPANY_ID})"
+
+    # Step 4: Create fiscal year 2025
+    echo "Creating fiscal year 2025..."
+    fy_response=$(api_post "/api/fiscal-years" "{
+        \"company_id\": ${COMPANY_ID},
+        \"year\": 2025,
+        \"label\": \"2025\",
+        \"start_date\": \"2025-01-01\",
+        \"end_date\": \"2025-12-31\",
+        \"is_closed\": false
+    }")
+    FISCAL_YEAR_2025_ID=$(echo "$fy_response" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    echo "   Created fiscal year 2025 (ID: ${FISCAL_YEAR_2025_ID})"
+
+    # NO BAS accounts, NO templates, NO customers/suppliers/invoices/verifications
+    echo ""
+    echo "   Company is empty - ready for SIE4 import!"
 }
 
 # ============================================
@@ -835,10 +1194,16 @@ echo "     - Same as Quick Reset"
 echo "     - Plus: Creates demo company, customers, suppliers, invoices"
 echo "     - Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
 echo ""
+echo "  4) Quick Reset with Empty Demo Company"
+echo "     - Same as Quick Reset"
+echo "     - Creates demo user and company (no BAS, no data)"
+echo "     - Useful for SIE4 import testing"
+echo "     - Login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
+echo ""
 read -p "Select option [1]: " RESET_TYPE
 RESET_TYPE=${RESET_TYPE:-1}
 
-if [ "$RESET_TYPE" != "1" ] && [ "$RESET_TYPE" != "2" ] && [ "$RESET_TYPE" != "3" ]; then
+if [ "$RESET_TYPE" != "1" ] && [ "$RESET_TYPE" != "2" ] && [ "$RESET_TYPE" != "3" ] && [ "$RESET_TYPE" != "4" ]; then
     echo "Invalid choice. Aborting."
     exit 1
 fi
@@ -946,10 +1311,56 @@ elif [ "$RESET_TYPE" = "3" ]; then
     echo "Data created:"
     echo "  - Fiscal Years: 2025, 2026"
     echo "  - Customers: 5"
-    echo "  - Customer invoices: 5 (3 paid, 2 unpaid)"
+    echo "  - Customer invoices: 8 (5 in 2025: 3 paid, 2 unpaid | 3 in 2026: 1 paid, 2 unpaid)"
     echo "  - Suppliers: 3"
-    echo "  - Supplier invoices: 6 (1 draft, 2 unpaid, 1 partial, 1 paid, 1 cancelled)"
-    echo "  - Manual verifications: 6 (3 in 2025, 3 in 2026)"
+    echo "  - Supplier invoices: 9 (6 in 2025 | 3 in 2026: 1 paid, 1 approved, 1 draft)"
+    echo "  - Manual verifications: 14 (3 in 2025, 11 in 2026)"
+
+# ============================================
+# Option 4: Quick Reset with Empty Demo Company
+# ============================================
+elif [ "$RESET_TYPE" = "4" ]; then
+    echo ""
+    echo "=========================================="
+    echo "  QUICK RESET WITH EMPTY DEMO COMPANY"
+    echo "=========================================="
+    echo ""
+    echo "This will:"
+    echo "  ✓ Stop and remove containers"
+    echo "  ✓ Remove database volume (all data deleted)"
+    echo "  ✓ Restart with empty migrated database"
+    echo "  ✓ Create demo user and company (NO BAS accounts, NO data)"
+    echo "  ✗ Keep existing images (no rebuild)"
+    echo ""
+    echo "Use this for testing SIE4 import into an empty company."
+    echo ""
+    read -p "Continue? [Y/n]: " CONFIRM
+    CONFIRM=${CONFIRM:-Y}
+
+    if [ "$CONFIRM" != "Y" ] && [ "$CONFIRM" != "y" ]; then
+        echo "Aborted."
+        exit 0
+    fi
+
+    do_quick_reset
+    seed_empty_demo_company
+
+    echo ""
+    echo "=========================================="
+    echo "  EMPTY DEMO COMPANY CREATED!"
+    echo "=========================================="
+    echo ""
+    echo "Login credentials:"
+    echo "  Email:    ${DEMO_EMAIL}"
+    echo "  Password: ${DEMO_PASSWORD}"
+    echo ""
+    echo "Company: Demo Företag AB"
+    echo "  - Accounting method: Cash (kontantmetoden)"
+    echo "  - VAT reporting: Yearly (årsmoms)"
+    echo "  - Fiscal Year: 2025"
+    echo ""
+    echo "The company has NO accounts and NO data."
+    echo "Use SIE4 import to populate the chart of accounts."
 fi
 
 echo ""
@@ -958,7 +1369,7 @@ echo "  - Backend:  http://localhost:8000"
 echo "  - Frontend: http://localhost:5173"
 echo "  - Database: localhost:5432"
 echo ""
-if [ "$RESET_TYPE" = "3" ]; then
+if [ "$RESET_TYPE" = "3" ] || [ "$RESET_TYPE" = "4" ]; then
     echo "Open http://localhost:5173 and login with:"
     echo "  ${DEMO_EMAIL} / ${DEMO_PASSWORD}"
 else

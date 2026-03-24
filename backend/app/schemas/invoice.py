@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.company import PaymentType
 from app.models.invoice import InvoiceStatus, PaymentStatus
 
 
@@ -125,6 +126,13 @@ class InvoiceResponse(InvoiceBase):
     invoice_verification_id: int | None
     payment_verification_id: int | None
     pdf_path: str | None
+    payment_type: PaymentType | None
+    bankgiro_number: str | None
+    plusgiro_number: str | None
+    clearing_number: str | None
+    account_number: str | None
+    iban: str | None
+    bic: str | None
     created_at: datetime
     updated_at: datetime
     sent_at: datetime | None

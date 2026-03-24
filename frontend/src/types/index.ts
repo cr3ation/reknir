@@ -22,6 +22,12 @@ export enum VATReportingPeriod {
   YEARLY = 'yearly',
 }
 
+export enum PaymentType {
+  BANKGIRO = 'bankgiro',
+  PLUSGIRO = 'plusgiro',
+  BANK_ACCOUNT = 'bank_account',
+}
+
 export interface Company {
   id: number
   name: string
@@ -38,6 +44,13 @@ export interface Company {
   vat_reporting_period: VATReportingPeriod
   is_vat_registered: boolean
   logo_filename?: string
+  payment_type?: PaymentType | null
+  bankgiro_number?: string | null
+  plusgiro_number?: string | null
+  clearing_number?: string | null
+  account_number?: string | null
+  iban?: string | null
+  bic?: string | null
 }
 
 export interface FiscalYear {
@@ -357,6 +370,13 @@ export interface Invoice {
   invoice_verification_id?: number
   payment_verification_id?: number
   pdf_path?: string
+  payment_type?: PaymentType
+  bankgiro_number?: string
+  plusgiro_number?: string
+  clearing_number?: string
+  account_number?: string
+  iban?: string
+  bic?: string
   created_at: string
   updated_at: string
   sent_at?: string
@@ -445,15 +465,31 @@ export interface DefaultAccount {
   account_name?: string
 }
 
+export interface SIE4PreviewResponse {
+  can_import: boolean
+  fiscal_year_start: string | null
+  fiscal_year_end: string | null
+  fiscal_year_exists: boolean
+  existing_fiscal_year_id: number | null
+  will_create_fiscal_year: boolean
+  accounts_count: number
+  verifications_count: number
+  blocking_errors: string[]
+  warnings: string[]
+}
+
 export interface SIE4ImportResponse {
   success: boolean
   message: string
   accounts_created: number
   accounts_updated: number
   verifications_created: number
+  verifications_skipped: number
   default_accounts_configured: number
-  errors?: string[]
-  warnings?: string[]
+  fiscal_year_id: number | null
+  fiscal_year_created: boolean
+  errors: string[]
+  warnings: string[]
 }
 
 export interface VATReport {
@@ -614,6 +650,12 @@ export enum EntityType {
   VERIFICATION = 'verification',
 }
 
+export interface AttachmentLinkItem {
+  entity_type: EntityType
+  entity_id: number
+  role: AttachmentRole
+}
+
 export interface Attachment {
   id: number
   company_id: number
@@ -626,6 +668,7 @@ export interface Attachment {
   rejection_reason?: string
   created_at: string
   created_by: number
+  links?: AttachmentLinkItem[]
 }
 
 export interface EntityAttachment {

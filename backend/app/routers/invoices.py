@@ -1,14 +1,16 @@
+import hashlib
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
-from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
+from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, AttachmentStatus, EntityType
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
 from app.models.fiscal_year import FiscalYear
@@ -16,10 +18,27 @@ from app.models.invoice import Invoice, InvoiceLine, InvoicePayment, InvoiceStat
 from app.models.user import User
 from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
 from app.schemas.invoice import InvoiceCreate, InvoiceListItem, InvoiceResponse, InvoiceUpdate, MarkPaidRequest
+from app.services.attachment_service import ATTACHMENTS_DIR
 from app.services.invoice_service import create_invoice_payment_verification, create_invoice_verification
 from app.services.pdf_service import generate_invoice_pdf
 
 router = APIRouter()
+
+
+def get_archived_pdf_attachment(db: Session, invoice_id: int) -> Attachment | None:
+    """Get archived PDF for an invoice via AttachmentLink."""
+    link = (
+        db.query(AttachmentLink)
+        .filter(
+            AttachmentLink.entity_type == EntityType.INVOICE,
+            AttachmentLink.entity_id == invoice_id,
+            AttachmentLink.role == AttachmentRole.ARCHIVED_PDF,
+        )
+        .first()
+    )
+    if link:
+        return db.query(Attachment).filter(Attachment.id == link.attachment_id).first()
+    return None
 
 
 @router.post("/", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
@@ -57,7 +76,38 @@ async def create_invoice(
             {**line_data.model_dump(), "net_amount": net_amount, "vat_amount": vat_amount, "total_amount": total_amount}
         )
 
-    # Create invoice
+    # Get company for payment info snapshot
+    company = db.query(Company).filter(Company.id == invoice_data.company_id).first()
+
+    # Validate that company has payment information configured
+    if not company or not company.payment_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Betalningsuppgifter saknas. Ange betalningstyp i företagsinställningarna innan du skapar fakturor.",
+        )
+
+    # Validate that required fields for the payment type are configured
+    from app.models.company import PaymentType
+
+    if company.payment_type == PaymentType.BANKGIRO and not company.bankgiro_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bankgironummer saknas. Ange bankgironummer i företagsinställningarna.",
+        )
+    elif company.payment_type == PaymentType.PLUSGIRO and not company.plusgiro_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Plusgironummer saknas. Ange plusgironummer i företagsinställningarna.",
+        )
+    elif company.payment_type == PaymentType.BANK_ACCOUNT and (
+        not company.clearing_number or not company.account_number
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Clearingnummer och kontonummer saknas. Ange båda i företagsinställningarna.",
+        )
+
+    # Create invoice (with payment info snapshot from company)
     invoice = Invoice(
         company_id=invoice_data.company_id,
         customer_id=invoice_data.customer_id,
@@ -73,6 +123,13 @@ async def create_invoice(
         vat_amount=total_vat,
         net_amount=total_net,
         status=InvoiceStatus.DRAFT,
+        payment_type=company.payment_type,
+        bankgiro_number=company.bankgiro_number,
+        plusgiro_number=company.plusgiro_number,
+        clearing_number=company.clearing_number,
+        account_number=company.account_number,
+        iban=company.iban,
+        bic=company.bic,
     )
     db.add(invoice)
     db.flush()
@@ -216,17 +273,62 @@ async def send_invoice(
     if invoice.status != InvoiceStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not in draft status")
 
-    # Get company accounting basis
+    # Get customer and company (needed for PDF)
+    customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
+
+    # Update status BEFORE generating PDF so it shows correct status
+    invoice.status = InvoiceStatus.ISSUED
+    invoice.sent_at = datetime.now()
+
+    # Generate and archive PDF (immutable snapshot for bookkeeping)
+    pdf_bytes = generate_invoice_pdf(invoice, customer, company)
+    checksum = hashlib.sha256(pdf_bytes).hexdigest()
+
+    storage_filename = f"{uuid.uuid4()}.pdf"
+    file_path = ATTACHMENTS_DIR / storage_filename
+    file_path.write_bytes(pdf_bytes)
+
+    # Filename format: faktura_{companyId}_{number}_{YYYYMMDD}.pdf (sortable, no sensitive data)
+    issue_date_str = invoice.invoice_date.strftime("%Y%m%d")
+    original_filename = f"faktura_{invoice.company_id}_{invoice.invoice_number}_{issue_date_str}.pdf"
+
+    attachment = Attachment(
+        company_id=invoice.company_id,
+        original_filename=original_filename,
+        storage_filename=storage_filename,
+        mime_type="application/pdf",
+        size_bytes=len(pdf_bytes),
+        checksum_sha256=checksum,
+        status=AttachmentStatus.READY,
+        created_by=current_user.id,
+    )
+    db.add(attachment)
+    db.flush()
+
+    link = AttachmentLink(
+        attachment_id=attachment.id,
+        entity_type=EntityType.INVOICE,
+        entity_id=invoice.id,
+        role=AttachmentRole.ARCHIVED_PDF,
+        sort_order=0,
+    )
+    db.add(link)
 
     # Create verification only for accrual method
     if company.accounting_basis == AccountingBasis.ACCRUAL:
         verification = create_invoice_verification(db, invoice)
         invoice.invoice_verification_id = verification.id
 
-    # Update invoice status
-    invoice.status = InvoiceStatus.ISSUED
-    invoice.sent_at = datetime.now()
+        # Link archived PDF to verification as well (bokföringsunderlag)
+        verification_link = AttachmentLink(
+            attachment_id=attachment.id,
+            entity_type=EntityType.VERIFICATION,
+            entity_id=verification.id,
+            role=AttachmentRole.ARCHIVED_PDF,
+            sort_order=0,
+        )
+        db.add(verification_link)
 
     db.commit()
     db.refresh(invoice)
@@ -266,18 +368,14 @@ async def mark_invoice_paid(
     if invoice.status == InvoiceStatus.CANCELLED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot pay cancelled invoice")
 
+    if invoice.status == InvoiceStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fakturan måste vara utfärdad (skickad) innan betalning kan registreras",
+        )
+
     # Get company accounting basis
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
-
-    # Handle draft invoices based on accounting method
-    if invoice.status == InvoiceStatus.DRAFT:
-        if company.accounting_basis == AccountingBasis.ACCRUAL:
-            # Accrual: Create invoice verification first
-            verification = create_invoice_verification(db, invoice)
-            invoice.invoice_verification_id = verification.id
-        # Cash method: Just update status, no verification needed
-        invoice.status = InvoiceStatus.ISSUED
-        invoice.sent_at = datetime.now()
 
     # Determine payment amount
     paid_amount = payment.paid_amount if payment.paid_amount else (invoice.total_amount - invoice.paid_amount)
@@ -286,6 +384,18 @@ async def mark_invoice_paid(
     payment_verification = create_invoice_payment_verification(
         db, invoice, payment.paid_date, paid_amount, payment.bank_account_id, company.accounting_basis
     )
+
+    # Link archived PDF to payment verification (bokföringsunderlag)
+    archived_pdf = get_archived_pdf_attachment(db, invoice.id)
+    if archived_pdf:
+        payment_verification_link = AttachmentLink(
+            attachment_id=archived_pdf.id,
+            entity_type=EntityType.VERIFICATION,
+            entity_id=payment_verification.id,
+            role=AttachmentRole.ARCHIVED_PDF,
+            sort_order=0,
+        )
+        db.add(payment_verification_link)
 
     # Create payment record for history
     invoice_payment = InvoicePayment(
@@ -323,7 +433,9 @@ async def download_invoice_pdf(
     """
     Download invoice as PDF
 
-    Returns a professionally formatted Swedish invoice PDF
+    Returns a professionally formatted Swedish invoice PDF.
+    For ISSUED invoices, returns the archived (immutable) PDF.
+    For DRAFT invoices, generates on-demand for preview.
     """
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not invoice:
@@ -332,19 +444,30 @@ async def download_invoice_pdf(
     # Verify user has access to this company
     await verify_company_access(invoice.company_id, current_user, db)
 
-    # Get customer and company
+    # ISSUED invoice: Return archived PDF (immutable snapshot)
+    if invoice.status == InvoiceStatus.ISSUED:
+        archived = get_archived_pdf_attachment(db, invoice_id)
+        if archived:
+            file_path = ATTACHMENTS_DIR / archived.storage_filename
+            if file_path.exists():
+                return FileResponse(
+                    path=str(file_path),
+                    filename=archived.original_filename,
+                    media_type="application/pdf",
+                )
+
+    # DRAFT or missing archived: Generate on-demand (preview)
     customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
 
     if not customer or not company:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load invoice data")
 
-    # Generate PDF
     try:
         pdf_bytes = generate_invoice_pdf(invoice, customer, company)
-
-        # Return PDF as download
-        filename = f"faktura_{invoice.invoice_series}{invoice.invoice_number}.pdf"
+        # Filename format: faktura_{companyId}_{number}_{YYYYMMDD}.pdf
+        issue_date_str = invoice.invoice_date.strftime("%Y%m%d")
+        filename = f"faktura_{invoice.company_id}_{invoice.invoice_number}_{issue_date_str}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -580,6 +703,13 @@ async def unlink_attachment(
     )
     if not link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not linked to this invoice")
+
+    # ARCHIVED_PDF is ALWAYS immutable (Swedish bookkeeping law)
+    if link.role == AttachmentRole.ARCHIVED_PDF:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot remove archived invoice PDF (bookkeeping law)",
+        )
 
     db.delete(link)
     db.commit()

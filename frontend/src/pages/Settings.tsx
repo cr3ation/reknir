@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
-import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi } from '@/services/api'
-import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo } from '@/types'
-import { VATReportingPeriod, AccountingBasis } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi, attachmentApi } from '@/services/api'
+import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo, Attachment } from '@/types'
+import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from '@/types'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
+import SIE4ImportModal from '@/components/SIE4ImportModal'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
-import { useLayoutSettings } from '@/contexts/LayoutSettingsContext'
+import { useLayoutSettings, ModalType } from '@/contexts/LayoutSettingsContext'
+import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 
 export default function SettingsPage() {
@@ -32,7 +34,6 @@ export default function SettingsPage() {
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [activeTab, setActiveTab] = useState<'company' | 'fiscal' | 'templates' | 'import' | 'layout'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
-  const [showImportSummary, setShowImportSummary] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [backups, setBackups] = useState<BackupInfo[]>([])
@@ -40,14 +41,20 @@ export default function SettingsPage() {
   const [creatingBackup, setCreatingBackup] = useState(false)
   const [downloadingBackup, setDownloadingBackup] = useState<string | null>(null)
   const [showRestoreModal, setShowRestoreModal] = useState(false)
-  const [importSummary, setImportSummary] = useState<{
-    accounts_created: number
-    accounts_updated: number
-    verifications_created: number
-    default_accounts_configured: number
-    errors?: string[]
-    warnings?: string[]
-  } | null>(null)
+  const [showSIE4ImportModal, setShowSIE4ImportModal] = useState(false)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [loadingAttachments, setLoadingAttachments] = useState(false)
+  const [deletingAttachment, setDeletingAttachment] = useState<number | null>(null)
+  const [editingPaymentInfo, setEditingPaymentInfo] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({
+    payment_type: '' as PaymentType | '',
+    bankgiro_number: '',
+    plusgiro_number: '',
+    clearing_number: '',
+    account_number: '',
+    iban: '',
+    bic: '',
+  })
   const [editingCompany, setEditingCompany] = useState(false)
   const [showCreateCompany, setShowCreateCompany] = useState(false)
   const [companyForm, setCompanyForm] = useState({
@@ -91,6 +98,12 @@ export default function SettingsPage() {
       loadBackups()
     }
   }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab === 'layout' && selectedCompany) {
+      loadAttachments()
+    }
+  }, [activeTab, selectedCompany])
 
   // Load company logo as blob URL (img tags can't send auth headers)
   useEffect(() => {
@@ -151,6 +164,100 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error('Failed to load data:', error)
       showMessage('Kunde inte ladda data', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadAttachments = async () => {
+    if (!selectedCompany) return
+    setLoadingAttachments(true)
+    try {
+      const res = await attachmentApi.list(selectedCompany.id)
+      setAttachments(res.data)
+    } catch (err) {
+      console.error('Failed to load attachments:', err)
+    } finally {
+      setLoadingAttachments(false)
+    }
+  }
+
+  const handleDeleteAttachment = async (id: number) => {
+    setDeletingAttachment(id)
+    try {
+      await attachmentApi.delete(id)
+      setAttachments(prev => prev.filter(a => a.id !== id))
+      showMessage('Bilagan har raderats', 'success')
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || 'Kunde inte radera bilagan'
+      showMessage(detail, 'error')
+    } finally {
+      setDeletingAttachment(null)
+    }
+  }
+
+  // Convert unlinked attachments to EntityAttachment format for preview
+  const unlinkedEntityAttachments = useMemo(() =>
+    attachments
+      .filter(a => a.links?.length === 0)
+      .map(a => ({
+        link_id: 0,
+        attachment_id: a.id,
+        role: AttachmentRole.ORIGINAL,
+        sort_order: 0,
+        created_at: a.created_at,
+        original_filename: a.original_filename,
+        mime_type: a.mime_type,
+        size_bytes: a.size_bytes,
+        status: a.status,
+      })),
+    [attachments]
+  )
+
+  const {
+    openPreview,
+    floatingPreview,
+  } = useAttachmentPreviewController(unlinkedEntityAttachments, {
+    modalType: ModalType.ATTACHMENT_PREVIEW
+  })
+
+  const startEditPaymentInfo = () => {
+    if (!selectedCompany) return
+    setPaymentForm({
+      payment_type: selectedCompany.payment_type || '',
+      bankgiro_number: selectedCompany.bankgiro_number || '',
+      plusgiro_number: selectedCompany.plusgiro_number || '',
+      clearing_number: selectedCompany.clearing_number || '',
+      account_number: selectedCompany.account_number || '',
+      iban: selectedCompany.iban || '',
+      bic: selectedCompany.bic || '',
+    })
+    setEditingPaymentInfo(true)
+  }
+
+  const cancelEditPaymentInfo = () => {
+    setEditingPaymentInfo(false)
+  }
+
+  const handleUpdatePaymentInfo = async () => {
+    if (!selectedCompany) return
+    try {
+      setLoading(true)
+      await companyApi.update(selectedCompany.id, {
+        payment_type: paymentForm.payment_type || null,
+        bankgiro_number: paymentForm.bankgiro_number || null,
+        plusgiro_number: paymentForm.plusgiro_number || null,
+        clearing_number: paymentForm.clearing_number || null,
+        account_number: paymentForm.account_number || null,
+        iban: paymentForm.iban || null,
+        bic: paymentForm.bic || null,
+      })
+      await loadCompanies()
+      setEditingPaymentInfo(false)
+      showMessage('Betalningsuppgifter uppdaterade', 'success')
+    } catch (error: any) {
+      const detail = error.response?.data?.detail || 'Kunde inte uppdatera betalningsuppgifter'
+      showMessage(detail, 'error')
     } finally {
       setLoading(false)
     }
@@ -321,41 +428,6 @@ export default function SettingsPage() {
       showMessage(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleSIE4Import = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedCompany || !selectedFiscalYear) {
-      showMessage('Välj ett räkenskapsår först', 'error')
-      return
-    }
-
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    try {
-      setLoading(true)
-      const response = await sie4Api.import(selectedCompany.id, selectedFiscalYear.id, file)
-
-      // Show modal with import summary
-      setImportSummary({
-        accounts_created: response.data.accounts_created,
-        accounts_updated: response.data.accounts_updated,
-        verifications_created: response.data.verifications_created,
-        default_accounts_configured: response.data.default_accounts_configured,
-        errors: response.data.errors || [],
-        warnings: response.data.warnings || [],
-      })
-      setShowImportSummary(true)
-
-      await loadData()
-    } catch (error: any) {
-      console.error('SIE4 import failed:', error)
-      showMessage(error.response?.data?.detail || 'Import misslyckades', 'error')
-    } finally {
-      setLoading(false)
-      // Reset input
-      event.target.value = ''
     }
   }
 
@@ -859,17 +931,17 @@ export default function SettingsPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            Utseende
+            Bilagor
           </button>
         </nav>
       </div>
 
       {message && (
         <div
-          className={`mb-4 p-4 rounded ${
+          className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 p-4 rounded-lg shadow-lg max-w-xl ${
             messageType === 'success'
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
+              ? 'bg-green-100 text-green-800 border border-green-300'
+              : 'bg-red-100 text-red-800 border border-red-300'
           }`}
         >
           <pre className="whitespace-pre-wrap font-sans text-sm">{message}</pre>
@@ -1228,6 +1300,227 @@ export default function SettingsPage() {
         )}
       </div>
 
+          {/* Payment Information Card */}
+          {selectedCompany && (
+            <div className="card mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  Betalningsuppgifter
+                </h2>
+                {!editingPaymentInfo && !editingCompany && (
+                  <button
+                    onClick={startEditPaymentInfo}
+                    className="btn btn-secondary flex items-center gap-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Redigera
+                  </button>
+                )}
+              </div>
+              <p className="text-gray-600 mb-4">
+                Dessa uppgifter visas på fakturor för att ange hur kunden ska betala.
+              </p>
+
+              {editingPaymentInfo ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Betalningstyp
+                    </label>
+                    <select
+                      value={paymentForm.payment_type}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, payment_type: e.target.value as PaymentType | '' })}
+                      className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="">Välj betalningstyp...</option>
+                      <option value={PaymentType.BANKGIRO}>Bankgiro</option>
+                      <option value={PaymentType.PLUSGIRO}>Plusgiro</option>
+                      <option value={PaymentType.BANK_ACCOUNT}>Bankkonto</option>
+                    </select>
+                  </div>
+
+                  {/* Bankgiro fields */}
+                  {paymentForm.payment_type === PaymentType.BANKGIRO && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Bankgironummer <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.bankgiro_number}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, bankgiro_number: e.target.value })}
+                        className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="t.ex. 123-4567"
+                      />
+                    </div>
+                  )}
+
+                  {/* Plusgiro fields */}
+                  {paymentForm.payment_type === PaymentType.PLUSGIRO && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Plusgironummer <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.plusgiro_number}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, plusgiro_number: e.target.value })}
+                        className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="t.ex. 12 34 56-7"
+                      />
+                    </div>
+                  )}
+
+                  {/* Bank account fields */}
+                  {paymentForm.payment_type === PaymentType.BANK_ACCOUNT && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Clearingnummer <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentForm.clearing_number}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, clearing_number: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. 1234"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Kontonummer <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentForm.account_number}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, account_number: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. 12 345 67"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            IBAN <span className="text-gray-400">(valfritt)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentForm.iban}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, iban: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. SE12 3456 7890 1234 5678 9012"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            BIC/SWIFT <span className="text-gray-400">(valfritt)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentForm.bic}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, bic: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            placeholder="t.ex. NDEASESS"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        IBAN och BIC visas på fakturan om de är ifyllda (för internationella betalningar).
+                      </p>
+                    </>
+                  )}
+
+                  {editingPaymentInfo && (
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={handleUpdatePaymentInfo}
+                        disabled={loading}
+                        className="btn btn-primary flex items-center gap-2"
+                      >
+                        <Save className="w-4 h-4" />
+                        {loading ? 'Sparar...' : 'Spara'}
+                      </button>
+                      <button
+                        onClick={cancelEditPaymentInfo}
+                        disabled={loading}
+                        className="btn btn-secondary flex items-center gap-2"
+                      >
+                        <X className="w-4 h-4" />
+                        Avbryt
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedCompany.payment_type ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-600">Betalningstyp:</span>
+                        <span className="text-gray-900">
+                          {selectedCompany.payment_type === PaymentType.BANKGIRO ? 'Bankgiro' :
+                           selectedCompany.payment_type === PaymentType.PLUSGIRO ? 'Plusgiro' :
+                           'Bankkonto'}
+                        </span>
+                      </div>
+                      {selectedCompany.payment_type === PaymentType.BANKGIRO && selectedCompany.bankgiro_number && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-600">Bankgironummer:</span>
+                          <span className="text-gray-900 font-mono">{selectedCompany.bankgiro_number}</span>
+                        </div>
+                      )}
+                      {selectedCompany.payment_type === PaymentType.PLUSGIRO && selectedCompany.plusgiro_number && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-600">Plusgironummer:</span>
+                          <span className="text-gray-900 font-mono">{selectedCompany.plusgiro_number}</span>
+                        </div>
+                      )}
+                      {selectedCompany.payment_type === PaymentType.BANK_ACCOUNT && (
+                        <>
+                          {selectedCompany.clearing_number && selectedCompany.account_number && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-600">Kontonummer:</span>
+                              <span className="text-gray-900 font-mono">
+                                {selectedCompany.clearing_number}-{selectedCompany.account_number}
+                              </span>
+                            </div>
+                          )}
+                          {selectedCompany.iban && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-600">IBAN:</span>
+                              <span className="text-gray-900 font-mono">{selectedCompany.iban}</span>
+                            </div>
+                          )}
+                          {selectedCompany.bic && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-600">BIC:</span>
+                              <span className="text-gray-900 font-mono">{selectedCompany.bic}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-yellow-800">
+                        <strong>Inga betalningsuppgifter angivna.</strong> Du måste ange betalningsuppgifter innan du kan skapa fakturor.
+                      </p>
+                      <button
+                        onClick={startEditPaymentInfo}
+                        className="mt-2 text-sm text-yellow-700 underline hover:text-yellow-900"
+                      >
+                        Lägg till betalningsuppgifter
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
       {/* VAT Reporting Period Section */}
       <div className="card mb-6">
         <h2 className="text-xl font-semibold mb-4">Momsredovisningsperiod</h2>
@@ -1544,21 +1837,16 @@ export default function SettingsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Importera SIE4-fil
             </label>
-            <input
-              type="file"
-              accept=".se,.si"
-              onChange={handleSIE4Import}
-              disabled={loading}
-              className="block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100
-                disabled:opacity-50"
-            />
-            <p className="mt-1 text-sm text-gray-500">
-              Konton och ingående balanser kommer importeras och standardkonton konfigureras automatiskt.
+            <button
+              onClick={() => setShowSIE4ImportModal(true)}
+              disabled={loading || !selectedCompany}
+              className="btn btn-primary inline-flex items-center"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Importera SIE4-fil
+            </button>
+            <p className="mt-2 text-sm text-gray-500">
+              Räkenskapsår skapas automatiskt från filen. Konton och verifikationer importeras med förhandsgranskning.
             </p>
           </div>
 
@@ -1570,19 +1858,24 @@ export default function SettingsPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => handleSIE4Export(true)}
-                disabled={loading}
+                disabled={loading || !selectedFiscalYear}
                 className="btn btn-primary"
               >
                 Exportera med verifikationer
               </button>
               <button
                 onClick={() => handleSIE4Export(false)}
-                disabled={loading}
+                disabled={loading || !selectedFiscalYear}
                 className="btn btn-secondary"
               >
                 Endast kontoplan
               </button>
             </div>
+            {!selectedFiscalYear && (
+              <p className="mt-2 text-sm text-amber-600">
+                Välj ett räkenskapsår för att exportera.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -1854,86 +2147,6 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
-        </div>
-      )}
-
-      {/* Import Summary Modal */}
-      {showImportSummary && importSummary && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="ml-4 text-lg font-semibold text-gray-900">Import Lyckades!</h3>
-              </div>
-
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Importsammanfattning:</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">Konton skapade:</span>
-                    <span className="text-sm font-semibold text-gray-900">{importSummary.accounts_created}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">Konton uppdaterade:</span>
-                    <span className="text-sm font-semibold text-gray-900">{importSummary.accounts_updated}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
-                    <span className="text-sm text-gray-700">Verifikationer importerade:</span>
-                    <span className="text-sm font-semibold text-blue-900">{importSummary.verifications_created}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">Standardkonton konfigurerade:</span>
-                    <span className="text-sm font-semibold text-gray-900">{importSummary.default_accounts_configured}</span>
-                  </div>
-                </div>
-
-                {/* Errors */}
-                {importSummary.errors && importSummary.errors.length > 0 && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-                    <h5 className="text-sm font-medium text-red-900 mb-2">Fel:</h5>
-                    <ul className="list-disc list-inside space-y-1">
-                      {importSummary.errors.map((error, idx) => (
-                        <li key={idx} className="text-sm text-red-800">{error}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Warnings */}
-                {importSummary.warnings && importSummary.warnings.length > 0 && (
-                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <h5 className="text-sm font-medium text-yellow-900 mb-2">Varningar:</h5>
-                    <ul className="list-disc list-inside space-y-1">
-                      {importSummary.warnings.map((warning, idx) => (
-                        <li key={idx} className="text-sm text-yellow-800">{warning}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {importSummary.verifications_created > 0 && (
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-sm text-blue-800">
-                      <strong>Tips:</strong> Glöm inte att tilldela verifikationerna till räkenskapsår!
-                      Scrolla ner till "Räkenskapsår" och klicka "Tilldela verifikationer".
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => setShowImportSummary(false)}
-                className="w-full btn btn-primary"
-              >
-                Stäng
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -2245,8 +2458,88 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
+          {/* Olänkade bilagor */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <Paperclip className="w-5 h-5 text-gray-600" />
+              <h2 className="text-xl font-semibold">Olänkade bilagor</h2>
+            </div>
+
+            <p className="text-gray-600 mb-4">
+              Bilagor som inte är kopplade till någon verifikation, faktura eller utlägg kan tas bort här.
+            </p>
+
+            {loadingAttachments ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Laddar bilagor...
+              </div>
+            ) : (
+              <>
+                {/* Statistik */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="text-2xl font-bold">{attachments.length}</div>
+                    <div className="text-sm text-gray-600">Totalt antal bilagor</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {attachments.filter(a => a.links?.length === 0).length}
+                    </div>
+                    <div className="text-sm text-gray-600">Olänkade</div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="text-2xl font-bold">
+                      {(attachments.reduce((sum, a) => sum + a.size_bytes, 0) / 1024 / 1024).toFixed(1)} MB
+                    </div>
+                    <div className="text-sm text-gray-600">Total storlek</div>
+                  </div>
+                </div>
+
+                {/* Lista olänkade */}
+                {attachments.filter(a => a.links?.length === 0).length === 0 ? (
+                  <p className="text-green-600">Inga olänkade bilagor.</p>
+                ) : (
+                  <div className="border rounded divide-y max-h-64 overflow-y-auto">
+                    {attachments
+                      .filter(a => a.links?.length === 0)
+                      .map((attachment, index) => (
+                        <div key={attachment.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                          <div
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() => openPreview(index)}
+                          >
+                            <div className="font-medium truncate text-blue-600 hover:text-blue-800">{attachment.original_filename}</div>
+                            <div className="text-sm text-gray-500">
+                              {(attachment.size_bytes / 1024).toFixed(0)} KB
+                              {' · '}
+                              {new Date(attachment.created_at).toLocaleDateString('sv-SE')}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteAttachment(attachment.id)}
+                            disabled={deletingAttachment === attachment.id}
+                            className="btn btn-danger btn-sm flex items-center gap-1 ml-3"
+                          >
+                            {deletingAttachment === attachment.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                            Radera
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
+
+      {floatingPreview}
 
       {/* Restore Modal */}
       <RestoreModal
@@ -2254,6 +2547,16 @@ export default function SettingsPage() {
         onClose={() => setShowRestoreModal(false)}
         backups={backups}
       />
+
+      {/* SIE4 Import Modal */}
+      {selectedCompany && (
+        <SIE4ImportModal
+          isOpen={showSIE4ImportModal}
+          onClose={() => setShowSIE4ImportModal(false)}
+          companyId={selectedCompany.id}
+          onSuccess={loadData}
+        />
+      )}
 
     </div>
   )

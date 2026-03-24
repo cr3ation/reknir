@@ -13,6 +13,8 @@ import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
+import { useSortableTable } from '@/hooks/useSortableTable'
+import SortableHeader from '@/components/SortableHeader'
 
 // Format number with Swedish thousand separators (space)
 const formatNumberWithSeparator = (value: number): string => {
@@ -70,6 +72,18 @@ export default function Invoices() {
     modalType: ModalType.SUPPLIER_INVOICE,
   })
 
+  // Sorting for customer invoices
+  const { sortedData: sortedInvoices, sortConfig: invoiceSortConfig, requestSort: requestInvoiceSort } = useSortableTable(
+    invoices,
+    { key: 'invoice_date', direction: 'desc' }
+  )
+
+  // Sorting for supplier invoices
+  const { sortedData: sortedSupplierInvoices, sortConfig: supplierInvoiceSortConfig, requestSort: requestSupplierInvoiceSort } = useSortableTable(
+    supplierInvoices,
+    { key: 'invoice_date', direction: 'desc' }
+  )
+
   useEffect(() => {
     loadInvoices()
   }, [selectedCompany, selectedFiscalYear])
@@ -101,7 +115,7 @@ export default function Invoices() {
     }
   }
 
-  const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string, series: string) => {
+  const downloadInvoicePdf = async (invoiceId: number, invoiceNumber: string) => {
     try {
       // Use axios to download with authentication
       const response = await api.get(`/invoices/${invoiceId}/pdf`, {
@@ -113,7 +127,7 @@ export default function Invoices() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `faktura_${series}${invoiceNumber}.pdf`
+      link.download = `faktura_${invoiceNumber}.pdf`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -316,34 +330,24 @@ export default function Invoices() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Fakturanr
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Datum
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Kund
-                  </th>
+                  <SortableHeader label="Fakturanr" sortKey="invoice_number" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} />
+                  <SortableHeader label="Datum" sortKey="invoice_date" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} />
+                  <SortableHeader label="Kund" sortKey="customer_name" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} />
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Belopp
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Betalt
-                  </th>
+                  <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} align="right" />
+                  <SortableHeader label="Betalt" sortKey="paid_amount" sortConfig={invoiceSortConfig} onSort={requestInvoiceSort} align="right" />
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Åtgärder
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {invoices.map((invoice) => (
+                {sortedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium">
-                      {invoice.invoice_series}{invoice.invoice_number}
+                      {invoice.invoice_number}
                     </td>
                     <td className="px-4 py-3 text-sm">{invoice.invoice_date}</td>
                     <td className="px-4 py-3 text-sm">{invoice.customer_name}</td>
@@ -393,7 +397,7 @@ export default function Invoices() {
                           </button>
                         )}
                         <button
-                          onClick={() => downloadInvoicePdf(invoice.id, String(invoice.invoice_number), invoice.invoice_series)}
+                          onClick={() => downloadInvoicePdf(invoice.id, String(invoice.invoice_number))}
                           className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                           title="Ladda ner PDF"
                         >
@@ -432,31 +436,21 @@ export default function Invoices() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Fakturanr
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Datum
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Leverantör
-                  </th>
+                  <SortableHeader label="Fakturanr" sortKey="supplier_invoice_number" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} />
+                  <SortableHeader label="Datum" sortKey="invoice_date" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} />
+                  <SortableHeader label="Leverantör" sortKey="supplier_name" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} />
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Belopp
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Betalt
-                  </th>
+                  <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} align="right" />
+                  <SortableHeader label="Betalt" sortKey="paid_amount" sortConfig={supplierInvoiceSortConfig} onSort={requestSupplierInvoiceSort} align="right" />
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Åtgärder
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {supplierInvoices.map((invoice) => (
+                {sortedSupplierInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.supplier_invoice_number}
@@ -600,7 +594,7 @@ export default function Invoices() {
                     Skicka faktura
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {confirmSendInvoice.invoice_series}{confirmSendInvoice.invoice_number} - {confirmSendInvoice.customer_name}
+                    {confirmSendInvoice.invoice_number} - {confirmSendInvoice.customer_name}
                   </p>
                 </div>
               </div>
@@ -748,7 +742,7 @@ export default function Invoices() {
                     Markera faktura som betald
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {confirmPayInvoice.invoice_series}{confirmPayInvoice.invoice_number} - {confirmPayInvoice.customer_name}
+                    {confirmPayInvoice.invoice_number} - {confirmPayInvoice.customer_name}
                   </p>
                 </div>
               </div>

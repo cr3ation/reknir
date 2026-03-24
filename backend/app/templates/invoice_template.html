@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
     <meta charset="UTF-8">
-    <title>Faktura {{ invoice.invoice_series }}{{ invoice.invoice_number }}</title>
+    <title>Faktura {{ invoice.invoice_number }}</title>
     <style>
         @page {
             size: A4;
@@ -248,7 +248,7 @@
             <table class="invoice-details">
                 <tr>
                     <td>Fakturanummer:</td>
-                    <td>{{ invoice.invoice_series }}{{ invoice.invoice_number }}</td>
+                    <td>{{ invoice.invoice_number }}</td>
                 </tr>
                 <tr>
                     <td>Fakturadatum:</td>
@@ -301,11 +301,11 @@
             {% for line in invoice.invoice_lines %}
             <tr>
                 <td>{{ line.description }}</td>
-                <td style="text-align: center;">{{ "%.2f"|format(line.quantity) }}</td>
+                <td style="text-align: center;">{{ line.quantity|format_sek }}</td>
                 <td style="text-align: center;">{{ line.unit }}</td>
-                <td class="number">{{ "%.2f"|format(line.unit_price) }} kr</td>
+                <td class="number">{{ line.unit_price|format_sek }} kr</td>
                 <td class="number">{{ "%.0f"|format(line.vat_rate) }}%</td>
-                <td class="number">{{ "%.2f"|format(line.net_amount) }} kr</td>
+                <td class="number">{{ line.net_amount|format_sek }} kr</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -316,15 +316,15 @@
         <table>
             <tr>
                 <td>Netto:</td>
-                <td>{{ "%.2f"|format(invoice.net_amount) }} kr</td>
+                <td>{{ invoice.net_amount|format_sek }} kr</td>
             </tr>
             <tr>
                 <td>Moms:</td>
-                <td>{{ "%.2f"|format(invoice.vat_amount) }} kr</td>
+                <td>{{ invoice.vat_amount|format_sek }} kr</td>
             </tr>
             <tr class="total-row">
                 <td>ATT BETALA:</td>
-                <td>{{ "%.2f"|format(invoice.total_amount) }} kr</td>
+                <td>{{ invoice.total_amount|format_sek }} kr</td>
             </tr>
         </table>
     </div>
@@ -332,12 +332,32 @@
     <!-- Payment Info -->
     <div class="payment-info">
         <h3>Betalningsinformation</h3>
-        <p style="margin: 3px 0;"><strong>Belopp att betala: {{ "%.2f"|format(invoice.total_amount) }} kr</strong></p>
-        <p style="margin: 3px 0;">Förfallodatum: {{ invoice.due_date }}</p>
+        <p style="margin: 5px 0;">Förfallodatum: <strong>{{ invoice.due_date }}</strong></p>
+        {% if invoice.payment_type %}
+        <p style="margin: 5px 0;">Betalsätt: <strong>
+            {%- if invoice.payment_type.value == 'bankgiro' -%}Bankgiro
+            {%- elif invoice.payment_type.value == 'plusgiro' -%}Plusgiro
+            {%- elif invoice.payment_type.value == 'bank_account' -%}Bankkonto
+            {%- endif -%}
+        </strong></p>
+        {% if invoice.payment_type.value == 'bankgiro' and invoice.bankgiro_number %}
+        <p style="margin: 5px 0;">Bankgironr: <strong>{{ invoice.bankgiro_number }}</strong></p>
+        {% elif invoice.payment_type.value == 'plusgiro' and invoice.plusgiro_number %}
+        <p style="margin: 5px 0;">Plusgironr: <strong>{{ invoice.plusgiro_number }}</strong></p>
+        {% elif invoice.payment_type.value == 'bank_account' and invoice.clearing_number and invoice.account_number %}
+        <p style="margin: 5px 0;">Clearingnr: <strong>{{ invoice.clearing_number }}</strong></p>
+        <p style="margin: 5px 0;">Kontonr: <strong>{{ invoice.account_number }}</strong></p>
+        {% endif %}
+        {% if invoice.payment_type.value == 'bank_account' and invoice.iban %}
+        <p style="margin: 3px 0; font-size: 8pt; color: #555;">
+            (IBAN: {{ invoice.iban }}{% if invoice.bic %} BIC: {{ invoice.bic }}{% endif %})
+        </p>
+        {% endif %}
+        {% endif %}
+        <p style="margin: 5px 0;">Vänligen ange fakturanummer <strong>{{ invoice.invoice_number }}</strong> som referens vid betalning.</p>
+        <p style="margin: 5px 0;"><strong>Belopp att betala: {{ invoice.total_amount|format_sek }} kr</strong></p>
         {% if invoice.status == 'paid' %}
-        <p style="color: green; margin: 3px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
-        {% else %}
-        <p style="margin: 3px 0;">Vänligen ange fakturanummer {{ invoice.invoice_series }}{{ invoice.invoice_number }} som referens vid betalning.</p>
+        <p style="color: green; margin: 5px 0;"><strong>✓ Denna faktura är betald ({{ invoice.paid_date }})</strong></p>
         {% endif %}
     </div>
 
@@ -351,8 +371,22 @@
 
     <!-- Footer -->
     <div class="footer">
-        <p>{{ company.name }} | Org.nr: {{ company.org_number }} | VAT: {{ company.vat_number }}</p>
-        <p>Denna faktura är skapad elektroniskt och är giltig utan signatur</p>
+        <p>
+            <strong>{{ company.name }}</strong> | Org.nr: {{ company.org_number }}
+            {% if company.is_vat_registered %} | VAT: {{ company.vat_number }}{% endif %}
+        </p>
+        <p>
+            {% if company.address %}{{ company.address }}{% endif %}
+            {% if company.address and (company.postal_code or company.city) %}, {% endif %}
+            {% if company.postal_code %}{{ company.postal_code }}{% endif %}
+            {% if company.city %} {{ company.city }}{% endif %}
+        </p>
+        <p>
+            {% if company.phone %}Tel: {{ company.phone }}{% endif %}
+            {% if company.phone and company.email %} | {% endif %}
+            {% if company.email %}E-post: {{ company.email }}{% endif %}
+        </p>
+        <p style="margin-top: 8px;">Denna faktura är skapad elektroniskt och är giltig utan signatur</p>
     </div>
 </body>
 </html>

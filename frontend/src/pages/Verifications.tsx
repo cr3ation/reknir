@@ -11,17 +11,22 @@ import { ModalType } from '@/contexts/LayoutSettingsContext'
 import VerificationForm from '@/components/forms/VerificationForm'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
+import { useSortableTable } from '@/hooks/useSortableTable'
+import SortableHeader from '@/components/SortableHeader'
 
 export default function Verifications() {
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
-  const [allVerifications, setAllVerifications] = useState<VerificationListItem[]>([])
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingVerification, setEditingVerification] = useState<Verification | null>(null)
   const { selectedFiscalYear } = useFiscalYear()
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [seriesFilter, setSeriesFilter] = useState<string>('all')
 
   // Track attachments from form for preview controller
   const [formAttachments, setFormAttachments] = useState<EntityAttachment[]>([])
@@ -43,23 +48,25 @@ export default function Verifications() {
   })
 
   const loadData = useCallback(async () => {
-    if (!selectedCompany) {
+    if (!selectedCompany || !selectedFiscalYear) {
       setLoading(false)
+      setVerifications([])
       return
     }
 
     try {
       setLoading(true)
 
-      // Load verifications
-      const verificationsRes = await verificationApi.list(selectedCompany.id)
-      setAllVerifications(verificationsRes.data)
+      // Load verifications for selected fiscal year
+      const verificationsRes = await verificationApi.list(selectedCompany.id, {
+        fiscal_year_id: selectedFiscalYear.id,
+        limit: 1000,
+      })
+      setVerifications(verificationsRes.data)
 
       // Load accounts for selected fiscal year
-      if (selectedFiscalYear) {
-        const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
-        setAccounts(accountsRes.data)
-      }
+      const accountsRes = await accountApi.list(selectedCompany.id, selectedFiscalYear.id)
+      setAccounts(accountsRes.data)
     } catch (error) {
       console.error('Failed to load verifications:', error)
     } finally {
@@ -67,30 +74,37 @@ export default function Verifications() {
     }
   }, [selectedCompany, selectedFiscalYear])
 
-  const filterVerificationsByFiscalYear = useCallback(() => {
-    if (!selectedFiscalYear) {
-      setVerifications(allVerifications)
-      return
-    }
-
-    // Filter verifications by fiscal year date range
-    const filtered = allVerifications.filter((v) => {
-      const transactionDate = new Date(v.transaction_date)
-      const startDate = new Date(selectedFiscalYear.start_date)
-      const endDate = new Date(selectedFiscalYear.end_date)
-      return transactionDate >= startDate && transactionDate <= endDate
-    })
-
-    setVerifications(filtered)
-  }, [selectedFiscalYear, allVerifications])
-
   useEffect(() => {
     loadData()
   }, [loadData])
 
-  useEffect(() => {
-    filterVerificationsByFiscalYear()
-  }, [filterVerificationsByFiscalYear])
+  // Filter verifications
+  const filteredVerifications = verifications.filter((v) => {
+    const matchesSeries = seriesFilter === 'all' || v.series === seriesFilter
+    // Normalize search: remove spaces for amount matching (4500 matches "4 500")
+    const normalizedQuery = searchQuery.replace(/\s/g, '')
+    const formattedAmount = v.total_amount.toLocaleString('sv-SE')
+    const matchesSearch =
+      searchQuery === '' ||
+      v.verification_number.toString().includes(searchQuery) ||
+      v.transaction_date.includes(searchQuery) ||
+      v.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formattedAmount.includes(searchQuery) ||
+      formattedAmount.replace(/\s/g, '').includes(normalizedQuery)
+    return matchesSeries && matchesSearch
+  })
+
+  // Get unique series for filter dropdown
+  const uniqueSeries = [...new Set(verifications.map((v) => v.series))].sort()
+
+  // Statistics
+  const lockedCount = filteredVerifications.filter((v) => v.locked).length
+
+  // Sorting
+  const { sortedData: sortedVerifications, sortConfig, requestSort } = useSortableTable(
+    filteredVerifications,
+    { key: 'verification_number', direction: 'desc' }
+  )
 
   const handleDelete = async (id: number) => {
     if (!confirm(
@@ -132,11 +146,62 @@ export default function Verifications() {
         </div>
       </div>
 
-      {verifications.length === 0 ? (
+      {/* Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-500 mb-1">Antal verifikationer</h3>
+          <p className="text-2xl font-bold">{filteredVerifications.length}</p>
+        </div>
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-500 mb-1">Låsta</h3>
+          <p className="text-2xl font-bold">{lockedCount}</p>
+        </div>
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-500 mb-1">Olåsta</h3>
+          <p className="text-2xl font-bold">{filteredVerifications.length - lockedCount}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="card mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sök</label>
+            <input
+              type="text"
+              placeholder="Ver.nr, datum, beskrivning eller belopp..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Serie</label>
+            <select
+              value={seriesFilter}
+              onChange={(e) => setSeriesFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="all">Alla serier ({verifications.length})</option>
+              {uniqueSeries.map((series) => {
+                const count = verifications.filter((v) => v.series === series).length
+                return (
+                  <option key={series} value={series}>
+                    {series} ({count})
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {filteredVerifications.length === 0 ? (
         <div className="card">
           <p className="text-gray-600">
-            Inga verifikationer ännu. Skapa din första verifikation för att registrera
-            transaktioner!
+            {verifications.length === 0
+              ? 'Inga verifikationer ännu. Skapa din första verifikation för att registrera transaktioner!'
+              : 'Inga verifikationer matchar din sökning.'}
           </p>
         </div>
       ) : (
@@ -144,21 +209,11 @@ export default function Verifications() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Ver.nr
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Serie
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Datum
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Beskrivning
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                  Belopp
-                </th>
+                <SortableHeader label="Ver.nr" sortKey="verification_number" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Serie" sortKey="series" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Datum" sortKey="transaction_date" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Beskrivning" sortKey="description" sortConfig={sortConfig} onSort={requestSort} />
+                <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                   Status
                 </th>
@@ -168,7 +223,7 @@ export default function Verifications() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {verifications.map((verification) => (
+              {sortedVerifications.map((verification) => (
                 <tr
                   key={verification.id}
                   className="hover:bg-gray-50 cursor-pointer"

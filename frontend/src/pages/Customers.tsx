@@ -4,6 +4,8 @@ import { customerApi, supplierApi } from '@/services/api'
 import type { Customer, Supplier } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useSortableTable } from '@/hooks/useSortableTable'
+import SortableHeader from '@/components/SortableHeader'
 
 export default function Customers() {
   const { selectedCompany } = useCompany()
@@ -15,6 +17,18 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers'>('customers')
+
+  // Sorting for customers
+  const { sortedData: sortedCustomers, sortConfig: customerSortConfig, requestSort: requestCustomerSort } = useSortableTable(
+    customers,
+    { key: 'name', direction: 'asc' }
+  )
+
+  // Sorting for suppliers
+  const { sortedData: sortedSuppliers, sortConfig: supplierSortConfig, requestSort: requestSupplierSort } = useSortableTable(
+    suppliers,
+    { key: 'name', direction: 'asc' }
+  )
 
   useEffect(() => {
     loadData()
@@ -126,24 +140,12 @@ export default function Customers() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Namn
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Org.nr
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Kontaktperson
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      E-post
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Stad
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                      Betalvillkor
-                    </th>
+                    <SortableHeader label="Namn" sortKey="name" sortConfig={customerSortConfig} onSort={requestCustomerSort} />
+                    <SortableHeader label="Org.nr" sortKey="org_number" sortConfig={customerSortConfig} onSort={requestCustomerSort} />
+                    <SortableHeader label="Kontaktperson" sortKey="contact_person" sortConfig={customerSortConfig} onSort={requestCustomerSort} />
+                    <SortableHeader label="E-post" sortKey="email" sortConfig={customerSortConfig} onSort={requestCustomerSort} />
+                    <SortableHeader label="Stad" sortKey="city" sortConfig={customerSortConfig} onSort={requestCustomerSort} />
+                    <SortableHeader label="Betalvillkor" sortKey="payment_terms_days" sortConfig={customerSortConfig} onSort={requestCustomerSort} align="center" />
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                       Status
                     </th>
@@ -153,7 +155,7 @@ export default function Customers() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {customers.map((customer) => (
+                  {sortedCustomers.map((customer) => (
                     <tr key={customer.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium">{customer.name}</td>
                       <td className="px-4 py-3 text-sm">{customer.org_number || '-'}</td>
@@ -216,24 +218,12 @@ export default function Customers() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Namn
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Org.nr
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Kontaktperson
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      E-post
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Stad
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                      Betalvillkor
-                    </th>
+                    <SortableHeader label="Namn" sortKey="name" sortConfig={supplierSortConfig} onSort={requestSupplierSort} />
+                    <SortableHeader label="Org.nr" sortKey="org_number" sortConfig={supplierSortConfig} onSort={requestSupplierSort} />
+                    <SortableHeader label="Kontaktperson" sortKey="contact_person" sortConfig={supplierSortConfig} onSort={requestSupplierSort} />
+                    <SortableHeader label="E-post" sortKey="email" sortConfig={supplierSortConfig} onSort={requestSupplierSort} />
+                    <SortableHeader label="Stad" sortKey="city" sortConfig={supplierSortConfig} onSort={requestSupplierSort} />
+                    <SortableHeader label="Betalvillkor" sortKey="payment_terms_days" sortConfig={supplierSortConfig} onSort={requestSupplierSort} align="center" />
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                       Status
                     </th>
@@ -243,7 +233,7 @@ export default function Customers() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {suppliers.map((supplier) => (
+                  {sortedSuppliers.map((supplier) => (
                     <tr key={supplier.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium">{supplier.name}</td>
                       <td className="px-4 py-3 text-sm">{supplier.org_number || '-'}</td>

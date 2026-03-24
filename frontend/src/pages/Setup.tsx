@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { companyApi, fiscalYearApi } from '@/services/api'
 import { authService } from '@/services/authService'
 import { useAuth } from '@/contexts/AuthContext'
@@ -52,6 +52,24 @@ export default function Setup() {
 
   // Chart of accounts choice
   const [importBAS, setImportBAS] = useState<boolean | null>(null)
+  const [basAccountCount, setBasAccountCount] = useState<number | null>(null)
+
+  // Fetch BAS account count when reaching the chart-of-accounts step
+  useEffect(() => {
+    if (currentStep === 'chart-of-accounts') {
+      const fetchBasAccountCount = async () => {
+        try {
+          const response = await companyApi.getBasAccounts()
+          setBasAccountCount(response.data.accounts.length)
+        } catch (error) {
+          console.error('Failed to fetch BAS account count:', error)
+          // Fallback to a reasonable default if API fails
+          setBasAccountCount(46)
+        }
+      }
+      fetchBasAccountCount()
+    }
+  }, [currentStep])
 
   // Step 1: Create Admin User
   const handleAdminSubmit = async (e: React.FormEvent) => {
@@ -567,7 +585,7 @@ export default function Setup() {
                       Systemet skapar automatiskt:
                     </p>
                     <ul className="text-sm text-gray-600 space-y-1">
-                      <li>✓ 43 BAS-konton från BAS2024</li>
+                      <li>✓ {basAccountCount ?? '...'} BAS-konton från BAS2024</li>
                       <li>✓ Standardkonton för moms</li>
                       <li>✓ Konteringsmallar</li>
                       <li>✓ Du är redo att börja!</li>
@@ -626,9 +644,9 @@ export default function Setup() {
             <p className="text-gray-600 mb-4">
               Ditt företag har skapats och är redo att användas
             </p>
-            {importBAS && (
+            {importBAS && basAccountCount && (
               <p className="text-sm text-gray-500">
-                BAS2024-kontoplanen har importerats med 43 konton
+                BAS2024-kontoplanen har importerats med {basAccountCount} konton
               </p>
             )}
             <p className="text-sm text-gray-400 mt-4">

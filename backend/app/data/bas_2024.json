@@ -45,6 +45,12 @@
       "description": "Share premium reserve"
     },
     {
+      "account_number": 2018,
+      "name": "Övriga egna insättningar",
+      "account_type": "equity_liability",
+      "description": "Tillskott av eget kapital från ägare"
+    },
+    {
       "account_number": 2050,
       "name": "Aktiekapital",
       "account_type": "equity_liability",

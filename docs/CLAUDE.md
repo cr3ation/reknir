@@ -664,10 +664,19 @@ BSD 3-Clause License - Se LICENSE-filen i projektets rot.
 
 ---
 
-**Version:** 1.3.0
-**Senast uppdaterad:** 2026-02-05
+**Version:** 1.3.2
+**Senast uppdaterad:** 2026-02-08
 
 ## Ändringslogg
+
+### v1.3.2 (2026-02-08)
+- ✅ Förbättrad SIE4-import med förhandsgranskning
+  - Ny preview-endpoint analyserar SIE4-filer innan import
+  - Automatisk skapande av räkenskapsår från #RAR 0
+  - Blockerande fel vid överlappande räkenskapsår
+  - Ny SIE4ImportModal med multi-steg-flöde: upload → preview → import → resultat
+  - Visar räkenskapsårsinfo, antal konton/verifikationer, fel och varningar
+  - Kräver inte längre förval av räkenskapsår (filen bestämmer)
 
 ### v1.3.0 (2026-02-05)
 - ✅ Komplett backup- och restore-system

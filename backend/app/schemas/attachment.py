@@ -24,6 +24,17 @@ class AttachmentResponse(BaseModel):
         from_attributes = True
 
 
+class AttachmentLinkItem(BaseModel):
+    """Simplified link info for attachment lists"""
+
+    entity_type: EntityType
+    entity_id: int
+    role: AttachmentRole
+
+    class Config:
+        from_attributes = True
+
+
 class AttachmentListItem(BaseModel):
     """Simplified schema for attachment lists"""
 
@@ -33,6 +44,7 @@ class AttachmentListItem(BaseModel):
     size_bytes: int
     status: AttachmentStatus
     created_at: datetime
+    links: list[AttachmentLinkItem] = []
 
     class Config:
         from_attributes = True

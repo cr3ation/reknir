@@ -20,6 +20,7 @@ import type {
   SupplierInvoiceListItem,
   SupplierInvoiceCreateData,
   DefaultAccount,
+  SIE4PreviewResponse,
   SIE4ImportResponse,
   VATReport,
   VATPeriodsResponse,
@@ -208,13 +209,28 @@ export const reportApi = {
         exclude_vat_settlements: excludeVatSettlements,
       },
     }),
-  vatPeriods: (companyId: number, year: number, fiscalYearId?: number) =>
+  vatPeriods: (companyId: number, year: number) =>
     api.get<VATPeriodsResponse>('/reports/vat-periods', {
-      params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
+      params: { company_id: companyId, year },
     }),
   monthlyStatistics: (companyId: number, fiscalYearId: number, year: number) =>
     api.get<MonthlyStatistics>('/reports/monthly-statistics', {
       params: { company_id: companyId, fiscal_year_id: fiscalYearId, year },
+    }),
+  balanceSheetPdf: (companyId: number, fiscalYearId: number) =>
+    api.get('/reports/balance-sheet', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
+      responseType: 'blob',
+    }),
+  incomeStatementPdf: (companyId: number, fiscalYearId: number) =>
+    api.get('/reports/income-statement', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
+      responseType: 'blob',
+    }),
+  generalLedgerPdf: (companyId: number, fiscalYearId: number) =>
+    api.get('/reports/general-ledger', {
+      params: { company_id: companyId, fiscal_year_id: fiscalYearId, format: 'pdf' },
+      responseType: 'blob',
     }),
 }
 
@@ -291,11 +307,16 @@ export const attachmentApi = {
 
 // SIE4 Import/Export
 export const sie4Api = {
-  import: (companyId: number, fiscalYearId: number, file: File) => {
+  preview: (companyId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<SIE4PreviewResponse>(`/sie4/preview/${companyId}`, formData)
+  },
+  import: (companyId: number, file: File, fiscalYearId?: number) => {
     const formData = new FormData()
     formData.append('file', file)
     return api.post<SIE4ImportResponse>(`/sie4/import/${companyId}`, formData, {
-      params: { fiscal_year_id: fiscalYearId },
+      params: fiscalYearId ? { fiscal_year_id: fiscalYearId } : undefined,
     })
   },
   export: (companyId: number, fiscalYearId: number, includeVerifications: boolean = true) => {
