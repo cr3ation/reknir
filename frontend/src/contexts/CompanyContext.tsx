@@ -19,9 +19,21 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     try {
       const response = await companyApi.list()
       setCompanies(response.data)
-      // Auto-select first company if none selected
+
       if (response.data.length > 0) {
-        setSelectedCompany((prev) => prev ?? response.data[0])
+        setSelectedCompany((prev) => {
+          if (!prev) {
+            // No company selected yet, select the first one
+            return response.data[0]
+          }
+          // Company already selected, find it in fresh data
+          const updated = response.data.find(c => c.id === prev.id)
+          // If found, use fresh data; otherwise fall back to first company
+          return updated ?? response.data[0]
+        })
+      } else {
+        // No companies exist, clear selection
+        setSelectedCompany(null)
       }
     } catch (error) {
       console.error('Failed to load companies:', error)
