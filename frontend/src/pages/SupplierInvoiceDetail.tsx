@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, FileText, DollarSign, BookOpen } from 'lucide-react'
+import { ArrowLeft, FileText, DollarSign, BookOpen, X } from 'lucide-react'
 import { supplierInvoiceApi, accountApi, supplierApi, attachmentApi } from '@/services/api'
 import type { SupplierInvoice, Account, Supplier, EntityAttachment } from '@/types'
 import { InvoiceStatus, PaymentStatus, EntityType } from '@/types'
@@ -19,6 +19,10 @@ export default function SupplierInvoiceDetail() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [attachments, setAttachments] = useState<EntityAttachment[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Cancel modal state
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   const loadInvoice = useCallback(async () => {
     try {
@@ -106,6 +110,21 @@ export default function SupplierInvoiceDetail() {
     }
   }
 
+  const handleCancelInvoice = async () => {
+    setCancelling(true)
+    try {
+      await supplierInvoiceApi.cancel(parseInt(invoiceId!))
+      setShowCancelModal(false)
+      await loadInvoice()
+      alert('Leverantörsfakturan har makulerats')
+    } catch (error) {
+      console.error('Failed to cancel invoice:', error)
+      alert(`Kunde inte makulera fakturan: ${getErrorMessage(error, 'Unknown error')}`)
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   // Attachment handlers for AttachmentManager
   const handleUploadAttachment = async (file: File) => {
     if (!selectedCompany) throw new Error('No company selected')
@@ -168,7 +187,7 @@ export default function SupplierInvoiceDetail() {
       paid: 'Betald',
       partial: 'Delvis betald',
       overdue: 'Förfallen',
-      cancelled: 'Avbruten',
+      cancelled: 'Makulerad',
     }
     return (
       <span className={`px-3 py-1 text-sm font-semibold rounded-full ${badges[status as keyof typeof badges]}`}>
@@ -380,6 +399,15 @@ export default function SupplierInvoiceDetail() {
                   Markera som betald
                 </button>
               )}
+              {invoice.status !== InvoiceStatus.CANCELLED && invoice.payment_status === PaymentStatus.UNPAID && (
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  <X className="w-4 h-4" />
+                  Makulera faktura
+                </button>
+              )}
               {invoice.invoice_verification_id && (
                 <Link
                   to={`/verifications/${invoice.invoice_verification_id}`}
@@ -450,6 +478,81 @@ export default function SupplierInvoiceDetail() {
           </div>
         </div>
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && invoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-red-50 px-6 py-4 border-b border-red-100">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <X className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Makulera leverantörsfaktura
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {supplier?.name} - {invoice.supplier_invoice_number}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+              <p className="text-gray-700 mb-4">
+                Är du säker på att du vill makulera denna leverantörsfaktura? Fakturan kommer att markeras som makulerad och kan inte längre användas.
+              </p>
+              {invoice.invoice_verification_id && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                  <strong>OBS:</strong> Fakturan har en bokföringsverifikation. Makuleringen av fakturan påverkar inte den befintliga bokföringen.
+                </div>
+              )}
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Fakturabelopp:</span>
+                  <span className="font-semibold">
+                    {formatCurrency(invoice.total_amount)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancelling}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleCancelInvoice}
+                disabled={cancelling}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {cancelling ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Makulerar...</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="w-4 h-4" />
+                    <span>Ja, makulera faktura</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
