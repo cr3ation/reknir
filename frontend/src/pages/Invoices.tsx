@@ -345,7 +345,11 @@ export default function Invoices() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-gray-50">
+                  <tr
+                    key={invoice.id}
+                    onClick={() => navigate(`/invoices/${invoice.id}`)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.invoice_number}
                     </td>
@@ -375,7 +379,10 @@ export default function Invoices() {
                         </button>
                         {invoice.status === InvoiceStatus.DRAFT && (
                           <button
-                            onClick={() => setConfirmSendInvoice(invoice)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConfirmSendInvoice(invoice)
+                            }}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                             title={selectedCompany?.accounting_basis === 'accrual' ? 'Skicka och bokför faktura' : 'Skicka faktura'}
                           >
@@ -384,7 +391,8 @@ export default function Invoices() {
                         )}
                         {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation()
                               setPaymentDate(new Date().toISOString().split('T')[0])
                               setPaymentAmount(invoice.total_amount - invoice.paid_amount)
                               setPaymentError(null)
@@ -397,7 +405,10 @@ export default function Invoices() {
                           </button>
                         )}
                         <button
-                          onClick={() => downloadInvoicePdf(invoice.id, String(invoice.invoice_number))}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            downloadInvoicePdf(invoice.id, String(invoice.invoice_number))
+                          }}
                           className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                           title="Ladda ner PDF"
                         >
@@ -451,7 +462,11 @@ export default function Invoices() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedSupplierInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-gray-50">
+                  <tr
+                    key={invoice.id}
+                    onClick={() => navigate(`/supplier-invoices/${invoice.id}`)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.supplier_invoice_number}
                     </td>
@@ -481,7 +496,10 @@ export default function Invoices() {
                         </button>
                         {invoice.status === InvoiceStatus.DRAFT && (
                           <button
-                            onClick={() => setConfirmRegisterSupplierInvoice(invoice)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setConfirmRegisterSupplierInvoice(invoice)
+                            }}
                             className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                             title="Bokför faktura"
                           >
@@ -490,7 +508,8 @@ export default function Invoices() {
                         )}
                         {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation()
                               setPaymentDate(new Date().toISOString().split('T')[0])
                               setPaymentAmount(invoice.total_amount - invoice.paid_amount)
                               setPaymentError(null)
