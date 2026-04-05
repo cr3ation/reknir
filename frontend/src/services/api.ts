@@ -264,6 +264,7 @@ export const invoiceApi = {
   send: (id: number) => api.post<Invoice>(`/invoices/${id}/send`),
   markPaid: (id: number, data: { paid_date: string; paid_amount?: number; bank_account_id?: number }) =>
     api.post<Invoice>(`/invoices/${id}/mark-paid`, data),
+  cancel: (id: number) => api.post<Invoice>(`/invoices/${id}/cancel`),
   delete: (id: number) => api.delete(`/invoices/${id}`),
 }
 
@@ -278,6 +279,7 @@ export const supplierInvoiceApi = {
   register: (id: number) => api.post<SupplierInvoice>(`/supplier-invoices/${id}/register`),
   markPaid: (id: number, data: { paid_date: string; paid_amount?: number; bank_account_id?: number }) =>
     api.post<SupplierInvoice>(`/supplier-invoices/${id}/mark-paid`, data),
+  cancel: (id: number) => api.post<SupplierInvoice>(`/supplier-invoices/${id}/cancel`),
   delete: (id: number) => api.delete(`/supplier-invoices/${id}`),
   // Attachment link methods (new unified attachment system)
   listAttachments: (id: number) => api.get<EntityAttachment[]>(`/supplier-invoices/${id}/attachments`),
