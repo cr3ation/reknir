@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: reknir-db
     environment:
-      POSTGRES_USER: reknir
-      POSTGRES_PASSWORD: reknir
-      POSTGRES_DB: reknir
+      POSTGRES_USER: ${POSTGRES_USER:-reknir}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reknir}
+      POSTGRES_DB: ${POSTGRES_DB:-reknir}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -13,7 +13,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U reknir"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reknir}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,9 +25,11 @@ services:
       dockerfile: Dockerfile
     container_name: reknir-backend
     environment:
-      DATABASE_URL: postgresql://reknir:reknir@postgres:5432/reknir
+      DATABASE_URL: postgresql://${POSTGRES_USER:-reknir}:${POSTGRES_PASSWORD:-reknir}@postgres:5432/${POSTGRES_DB:-reknir}
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
+      DEBUG: ${DEBUG:-True}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
-      DEBUG: "True"
+      BACKUP_DIR: /backups
     ports:
       - "8000:8000"
     depends_on:
@@ -64,11 +66,11 @@ services:
     image: postgres:16-alpine
     container_name: reknir-backup
     environment:
-      POSTGRES_USER: reknir
-      POSTGRES_PASSWORD: reknir
-      POSTGRES_DB: reknir
+      POSTGRES_USER: ${POSTGRES_USER:-reknir}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reknir}
+      POSTGRES_DB: ${POSTGRES_DB:-reknir}
       BACKUP_DIR: /backups
-      BACKUP_KEEP_DAYS: 2555  # 7 years per Swedish law
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-2555}  # 7 years per Swedish bookkeeping law
     volumes:
       - ./backups:/backups
       - ./scripts/backup.sh:/backup.sh
