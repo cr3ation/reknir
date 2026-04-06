@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import settings
-from app.services.backup_scheduler import backup_scheduler_loop
 from app.routers import (
     accounts,
     attachments,
@@ -28,6 +27,8 @@ from app.routers import (
     system,
     verifications,
 )
+from app.services.backup_scheduler import backup_scheduler_loop
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

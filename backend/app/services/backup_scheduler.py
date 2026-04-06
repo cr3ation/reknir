@@ -123,7 +123,7 @@ async def backup_scheduler_loop():
                     # Event was set — settings changed, re-read
                     _reconfigure_event.clear()
                     continue
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Timeout reached — time to run the backup
                     pass
 
