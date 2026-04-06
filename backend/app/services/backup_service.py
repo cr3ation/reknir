@@ -113,6 +113,23 @@ def create_backup() -> Path:
         return archive_path
 
 
+def enforce_retention(max_backups: int) -> int:
+    """Delete oldest backup archives if count exceeds max_backups.
+
+    Returns:
+        Number of backups deleted.
+    """
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    archives = sorted(BACKUP_DIR.glob("reknir_backup_*.tar.gz"))
+    deleted = 0
+    while len(archives) > max_backups:
+        oldest = archives.pop(0)
+        oldest.unlink()
+        logger.info(f"Retention: deleted {oldest.name}")
+        deleted += 1
+    return deleted
+
+
 def list_backups() -> list[dict]:
     """List all available backup archives with their manifest metadata.
 

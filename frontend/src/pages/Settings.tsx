@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi, attachmentApi } from '@/services/api'
-import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo, Attachment } from '@/types'
+import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo, BackupScheduleResponse, Attachment } from '@/types'
 import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from '@/types'
-import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip, Clock } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
 import SIE4ImportModal from '@/components/SIE4ImportModal'
 import { useCompany } from '@/contexts/CompanyContext'
@@ -42,6 +42,11 @@ export default function SettingsPage() {
   const [downloadingBackup, setDownloadingBackup] = useState<string | null>(null)
   const [showRestoreModal, setShowRestoreModal] = useState(false)
   const [showSIE4ImportModal, setShowSIE4ImportModal] = useState(false)
+  const [schedule, setSchedule] = useState<BackupScheduleResponse | null>(null)
+  const [scheduleForm, setScheduleForm] = useState({ enabled: false, interval_hours: 24, max_backups: 30 })
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const [deletingBackup, setDeletingBackup] = useState<string | null>(null)
+  const [backupToDelete, setBackupToDelete] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loadingAttachments, setLoadingAttachments] = useState(false)
   const [deletingAttachment, setDeletingAttachment] = useState<number | null>(null)
@@ -96,6 +101,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'import') {
       loadBackups()
+      loadSchedule()
     }
   }, [activeTab])
 
@@ -477,33 +483,56 @@ export default function SettingsPage() {
   const handleCreateBackup = async () => {
     setCreatingBackup(true)
     try {
-      const response = await backupApi.create()
-
-      // Trigger download
-      const blob = new Blob([response.data], { type: 'application/gzip' })
-      const url = window.URL.createObjectURL(blob)
-      const contentDisposition = response.headers['content-disposition']
-      let filename = `reknir_backup_${new Date().toISOString().split('T')[0]}.tar.gz`
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?([^";\n]+)"?/)
-        if (match) filename = match[1]
-      }
-
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      showMessage('Backup skapad och nedladdad!', 'success')
+      await backupApi.create()
+      showMessage('Backup skapad!', 'success')
       loadBackups()
     } catch (error: any) {
       console.error('Backup creation failed:', error)
       showMessage(error.response?.data?.detail || 'Kunde inte skapa backup', 'error')
     } finally {
       setCreatingBackup(false)
+    }
+  }
+
+  const handleDeleteBackup = async () => {
+    if (!backupToDelete) return
+    setDeletingBackup(backupToDelete)
+    try {
+      await backupApi.delete(backupToDelete)
+      showMessage('Backup raderad', 'success')
+      loadBackups()
+    } catch (error: any) {
+      showMessage(error.response?.data?.detail || 'Kunde inte radera backup', 'error')
+    } finally {
+      setDeletingBackup(null)
+      setBackupToDelete(null)
+    }
+  }
+
+  const loadSchedule = async () => {
+    try {
+      const response = await backupApi.getSchedule()
+      setSchedule(response.data)
+      setScheduleForm({
+        enabled: response.data.enabled,
+        interval_hours: response.data.interval_hours,
+        max_backups: response.data.max_backups,
+      })
+    } catch (error: any) {
+      console.error('Failed to load schedule:', error)
+    }
+  }
+
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true)
+    try {
+      const response = await backupApi.updateSchedule(scheduleForm)
+      setSchedule(response.data)
+      showMessage('Schemaläggning sparad!', 'success')
+    } catch (error: any) {
+      showMessage(error.response?.data?.detail || 'Kunde inte spara schemaläggning', 'error')
+    } finally {
+      setSavingSchedule(false)
     }
   }
 
@@ -1719,11 +1748,93 @@ export default function SettingsPage() {
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4 mr-2" />
-                    Skapa och ladda ner backup
+                    <HardDrive className="w-4 h-4 mr-2" />
+                    Skapa backup
                   </>
                 )}
               </button>
+            </div>
+
+            {/* Schedule Section */}
+            <div className="border-t pt-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-4 h-4 text-gray-600" />
+                <h3 className="text-sm font-medium text-gray-700">Automatisk backup</h3>
+              </div>
+
+              <div className="space-y-4">
+                {/* Enable toggle */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleForm.enabled}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, enabled: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-gray-700">Aktivera schemalagd backup</span>
+                </label>
+
+                {/* Interval and max backups */}
+                <div className="flex flex-wrap gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Intervall</label>
+                    <select
+                      value={scheduleForm.interval_hours}
+                      onChange={(e) => setScheduleForm(prev => ({ ...prev, interval_hours: Number(e.target.value) }))}
+                      disabled={!scheduleForm.enabled}
+                      className="input text-sm w-44 disabled:opacity-50"
+                    >
+                      <option value={6}>Var 6:e timme</option>
+                      <option value={24}>Varje dygn</option>
+                      <option value={48}>Varannan dag</option>
+                      <option value={168}>Varje vecka</option>
+                      <option value={336}>Varannan vecka</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Max antal backups</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={scheduleForm.max_backups}
+                      onChange={(e) => setScheduleForm(prev => ({ ...prev, max_backups: Math.max(1, Number(e.target.value)) }))}
+                      disabled={!scheduleForm.enabled}
+                      className="input text-sm w-24 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+
+                {/* Status */}
+                {schedule && schedule.enabled && (
+                  <div className="text-xs text-gray-500 space-y-1">
+                    {schedule.last_backup_at && (
+                      <p>Senaste backup: {formatBackupDate(schedule.last_backup_at)}</p>
+                    )}
+                    {schedule.next_backup_at && (
+                      <p>Nästa backup: {formatBackupDate(schedule.next_backup_at)}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Save button */}
+                <button
+                  onClick={handleSaveSchedule}
+                  disabled={savingSchedule}
+                  className="btn btn-secondary inline-flex items-center text-sm"
+                >
+                  {savingSchedule ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sparar...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Spara inställningar
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Backup List */}
@@ -1786,11 +1897,16 @@ export default function SettingsPage() {
                                 )}
                               </button>
                               <button
-                                onClick={() => setShowRestoreModal(true)}
-                                className="text-amber-600 hover:text-amber-800 p-1"
-                                title="Återställ"
+                                onClick={() => setBackupToDelete(backup.filename)}
+                                disabled={deletingBackup === backup.filename}
+                                className="text-red-600 hover:text-red-800 p-1"
+                                title="Radera"
                               >
-                                <RotateCcw className="w-4 h-4" />
+                                {deletingBackup === backup.filename ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
                               </button>
                             </div>
                           </td>
@@ -2540,6 +2656,59 @@ export default function SettingsPage() {
       )}
 
       {floatingPreview}
+
+      {/* Delete Backup Confirmation Modal */}
+      {backupToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-white bg-opacity-20 p-2 rounded-full">
+                  <Trash2 className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-semibold text-white">Radera backup</h3>
+              </div>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-gray-700 mb-3">
+                Är du säker på att du vill radera följande backup?
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="font-mono text-sm text-gray-900">{backupToDelete}</p>
+              </div>
+              <p className="text-sm text-red-600 mt-3">
+                Denna åtgärd kan inte ångras.
+              </p>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex gap-3 justify-end">
+              <button
+                onClick={() => setBackupToDelete(null)}
+                disabled={!!deletingBackup}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={handleDeleteBackup}
+                disabled={!!deletingBackup}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {deletingBackup ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Raderar...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Radera
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Restore Modal */}
       <RestoreModal

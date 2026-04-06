@@ -32,6 +32,8 @@ import type {
   AttachmentRole,
   BackupInfo,
   RestoreResponse,
+  BackupScheduleResponse,
+  BackupScheduleUpdate,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -374,13 +376,15 @@ const BACKUP_TIMEOUT = 10 * 60 * 1000
 export const backupApi = {
   list: () => api.get<BackupInfo[]>('/backup/list'),
 
-  create: () => api.post('/backup/create', null, {
-    responseType: 'blob',
+  create: () => api.post<BackupInfo>('/backup/create', null, {
     timeout: BACKUP_TIMEOUT,
   }),
 
   download: (filename: string) =>
     api.get(`/backup/download/${filename}`, { responseType: 'blob' }),
+
+  delete: (filename: string) =>
+    api.delete(`/backup/${filename}`),
 
   restoreFromServer: (filename: string) =>
     api.post<RestoreResponse>(`/backup/restore/${filename}`, null, {
@@ -394,6 +398,11 @@ export const backupApi = {
       timeout: BACKUP_TIMEOUT,
     })
   },
+
+  getSchedule: () => api.get<BackupScheduleResponse>('/backup/schedule'),
+
+  updateSchedule: (data: BackupScheduleUpdate) =>
+    api.put<BackupScheduleResponse>('/backup/schedule', data),
 }
 
 export default api
