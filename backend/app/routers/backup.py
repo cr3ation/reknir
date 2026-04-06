@@ -338,11 +338,13 @@ async def update_backup_schedule(
     if data.preferred_time is not None:
         h, m = data.preferred_time.split(":")
         from datetime import time as time_type
+
         row.preferred_time = time_type(int(h), int(m))
 
     # Compute next_backup_at when enabling or changing interval
     if row.enabled:
         from app.services.backup_scheduler import _compute_next_backup
+
         interval = timedelta(hours=row.interval_hours)
         preferred = row.preferred_time or time_type(3, 0)
         row.next_backup_at = _compute_next_backup(interval, preferred)
@@ -354,6 +356,8 @@ async def update_backup_schedule(
     db.refresh(row)
 
     signal_reconfigure()
-    logger.info(f"Backup schedule updated by {admin.email}: enabled={row.enabled}, interval={row.interval_hours}h, max={row.max_backups}")
+    logger.info(
+        f"Backup schedule updated by {admin.email}: enabled={row.enabled}, interval={row.interval_hours}h, max={row.max_backups}"
+    )
 
     return _schedule_to_response(row)

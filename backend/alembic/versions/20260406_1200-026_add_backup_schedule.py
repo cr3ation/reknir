@@ -32,10 +32,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     # Insert default row (single-row table)
-    op.execute(
-        "INSERT INTO backup_schedule (id, enabled, interval_hours, max_backups) "
-        "VALUES (1, false, 24, 30)"
-    )
+    op.execute("INSERT INTO backup_schedule (id, enabled, interval_hours, max_backups) " "VALUES (1, false, 24, 30)")
 
 
 def downgrade() -> None:
