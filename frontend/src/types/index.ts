@@ -699,3 +699,19 @@ export interface RestoreResponse {
   message: string
   stages_completed: string[]
 }
+
+export interface BackupScheduleResponse {
+  enabled: boolean
+  interval_hours: number
+  max_backups: number
+  preferred_time: string
+  last_backup_at: string | null
+  next_backup_at: string | null
+}
+
+export interface BackupScheduleUpdate {
+  enabled?: boolean
+  interval_hours?: number
+  max_backups?: number
+  preferred_time?: string
+}

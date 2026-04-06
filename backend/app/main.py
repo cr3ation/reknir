@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,12 +27,26 @@ from app.routers import (
     system,
     verifications,
 )
+from app.services.backup_scheduler import backup_scheduler_loop
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(backup_scheduler_loop())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
 
 # Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
     description="Modern Swedish bookkeeping system with BAS kontoplan support and invoice management",
     version=__version__,
+    lifespan=lifespan,
 )
 
 # Configure CORS

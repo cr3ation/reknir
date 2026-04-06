@@ -142,29 +142,20 @@ docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
 
 ## Backups
 
-### Create Backup
+Backups are managed via **Settings → Import/Export** in the GUI, or via CLI:
 
 ```bash
-# Development
-docker compose exec postgres pg_dump -U reknir reknir > backup_$(date +%Y%m%d).sql
+# Create backup
+docker compose exec backend python -m app.cli backup create
 
-# Production
-docker compose -f docker-compose.prod.yml exec postgres \
-  pg_dump -U reknir reknir | gzip > backups/manual_$(date +%Y%m%d_%H%M%S).sql.gz
+# List backups
+docker compose exec backend python -m app.cli backup list
+
+# Restore from backup
+docker compose exec backend python -m app.cli backup restore <filename>
 ```
 
-### Restore Backup
-
-```bash
-# Development
-docker compose exec -T postgres psql -U reknir reknir < backup_20241109.sql
-
-# Production (stop backend first!)
-docker compose -f docker-compose.prod.yml stop backend
-gunzip -c backups/backup_file.sql.gz | \
-  docker compose -f docker-compose.prod.yml exec -T postgres psql -U reknir -d reknir
-docker compose -f docker-compose.prod.yml start backend
-```
+Automatic scheduled backups can be configured in the GUI.
 
 ---
 

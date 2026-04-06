@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models.attachment import AttachmentRole, AttachmentStatus, EntityType
 
@@ -20,8 +20,7 @@ class AttachmentResponse(BaseModel):
     created_at: datetime
     created_by: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttachmentLinkItem(BaseModel):
@@ -31,8 +30,7 @@ class AttachmentLinkItem(BaseModel):
     entity_id: int
     role: AttachmentRole
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttachmentListItem(BaseModel):
@@ -46,8 +44,7 @@ class AttachmentListItem(BaseModel):
     created_at: datetime
     links: list[AttachmentLinkItem] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttachmentLinkCreate(BaseModel):
@@ -72,8 +69,7 @@ class AttachmentLinkResponse(BaseModel):
     # Include attachment details for convenience
     attachment: AttachmentListItem
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttachmentWithLinksResponse(AttachmentResponse):
@@ -81,8 +77,7 @@ class AttachmentWithLinksResponse(AttachmentResponse):
 
     links: list[AttachmentLinkResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EntityAttachmentItem(BaseModel):
@@ -100,5 +95,4 @@ class EntityAttachmentItem(BaseModel):
     size_bytes: int
     status: AttachmentStatus
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

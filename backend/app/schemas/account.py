@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.account import AccountType
 
@@ -43,9 +43,7 @@ class AccountResponse(AccountBase):
     active: bool
     is_bas_account: bool
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class AccountBalance(BaseModel):
@@ -58,6 +56,4 @@ class AccountBalance(BaseModel):
     current_balance: Decimal
     change: Decimal
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})

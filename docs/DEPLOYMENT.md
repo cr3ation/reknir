@@ -197,29 +197,12 @@ Visit your domain: `https://reknir.yourdomain.com`
 
 ### Setup Automated Backups
 
-Backups run automatically daily at 3 AM. To manually backup:
+Automatic backups are configured via **Settings → Import/Export → Automatisk backup**. Options include backup interval (6h to 14 days) and maximum number of backups to retain.
+
+Manual backups can also be created via CLI:
 
 ```bash
-# Create backup script
-cat > ~/manual-backup.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR="$HOME/reknir/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-
-# Backup database
-docker exec reknir-db pg_dump -U reknir reknir | gzip > "$BACKUP_DIR/manual_db_$DATE.sql.gz"
-
-# Backup files
-tar -czf "$BACKUP_DIR/manual_files_$DATE.tar.gz" -C ~/reknir receipts invoices
-
-echo "Backup completed: $DATE"
-ls -lh "$BACKUP_DIR"/manual_*
-EOF
-
-chmod +x ~/manual-backup.sh
-
-# Run manual backup
-~/manual-backup.sh
+docker compose exec backend python -m app.cli backup create
 ```
 
 ### Monitoring
@@ -385,8 +368,7 @@ docker stats
 df -h
 du -sh ~/reknir/* | sort -h
 
-# Clean old backups (keeps last 30 days)
-find ~/reknir/backups -name "*.gz" -mtime +30 -delete
+# Backup retention is managed via Settings GUI
 
 # Clean docker
 docker system prune -a --volumes

@@ -1,8 +1,10 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings"""
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
     # Database
     database_url: str = "postgresql://reknir:reknir@localhost:5432/reknir"
@@ -21,10 +23,6 @@ class Settings(BaseSettings):
     secret_key: str = "your-secret-key-change-in-production-use-openssl-rand-hex-32"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
     @property
     def cors_origins_list(self) -> list[str]:

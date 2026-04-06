@@ -196,7 +196,7 @@ docker compose exec backend python -m app.cli backup restore <filename>
 ```
 
 ### Automatic Backups
-- Cron-based automatic daily backups
+- Configurable scheduled backups via Settings GUI (interval and retention)
 - Backups stored in `backups/` directory as `.tar.gz` archives
 - Each archive contains SQL dump, uploaded files, and version metadata
 

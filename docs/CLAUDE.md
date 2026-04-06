@@ -334,28 +334,31 @@ Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förut
 
 ### 11. Backup & Restore
 - Komplett backup-system med databas + bilagor i .tar.gz-arkiv
-- Manuell backup via GUI (Inställningar → Backup)
-- Automatisk backup via cron
-- Restore via GUI med wizard (5 steg: källa → välj → bekräfta → progress → resultat)
+- Manuell och schemalagd backup (konfigurerbart intervall och retention)
+- Restore med wizard (5 steg: källa → välj → bekräfta → progress → resultat)
 - Kalenderbaserad backup-väljare med snabbåtkomst till senaste backuper
-- Restore från server (befintliga backuper) eller filuppladdning
+- Restore från server eller filuppladdning
+- Radering av backuper
 - CLI-stöd (`backup create`, `backup list`, `backup restore`)
 - Metadata per backup: appversion, schemaversion, storlek, tidpunkt
 
 **Backup-arkiv innehåller:**
-- SQL-dump av hela databasen
+- SQL-dump av hela databasen (pg_dump custom format)
 - Alla uppladdade filer (logotyper, bilagor, kvitton)
 - Metadata-fil (JSON) med version och schemainformation
 
 **API Endpoints:**
-- `POST /api/backup/create` - Skapa ny backup
+- `POST /api/backup/create` - Skapa ny backup (returnerar metadata)
 - `GET /api/backup/list` - Lista alla backuper
 - `GET /api/backup/download/{filename}` - Ladda ner backup
+- `DELETE /api/backup/{filename}` - Radera backup
 - `POST /api/backup/restore/{filename}` - Återställ från server-backup
 - `POST /api/backup/restore` - Återställ från uppladdad fil
+- `GET /api/backup/schedule` - Hämta schema-inställningar
+- `PUT /api/backup/schedule` - Uppdatera schema-inställningar
 
 **Routes:**
-- `/settings` - Inställningar (fliken "Backup")
+- `/settings` - Inställningar (fliken "Import/Export")
 
 ### 12. Företagsinställningar
 - Företagsinformation med automatiskt VAT-nummer
@@ -478,7 +481,12 @@ Systemet använder default accounts för automatisk bokföring:
 ### `/backend/app/services/backup_service.py`
 - `create_backup()` - Skapar komplett backup-arkiv (.tar.gz) med databas, bilagor och metadata
 - `list_backups()` - Listar alla tillgängliga backuper med metadata
+- `enforce_retention(max_backups)` - Raderar äldsta backuper om antal överstiger max
 - `BACKUP_DIR` - Sökväg till backup-katalogen
+
+### `/backend/app/services/backup_scheduler.py`
+- `backup_scheduler_loop()` - Asyncio background task för schemalagda backuper
+- `signal_reconfigure()` - Väcker schedulern vid ändrade inställningar
 
 ### `/backend/app/services/restore_service.py`
 - `restore_from_archive()` - Återställer hela systemet från ett backup-arkiv
@@ -508,6 +516,7 @@ Systemet använder default accounts för automatisk bokföring:
 - `default_accounts` - Standardkonton
 - `posting_templates` - Konteringsmallar
 - `posting_template_lines` - Konteringsmallrader
+- `backup_schedule` - Schemaläggning av automatiska backuper (single-row)
 
 ### Enum Types
 - `InvoiceStatus`: draft, sent, paid, partial, overdue, cancelled
@@ -664,10 +673,16 @@ BSD 3-Clause License - Se LICENSE-filen i projektets rot.
 
 ---
 
-**Version:** 1.3.2
-**Senast uppdaterad:** 2026-02-08
+**Version:** 1.3.3
+**Senast uppdaterad:** 2026-04-06
 
 ## Ändringslogg
+
+### v1.3.3 (2026-04-06)
+- ✅ Schemalagda automatiska backuper med konfigurerbart intervall och retention
+- ✅ Radering av backuper
+- ✅ Förbättrad konfiguration: env-variabler istället för hårdkodade credentials i docker-compose
+- ✅ Borttagen separat Docker backup-container (ersatt av inbyggd scheduler)
 
 ### v1.3.2 (2026-02-08)
 - ✅ Förbättrad SIE4-import med förhandsgranskning

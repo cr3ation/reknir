@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CustomerBase(BaseModel):
@@ -45,8 +45,7 @@ class CustomerResponse(CustomerBase):
     company_id: int
     active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SupplierBase(BaseModel):
@@ -97,5 +96,4 @@ class SupplierResponse(SupplierBase):
     company_id: int
     active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

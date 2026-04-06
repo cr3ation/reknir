@@ -1,4 +1,5 @@
 from app.models.account import Account
+from app.models.backup_schedule import BackupSchedule
 from app.models.company import Company
 from app.models.customer import Customer, Supplier
 from app.models.default_account import DefaultAccount
@@ -12,6 +13,7 @@ from app.models.verification import TransactionLine, Verification
 
 __all__ = [
     "Account",
+    "BackupSchedule",
     "Verification",
     "TransactionLine",
     "PostingTemplate",
