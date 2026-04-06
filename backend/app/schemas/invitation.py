@@ -4,7 +4,7 @@ Pydantic schemas for invitations
 
 from datetime import datetime
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class InvitationCreate(BaseModel):
@@ -14,15 +14,17 @@ class InvitationCreate(BaseModel):
     role: str = "user"
     days_valid: int = 7
 
-    @validator("role")
-    def validate_role(cls, v):
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
         allowed_roles = ["user", "accountant", "manager"]
         if v not in allowed_roles:
             raise ValueError(f'Role must be one of: {", ".join(allowed_roles)}')
         return v
 
-    @validator("days_valid")
-    def validate_days_valid(cls, v):
+    @field_validator("days_valid")
+    @classmethod
+    def validate_days_valid(cls, v: int) -> int:
         if v < 1 or v > 30:
             raise ValueError("days_valid must be between 1 and 30")
         return v
@@ -40,8 +42,7 @@ class InvitationResponse(BaseModel):
     used_at: datetime | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InvitationAccept(BaseModel):
@@ -51,14 +52,16 @@ class InvitationAccept(BaseModel):
     email: str
     password: str
 
-    @validator("password")
-    def validate_password(cls, v):
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
         if len(v) < 6:
             raise ValueError("Password must be at least 6 characters long")
         return v
 
-    @validator("email")
-    def validate_email(cls, v):
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
         if "@" not in v:
             raise ValueError("Invalid email address")
         return v.lower()

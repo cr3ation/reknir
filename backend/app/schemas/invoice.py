@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.company import PaymentType
 from app.models.invoice import InvoiceStatus, PaymentStatus
@@ -33,9 +33,7 @@ class InvoiceLineResponse(InvoiceLineBase):
     vat_amount: Decimal
     total_amount: Decimal
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class InvoiceBase(BaseModel):
@@ -104,9 +102,7 @@ class InvoicePaymentResponse(InvoicePaymentBase):
     verification_id: int | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class InvoiceResponse(InvoiceBase):
@@ -139,9 +135,7 @@ class InvoiceResponse(InvoiceBase):
     invoice_lines: list[InvoiceLineResponse]
     payments: list[InvoicePaymentResponse] = []
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class InvoiceListItem(BaseModel):
@@ -159,9 +153,7 @@ class InvoiceListItem(BaseModel):
     payment_status: PaymentStatus
     paid_amount: Decimal
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class SupplierInvoiceLineBase(BaseModel):
@@ -189,9 +181,7 @@ class SupplierInvoiceLineResponse(SupplierInvoiceLineBase):
     vat_amount: Decimal
     total_amount: Decimal
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class SupplierInvoiceBase(BaseModel):
@@ -239,9 +229,7 @@ class SupplierInvoicePaymentResponse(InvoicePaymentBase):
     verification_id: int | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class SupplierInvoiceResponse(SupplierInvoiceBase):
@@ -265,9 +253,7 @@ class SupplierInvoiceResponse(SupplierInvoiceBase):
     supplier_invoice_lines: list[SupplierInvoiceLineResponse]
     payments: list[SupplierInvoicePaymentResponse] = []
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class SupplierInvoiceListItem(BaseModel):
@@ -285,9 +271,7 @@ class SupplierInvoiceListItem(BaseModel):
     payment_status: PaymentStatus
     paid_amount: Decimal
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class MarkPaidRequest(BaseModel):

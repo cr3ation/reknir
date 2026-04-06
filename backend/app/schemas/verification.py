@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TransactionLineBase(BaseModel):
@@ -35,9 +35,7 @@ class TransactionLineResponse(TransactionLineBase):
     account_number: int = 0  # Will be populated from account
     account_name: str = ""  # Will be populated from account
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class VerificationBase(BaseModel):
@@ -90,9 +88,7 @@ class VerificationResponse(VerificationBase):
     is_balanced: bool
     total_amount: Decimal
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 
 
 class VerificationListItem(BaseModel):
@@ -106,6 +102,4 @@ class VerificationListItem(BaseModel):
     total_amount: Decimal
     locked: bool
 
-    class Config:
-        from_attributes = True
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})

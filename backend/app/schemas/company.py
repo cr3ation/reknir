@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.company import AccountingBasis, PaymentType, VATReportingPeriod
 
@@ -66,5 +66,4 @@ class CompanyResponse(CompanyBase):
     id: int
     vat_number: str = Field(..., description="Calculated Swedish VAT number (SE + org_number + 01)")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FiscalYearBase(BaseModel):
@@ -53,5 +53,4 @@ class FiscalYearResponse(FiscalYearBase):
     company_id: int
     is_current: bool = Field(default=False, description="Whether this fiscal year is currently active")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
