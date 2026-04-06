@@ -517,7 +517,7 @@ export default function SettingsPage() {
         enabled: response.data.enabled,
         interval_hours: response.data.interval_hours,
         max_backups: response.data.max_backups,
-        preferred_time: response.data.preferred_time,
+        preferred_time: utcTimeToLocal(response.data.preferred_time),
       })
     } catch (error: any) {
       console.error('Failed to load schedule:', error)
@@ -527,7 +527,8 @@ export default function SettingsPage() {
   const handleSaveSchedule = async () => {
     setSavingSchedule(true)
     try {
-      const response = await backupApi.updateSchedule(scheduleForm)
+      const payload = { ...scheduleForm, preferred_time: localTimeToUtc(scheduleForm.preferred_time) }
+      const response = await backupApi.updateSchedule(payload)
       setSchedule(response.data)
       showMessage('Schemaläggning sparad!', 'success')
     } catch (error: any) {
@@ -568,7 +569,26 @@ export default function SettingsPage() {
   }
 
   const formatBackupDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('sv-SE')
+    return new Date(dateString).toLocaleString('sv-SE', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    })
+  }
+
+  // Convert "HH:MM" in UTC to "HH:MM" in the browser's local timezone
+  const utcTimeToLocal = (utcTime: string): string => {
+    const [h, m] = utcTime.split(':').map(Number)
+    const d = new Date()
+    d.setUTCHours(h, m, 0, 0)
+    return d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  // Convert "HH:MM" in the browser's local timezone to "HH:MM" in UTC
+  const localTimeToUtc = (localTime: string): string => {
+    const [h, m] = localTime.split(':').map(Number)
+    const d = new Date()
+    d.setHours(h, m, 0, 0)
+    return d.toISOString().slice(11, 16)
   }
 
   const handleVATReportingPeriodChange = async (newPeriod: VATReportingPeriod) => {
