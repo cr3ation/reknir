@@ -26,6 +26,7 @@ def upgrade() -> None:
         sa.Column("max_backups", sa.Integer(), server_default=sa.text("30"), nullable=False),
         sa.Column("last_backup_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("next_backup_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("preferred_time", sa.Time(), server_default=sa.text("'03:00:00'"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),

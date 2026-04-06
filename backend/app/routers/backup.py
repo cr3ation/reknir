@@ -48,6 +48,7 @@ class BackupScheduleResponse(BaseModel):
     enabled: bool
     interval_hours: int
     max_backups: int
+    preferred_time: str
     last_backup_at: str | None
     next_backup_at: str | None
 
@@ -56,6 +57,7 @@ class BackupScheduleUpdate(BaseModel):
     enabled: bool | None = None
     interval_hours: Literal[6, 24, 48, 168, 336] | None = None
     max_backups: int | None = Field(default=None, ge=1)
+    preferred_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
 
 
 # ---- Endpoints ----
@@ -292,6 +294,7 @@ def _schedule_to_response(row: BackupSchedule) -> BackupScheduleResponse:
         enabled=row.enabled,
         interval_hours=row.interval_hours,
         max_backups=row.max_backups,
+        preferred_time=row.preferred_time.strftime("%H:%M") if row.preferred_time else "03:00",
         last_backup_at=row.last_backup_at.isoformat() if row.last_backup_at else None,
         next_backup_at=row.next_backup_at.isoformat() if row.next_backup_at else None,
     )
@@ -332,14 +335,17 @@ async def update_backup_schedule(
         row.interval_hours = data.interval_hours
     if data.max_backups is not None:
         row.max_backups = data.max_backups
+    if data.preferred_time is not None:
+        h, m = data.preferred_time.split(":")
+        from datetime import time as time_type
+        row.preferred_time = time_type(int(h), int(m))
 
     # Compute next_backup_at when enabling or changing interval
     if row.enabled:
+        from app.services.backup_scheduler import _compute_next_backup
         interval = timedelta(hours=row.interval_hours)
-        if row.last_backup_at:
-            row.next_backup_at = row.last_backup_at + interval
-        else:
-            row.next_backup_at = datetime.now(UTC) + interval
+        preferred = row.preferred_time or time_type(3, 0)
+        row.next_backup_at = _compute_next_backup(interval, preferred)
     else:
         row.next_backup_at = None
 

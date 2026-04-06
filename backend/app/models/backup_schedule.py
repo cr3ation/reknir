@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, time
 
-from sqlalchemy import Boolean, Column, DateTime, Integer
+from sqlalchemy import Boolean, Column, DateTime, Integer, Time
 
 from app.database import Base
 
@@ -16,6 +16,7 @@ class BackupSchedule(Base):
     max_backups = Column(Integer, default=30, nullable=False)
     last_backup_at = Column(DateTime(timezone=True), nullable=True)
     next_backup_at = Column(DateTime(timezone=True), nullable=True)
+    preferred_time = Column(Time(), default=time(3, 0), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 

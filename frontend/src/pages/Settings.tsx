@@ -43,7 +43,7 @@ export default function SettingsPage() {
   const [showRestoreModal, setShowRestoreModal] = useState(false)
   const [showSIE4ImportModal, setShowSIE4ImportModal] = useState(false)
   const [schedule, setSchedule] = useState<BackupScheduleResponse | null>(null)
-  const [scheduleForm, setScheduleForm] = useState({ enabled: false, interval_hours: 24, max_backups: 30 })
+  const [scheduleForm, setScheduleForm] = useState({ enabled: false, interval_hours: 24, max_backups: 30, preferred_time: '03:00' })
   const [savingSchedule, setSavingSchedule] = useState(false)
   const [deletingBackup, setDeletingBackup] = useState<string | null>(null)
   const [backupToDelete, setBackupToDelete] = useState<string | null>(null)
@@ -517,6 +517,7 @@ export default function SettingsPage() {
         enabled: response.data.enabled,
         interval_hours: response.data.interval_hours,
         max_backups: response.data.max_backups,
+        preferred_time: response.data.preferred_time,
       })
     } catch (error: any) {
       console.error('Failed to load schedule:', error)
@@ -1792,7 +1793,17 @@ export default function SettingsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Max antal backups</label>
+                    <label className="block text-xs text-gray-500 mb-1">Tid</label>
+                    <input
+                      type="time"
+                      value={scheduleForm.preferred_time}
+                      onChange={(e) => setScheduleForm(prev => ({ ...prev, preferred_time: e.target.value }))}
+                      disabled={!scheduleForm.enabled}
+                      className="input text-sm w-28 disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Behåll senaste</label>
                     <input
                       type="number"
                       min={1}
