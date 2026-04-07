@@ -7,9 +7,11 @@ import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import AttachmentManager from '@/components/AttachmentManager'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function VerificationDetail() {
   const { verificationId } = useParams<{ verificationId: string }>()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
@@ -30,7 +32,7 @@ export default function VerificationDetail() {
       setLoading(false)
     } catch (error) {
       console.error('Failed to load verification:', error)
-      alert('Kunde inte ladda verifikationen')
+      showToast('Kunde inte ladda verifikationen', 'error')
       navigate('/verifications')
     }
   }, [verificationId, navigate])

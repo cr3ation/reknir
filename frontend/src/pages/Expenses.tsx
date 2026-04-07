@@ -10,6 +10,7 @@ import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useDropZone } from '@/hooks/useDropZone'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
+import { useToast } from '@/contexts/ToastContext'
 
 // Receipt drop zone component for inline table cell
 function ReceiptDropZone({
@@ -27,6 +28,7 @@ function ReceiptDropZone({
   onDelete: () => void
   disabled: boolean
 }) {
+  const { showToast } = useToast()
   const { isDraggedOver, dropZoneProps } = useDropZone({
     onFilesDropped: (files) => {
       if (files.length > 0) {
@@ -36,7 +38,7 @@ function ReceiptDropZone({
     acceptedFileTypes: '.jpg,.jpeg,.png,.pdf,.gif',
     maxFileSizeMB: 10,
     disabled,
-    onError: (message) => alert(message),
+    onError: (message) => showToast(message, 'error'),
   })
 
   if (hasAttachment && attachment) {
@@ -96,6 +98,7 @@ function ReceiptDropZone({
 
 export default function Expenses() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -238,7 +241,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to save expense:', error)
-      alert('Kunde inte spara utlägget')
+      showToast('Kunde inte spara utlägget', 'error')
     }
   }
 
@@ -250,7 +253,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to delete expense:', error)
-      alert('Kunde inte ta bort utlägget')
+      showToast('Kunde inte ta bort utlägget', 'error')
     }
   }
 
@@ -260,7 +263,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to submit expense:', error)
-      alert('Kunde inte skicka in utlägget för godkännande')
+      showToast('Kunde inte skicka in utlägget för godkännande', 'error')
     }
   }
 
@@ -270,7 +273,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to approve expense:', error)
-      alert('Kunde inte godkänna utlägget')
+      showToast('Kunde inte godkänna utlägget', 'error')
     }
   }
 
@@ -280,7 +283,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to reject expense:', error)
-      alert('Kunde inte avslå utlägget')
+      showToast('Kunde inte avslå utlägget', 'error')
     }
   }
 
@@ -292,17 +295,17 @@ export default function Expenses() {
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
     if (!bankAccount) {
-      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      showToast('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.', 'error')
       return
     }
 
     try {
       await expenseApi.markPaid(id, paidDate, bankAccount.id)
       await loadExpenses()
-      alert('Utlägget har markerats som utbetalt och en verifikation har skapats')
+      showToast('Utlägget har markerats som utbetalt och en verifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to mark expense as paid:', error)
-      alert(`Kunde inte markera utlägget som utbetalat: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte markera utlägget som utbetalat: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     }
   }
 
@@ -313,7 +316,7 @@ export default function Expenses() {
     )
 
     if (liabilityAccounts.length === 0) {
-      alert('Inget skuldkonto hittades (t.ex. 2890). Lägg till ett konto för anställdas utlägg först.')
+      showToast('Inget skuldkonto hittades (t.ex. 2890). Lägg till ett konto för anställdas utlägg först.', 'error')
       return
     }
 
@@ -329,7 +332,7 @@ export default function Expenses() {
 
       const selectedAccount = liabilityAccounts.find(a => a.account_number.toString() === accountNumber)
       if (!selectedAccount) {
-        alert('Ogiltigt kontonummer')
+        showToast('Ogiltigt kontonummer', 'error')
         return
       }
       employeePayableAccountId = selectedAccount.id
@@ -338,10 +341,10 @@ export default function Expenses() {
     try {
       await expenseApi.book(id, employeePayableAccountId)
       await loadExpenses()
-      alert('Utlägget har bokförts och en verifikation har skapats')
+      showToast('Utlägget har bokförts och en verifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to book expense:', error)
-      alert(`Kunde inte bokföra utlägget: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte bokföra utlägget: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     }
   }
 
@@ -353,7 +356,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to upload receipt:', error)
-      alert('Kunde inte ladda upp kvittot')
+      showToast('Kunde inte ladda upp kvittot', 'error')
     }
   }
 
@@ -370,7 +373,7 @@ export default function Expenses() {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Failed to download receipt:', error)
-      alert('Kunde inte ladda ner kvittot')
+      showToast('Kunde inte ladda ner kvittot', 'error')
     }
   }
 
@@ -382,7 +385,7 @@ export default function Expenses() {
       await loadExpenses()
     } catch (error) {
       console.error('Failed to delete receipt:', error)
-      alert('Kunde inte ta bort kvittot')
+      showToast('Kunde inte ta bort kvittot', 'error')
     }
   }
 

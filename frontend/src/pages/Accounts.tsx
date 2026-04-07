@@ -7,6 +7,7 @@ import api from '@/services/api'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
+import { useToast } from '@/contexts/ToastContext'
 
 const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   revenue_25: 'Försäljning 25% moms',
@@ -26,6 +27,7 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
 
 export default function Accounts() {
   const { selectedCompany } = useCompany()
+  const { showToast } = useToast()
   const { selectedFiscalYear } = useFiscalYear()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,8 +44,6 @@ export default function Accounts() {
   const [savingDefaultAccount, setSavingDefaultAccount] = useState(false)
   const [deletingDefaultAccountType, setDeletingDefaultAccountType] = useState<string | null>(null)
   const [removingDefaultAccount, setRemovingDefaultAccount] = useState(false)
-  const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState<'success' | 'error'>('success')
 
   // Add account state
   const [showAddAccount, setShowAddAccount] = useState(false)
@@ -63,12 +63,6 @@ export default function Accounts() {
     canDelete: true,
     blockingReason: null
   })
-
-  const showMessage = (msg: string, type: 'success' | 'error') => {
-    setMessage(msg)
-    setMessageType(type)
-    setTimeout(() => setMessage(''), 3000)
-  }
 
   useEffect(() => {
     loadAccounts()
@@ -119,7 +113,7 @@ export default function Accounts() {
       setBasAccounts(response.data.accounts)
     } catch (error) {
       console.error('Failed to load BAS accounts:', error)
-      showMessage('Kunde inte ladda BAS-konton', 'error')
+      showToast('Kunde inte ladda BAS-konton', 'error')
     }
   }
 
@@ -139,7 +133,7 @@ export default function Accounts() {
 
     const basAccount = basAccounts.find(acc => acc.account_number === parseInt(selectedBasAccount))
     if (!basAccount) {
-      showMessage('Kunde inte hitta det valda kontot', 'error')
+      showToast('Kunde inte hitta det valda kontot', 'error')
       return
     }
 
@@ -157,14 +151,14 @@ export default function Accounts() {
         is_bas_account: true,
       })
 
-      showMessage('Konto tillagt!', 'success')
+      showToast('Konto tillagt!', 'success')
       setSelectedBasAccount('')
       setShowAddAccount(false)
       await loadAccounts()
     } catch (error: unknown) {
       console.error('Failed to add account:', error)
       const errorMessage = error instanceof Error ? error.message : 'Kunde inte lägga till konto'
-      showMessage(errorMessage, 'error')
+      showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -215,12 +209,12 @@ export default function Accounts() {
     try {
       setLoading(true)
       await accountApi.delete(deleteConfirmation.account.id)
-      showMessage('Konto borttaget!', 'success')
+      showToast('Konto borttaget!', 'success')
       await loadAccounts()
     } catch (error: unknown) {
       console.error('Failed to delete account:', error)
       const errorMessage = error instanceof Error ? error.message : 'Kunde inte ta bort konto'
-      showMessage(errorMessage, 'error')
+      showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
       setDeleteConfirmation({ show: false, account: null, canDelete: true, blockingReason: null })
@@ -255,14 +249,14 @@ export default function Accounts() {
 
       if (existingDefault) {
         await defaultAccountApi.update(existingDefault.id, { account_id: selectedAccountIdForDefault })
-        showMessage('Standardkonto uppdaterat', 'success')
+        showToast('Standardkonto uppdaterat', 'success')
       } else {
         await defaultAccountApi.create({
           company_id: selectedCompany.id,
           account_type: editingDefaultAccountType,
           account_id: selectedAccountIdForDefault,
         })
-        showMessage('Standardkonto sparat', 'success')
+        showToast('Standardkonto sparat', 'success')
       }
 
       await loadDefaultAccounts()
@@ -271,7 +265,7 @@ export default function Accounts() {
     } catch (error: unknown) {
       console.error('Failed to save default account:', error)
       const errorMessage = error instanceof Error ? error.message : 'Kunde inte spara standardkonto'
-      showMessage(errorMessage, 'error')
+      showToast(errorMessage, 'error')
     } finally {
       setSavingDefaultAccount(false)
     }
@@ -290,13 +284,13 @@ export default function Accounts() {
     setRemovingDefaultAccount(true)
     try {
       await defaultAccountApi.delete(existingDefault.id)
-      showMessage('Standardkonto borttaget', 'success')
+      showToast('Standardkonto borttaget', 'success')
       await loadDefaultAccounts()
       setDeletingDefaultAccountType(null)
     } catch (error: unknown) {
       console.error('Failed to remove default account:', error)
       const errorMessage = error instanceof Error ? error.message : 'Kunde inte ta bort standardkonto'
-      showMessage(errorMessage, 'error')
+      showToast(errorMessage, 'error')
     } finally {
       setRemovingDefaultAccount(false)
     }
@@ -304,19 +298,19 @@ export default function Accounts() {
 
   const handleInitializeDefaults = async () => {
     if (!selectedCompany || !selectedFiscalYear) {
-      showMessage('Du måste välja ett räkenskapsår först', 'error')
+      showToast('Du måste välja ett räkenskapsår först', 'error')
       return
     }
 
     try {
       setLoading(true)
       const response = await companyApi.initializeDefaults(selectedCompany.id, selectedFiscalYear.id)
-      showMessage(response.data.message, 'success')
+      showToast(response.data.message, 'success')
       await loadDefaultAccounts()
     } catch (error: unknown) {
       console.error('Failed to initialize defaults:', error)
       const errorMessage = error instanceof Error ? error.message : 'Kunde inte initialisera standardkonton'
-      showMessage(errorMessage, 'error')
+      showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
@@ -342,7 +336,7 @@ export default function Accounts() {
       setEditValue('')
     } catch (error) {
       console.error('Failed to update balance:', error)
-      alert('Kunde inte uppdatera balansen')
+      showToast('Kunde inte uppdatera balansen', 'error')
     }
   }
 
@@ -398,13 +392,6 @@ export default function Accounts() {
         </div>
         <FiscalYearSelector />
       </div>
-
-      {/* Message */}
-      {message && (
-        <div className={`mb-4 p-4 rounded-lg ${messageType === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-          {message}
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">

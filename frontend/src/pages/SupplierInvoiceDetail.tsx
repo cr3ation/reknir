@@ -8,9 +8,11 @@ import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { getErrorMessage } from '@/utils/errors'
 import AttachmentManager from '@/components/AttachmentManager'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function SupplierInvoiceDetail() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
@@ -42,7 +44,7 @@ export default function SupplierInvoiceDetail() {
       setLoading(false)
     } catch (error) {
       console.error('Failed to load invoice:', error)
-      alert('Kunde inte ladda fakturan')
+      showToast('Kunde inte ladda fakturan', 'error')
       navigate('/invoices')
     }
   }, [invoiceId, navigate])
@@ -77,10 +79,10 @@ export default function SupplierInvoiceDetail() {
       const successMessage = isAccrualMethod
         ? 'Leverantörsfakturan har registrerats och en verifikation har skapats'
         : 'Leverantörsfakturan har registrerats'
-      alert(successMessage)
+      showToast(successMessage, 'success')
     } catch (error) {
       console.error('Failed to register:', error)
-      alert(`Kunde inte registrera: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte registrera: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     }
   }
 
@@ -92,7 +94,7 @@ export default function SupplierInvoiceDetail() {
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
     if (!bankAccount) {
-      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      showToast('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.', 'error')
       return
     }
 
@@ -103,10 +105,10 @@ export default function SupplierInvoiceDetail() {
         bank_account_id: bankAccount.id
       })
       await loadInvoice()
-      alert('Fakturan har markerats som betald och en betalningsverifikation har skapats')
+      showToast('Fakturan har markerats som betald och en betalningsverifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to mark paid:', error)
-      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     }
   }
 
@@ -116,10 +118,10 @@ export default function SupplierInvoiceDetail() {
       await supplierInvoiceApi.cancel(parseInt(invoiceId!))
       setShowCancelModal(false)
       await loadInvoice()
-      alert('Leverantörsfakturan har makulerats')
+      showToast('Leverantörsfakturan har makulerats', 'success')
     } catch (error) {
       console.error('Failed to cancel invoice:', error)
-      alert(`Kunde inte makulera fakturan: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte makulera fakturan: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     } finally {
       setCancelling(false)
     }

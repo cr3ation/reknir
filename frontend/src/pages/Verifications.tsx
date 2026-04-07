@@ -13,9 +13,11 @@ import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function Verifications() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const { selectedCompany } = useCompany()
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -118,7 +120,7 @@ export default function Verifications() {
       await loadData()
     } catch (error) {
       console.error('Failed to delete verification:', error)
-      alert(getErrorMessage(error, 'Kunde inte radera verifikationen'))
+      showToast(getErrorMessage(error, 'Kunde inte radera verifikationen'), 'error')
     }
   }
 
@@ -324,8 +326,10 @@ export default function Verifications() {
               setFormAttachments([])
               setPendingAttachmentIds([])
               setShowCreateModal(false)
+              const wasEditing = !!editingVerification
               setEditingVerification(null)
               loadData()
+              showToast(wasEditing ? 'Verifikation uppdaterad' : 'Verifikation skapad', 'success')
             }}
             onCancel={() => {
               resetPreview()

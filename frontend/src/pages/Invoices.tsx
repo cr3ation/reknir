@@ -15,6 +15,7 @@ import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
+import { useToast } from '@/contexts/ToastContext'
 
 // Format number with Swedish thousand separators (space)
 const formatNumberWithSeparator = (value: number): string => {
@@ -32,6 +33,7 @@ const parseFormattedNumber = (value: string): number => {
 
 export default function Invoices() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
@@ -134,7 +136,7 @@ export default function Invoices() {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Failed to download PDF:', error)
-      alert('Kunde inte ladda ner PDF')
+      showToast('Kunde inte ladda ner PDF', 'error')
     }
   }
 
@@ -148,7 +150,7 @@ export default function Invoices() {
       setConfirmSendInvoice(null)
     } catch (error) {
       console.error('Failed to send invoice:', error)
-      alert('Kunde inte skicka fakturan')
+      showToast('Kunde inte skicka fakturan', 'error')
     } finally {
       setSendingInvoice(false)
     }
@@ -164,7 +166,7 @@ export default function Invoices() {
       setConfirmRegisterSupplierInvoice(null)
     } catch (error) {
       console.error('Failed to register supplier invoice:', error)
-      alert('Kunde inte bokföra leverantörsfakturan')
+      showToast('Kunde inte bokföra leverantörsfakturan', 'error')
     } finally {
       setRegisteringSupplierInvoice(false)
     }
@@ -202,12 +204,12 @@ export default function Invoices() {
       await loadInvoices()
       setConfirmPayInvoice(null)
       const isPartialPayment = paymentAmount < remainingAmount
-      alert(isPartialPayment
+      showToast(isPartialPayment
         ? `Delbetalning på ${paymentAmount.toLocaleString('sv-SE')} kr har registrerats`
-        : 'Fakturan har markerats som betald och en betalningsverifikation har skapats')
+        : 'Fakturan har markerats som betald och en betalningsverifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to mark invoice as paid:', error)
-      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     } finally {
       setPayingInvoice(false)
     }
@@ -245,12 +247,12 @@ export default function Invoices() {
       await loadInvoices()
       setConfirmPaySupplierInvoice(null)
       const isPartialPayment = paymentAmount < remainingAmount
-      alert(isPartialPayment
+      showToast(isPartialPayment
         ? `Delbetalning på ${paymentAmount.toLocaleString('sv-SE')} kr har registrerats`
-        : 'Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
+        : 'Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to mark supplier invoice as paid:', error)
-      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     } finally {
       setPayingSupplierInvoice(false)
     }

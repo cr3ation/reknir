@@ -5,6 +5,7 @@ import { EntityType, AttachmentRole } from '@/types'
 import { attachmentApi, supplierInvoiceApi, expenseApi, verificationApi } from '@/services/api'
 import { useDropZone } from '@/hooks/useDropZone'
 import AttachmentPreviewPanel, { ImageViewer } from './AttachmentPreviewPanel'
+import { useToast } from '@/contexts/ToastContext'
 
 // ============================================================================
 // Types & Interfaces
@@ -83,6 +84,7 @@ export default function AttachmentManager({
   disableInternalPreview = false,
   onVisibleAttachmentsChange,
 }: AttachmentManagerProps) {
+  const { showToast } = useToast()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<EntityAttachment | null>(null)
@@ -163,7 +165,7 @@ export default function AttachmentManager({
     const file = event.target.files?.[0]
     if (file) {
       if (file.size > maxFileSizeMB * 1024 * 1024) {
-        alert(`Filen är för stor. Max ${maxFileSizeMB} MB.`)
+        showToast(`Filen är för stor. Max ${maxFileSizeMB} MB.`, 'error')
         return
       }
       setSelectedFile(file)
@@ -184,10 +186,10 @@ export default function AttachmentManager({
         setAvailableAttachments(response.data)
       }
 
-      if (labels.uploadSuccess) alert(labels.uploadSuccess)
+      if (labels.uploadSuccess) showToast(labels.uploadSuccess, 'success')
     } catch (error) {
       console.error('Failed to upload attachment:', error)
-      alert(labels.uploadError || 'Kunde inte ladda upp bilagan')
+      showToast(labels.uploadError || 'Kunde inte ladda upp bilagan', 'error')
     } finally {
       setUploading(false)
     }
@@ -199,7 +201,7 @@ export default function AttachmentManager({
       await onDelete(attachment)
     } catch (error) {
       console.error('Failed to delete attachment:', error)
-      alert(labels.deleteError || 'Kunde inte ta bort bilagan')
+      showToast(labels.deleteError || 'Kunde inte ta bort bilagan', 'error')
     }
   }
 
@@ -208,7 +210,7 @@ export default function AttachmentManager({
       await onDownload(attachment)
     } catch (error) {
       console.error('Failed to download attachment:', error)
-      alert(labels.downloadError || 'Kunde inte ladda ner bilagan')
+      showToast(labels.downloadError || 'Kunde inte ladda ner bilagan', 'error')
     }
   }
 
@@ -224,7 +226,7 @@ export default function AttachmentManager({
       setPreviewUrl(url)
     } catch (error) {
       console.error('Failed to load preview:', error)
-      alert(labels.downloadError || 'Kunde inte ladda förhandsvisning')
+      showToast(labels.downloadError || 'Kunde inte ladda förhandsvisning', 'error')
       setPreviewAttachment(null)
     } finally {
       setPreviewLoading(false)
@@ -256,7 +258,7 @@ export default function AttachmentManager({
         await onDelete(attachments[0])
       } catch (error) {
         console.error('Failed to delete existing attachment:', error)
-        alert(labels.deleteError || 'Kunde inte ta bort befintlig bilaga')
+        showToast(labels.deleteError || 'Kunde inte ta bort befintlig bilaga', 'error')
         return
       }
     }
@@ -265,7 +267,7 @@ export default function AttachmentManager({
     const filesToUpload = files.slice(0, Math.max(0, remainingSlots))
 
     if (filesToUpload.length < files.length) {
-      alert(`Endast ${filesToUpload.length} av ${files.length} filer kunde laddas upp (max ${maxAttachments} bilagor).`)
+      showToast(`Endast ${filesToUpload.length} av ${files.length} filer kunde laddas upp (max ${maxAttachments} bilagor).`, 'error')
     }
 
     setUploading(true)
@@ -279,7 +281,7 @@ export default function AttachmentManager({
       }
     } catch (error) {
       console.error('Failed to upload:', error)
-      alert(labels.uploadError || 'Kunde inte ladda upp bilagan')
+      showToast(labels.uploadError || 'Kunde inte ladda upp bilagan', 'error')
     } finally {
       setUploading(false)
     }
@@ -290,7 +292,7 @@ export default function AttachmentManager({
     acceptedFileTypes,
     maxFileSizeMB,
     disabled: !allowUpload,
-    onError: (message) => alert(message),
+    onError: (message) => showToast(message, 'error'),
   })
 
   // Select existing file handlers
@@ -381,7 +383,7 @@ export default function AttachmentManager({
         onPendingSelectionChange?.(pendingAttachmentIds.filter(id => id !== attachment.id))
       } else {
         if (maxAttachments && pendingAttachmentIds.length >= maxAttachments) {
-          alert(`Max ${maxAttachments} bilaga${maxAttachments > 1 ? 'or' : ''} tillåtna`)
+          showToast(`Max ${maxAttachments} bilaga${maxAttachments > 1 ? 'or' : ''} tillåtna`, 'error')
           return
         }
         onPendingSelectionChange?.([...pendingAttachmentIds, attachment.id])
@@ -399,7 +401,7 @@ export default function AttachmentManager({
         await onDelete(attachments[0])
       } catch (error) {
         console.error('Failed to delete existing attachment:', error)
-        alert(labels.deleteError || 'Kunde inte ta bort befintlig bilaga')
+        showToast(labels.deleteError || 'Kunde inte ta bort befintlig bilaga', 'error')
         return
       }
     }
@@ -410,7 +412,7 @@ export default function AttachmentManager({
       onAttachmentsChange?.()
     } catch (error) {
       console.error('Failed to link attachment:', error)
-      alert(labels.uploadError || 'Kunde inte länka bilagan')
+      showToast(labels.uploadError || 'Kunde inte länka bilagan', 'error')
     }
   }
 

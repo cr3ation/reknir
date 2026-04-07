@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users as UsersIcon, Plus, Building2, Trash2 } from 'lucide-react'
 import api from '../services/api'
 import { getErrorMessage } from '../utils/errors'
+import { useToast } from '@/contexts/ToastContext'
 
 interface User {
   id: number
@@ -19,6 +20,7 @@ interface Company {
 
 export default function Users() {
   const [users, setUsers] = useState<User[]>([])
+  const { showToast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -77,7 +79,7 @@ export default function Users() {
       setNewUser({ email: '', full_name: '', password: '' })
       loadUsers()
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to create user'))
+      showToast(getErrorMessage(error, 'Failed to create user'), 'error')
     }
   }
 
@@ -92,7 +94,7 @@ export default function Users() {
       loadUserCompanies(selectedUser.id)
       setSelectedCompanyId(null)
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to grant access'))
+      showToast(getErrorMessage(error, 'Failed to grant access'), 'error')
     }
   }
 
@@ -105,7 +107,7 @@ export default function Users() {
         loadUserCompanies(selectedUser.id)
       }
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to revoke access'))
+      showToast(getErrorMessage(error, 'Failed to revoke access'), 'error')
     }
   }
 

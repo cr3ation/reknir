@@ -6,9 +6,11 @@ import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function Customers() {
   const { selectedCompany } = useCompany()
+  const { showToast } = useToast()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +65,7 @@ export default function Customers() {
       await loadData()
     } catch (error) {
       console.error('Failed to delete customer:', error)
-      alert('Kunde inte ta bort kunden')
+      showToast('Kunde inte ta bort kunden', 'error')
     }
   }
 
@@ -75,7 +77,7 @@ export default function Customers() {
       await loadData()
     } catch (error) {
       console.error('Failed to delete supplier:', error)
-      alert('Kunde inte ta bort leverantören')
+      showToast('Kunde inte ta bort leverantören', 'error')
     }
   }
 

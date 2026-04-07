@@ -3,6 +3,7 @@ import { UserPlus, Copy, Trash2, Check, Clock } from 'lucide-react'
 import api from '../services/api'
 import { useCompany } from '../contexts/CompanyContext'
 import { getErrorMessage } from '../utils/errors'
+import { useToast } from '@/contexts/ToastContext'
 
 interface Invitation {
   id: number
@@ -17,6 +18,7 @@ interface Invitation {
 
 export default function InvitationManager() {
   const { selectedCompany } = useCompany()
+  const { showToast } = useToast()
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loading, setLoading] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -59,7 +61,7 @@ export default function InvitationManager() {
       setShowCreateModal(false)
       setNewInvitation({ role: 'user', days_valid: 7 })
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to create invitation'))
+      showToast(getErrorMessage(error, 'Failed to create invitation'), 'error')
     }
   }
 
@@ -70,7 +72,7 @@ export default function InvitationManager() {
       await api.delete(`/invitations/${invitationId}`)
       setInvitations(invitations.filter(inv => inv.id !== invitationId))
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to delete invitation'))
+      showToast(getErrorMessage(error, 'Failed to delete invitation'), 'error')
     }
   }
 
