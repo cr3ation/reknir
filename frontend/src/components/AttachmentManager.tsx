@@ -52,7 +52,7 @@ export interface AttachmentManagerProps {
   // Pending mode props (for use before entity is created)
   pendingMode?: boolean
   pendingAttachmentIds?: number[]
-  onPendingSelectionChange?: (ids: number[]) => void
+  onPendingSelectionChange?: React.Dispatch<React.SetStateAction<number[]>>
   // Callback when attachment is clicked (for external preview handling)
   onAttachmentClick?: (attachment: EntityAttachment, index: number) => void
   // Disable internal preview (when using external preview controller)
@@ -85,8 +85,7 @@ export default function AttachmentManager({
   onVisibleAttachmentsChange,
 }: AttachmentManagerProps) {
   const { showToast } = useToast()
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
+  // selectedFile and uploading removed — files are uploaded immediately on selection
   const [previewAttachment, setPreviewAttachment] = useState<EntityAttachment | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -161,24 +160,10 @@ export default function AttachmentManager({
   }, [visibleAttachments, onVisibleAttachmentsChange])
 
   // File handlers
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      if (file.size > maxFileSizeMB * 1024 * 1024) {
-        showToast(`Filen är för stor. Max ${maxFileSizeMB} MB.`, 'error')
-        return
-      }
-      setSelectedFile(file)
-    }
-    event.target.value = ''
-  }
-
-  const handleUpload = async () => {
-    if (!selectedFile) return
+  const uploadFile = async (file: File) => {
     try {
-      setUploading(true)
-      await onUpload(selectedFile)
-      setSelectedFile(null)
+
+      await onUpload(file)
 
       // Reload available attachments in pending mode so the new upload appears
       if (pendingMode && companyId) {
@@ -191,7 +176,22 @@ export default function AttachmentManager({
       console.error('Failed to upload attachment:', error)
       showToast(labels.uploadError || 'Kunde inte ladda upp bilagan', 'error')
     } finally {
-      setUploading(false)
+
+    }
+  }
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+    const fileList = Array.from(files)
+    event.target.value = ''
+
+    for (const file of fileList) {
+      if (file.size > maxFileSizeMB * 1024 * 1024) {
+        showToast(`Filen "${file.name}" är för stor. Max ${maxFileSizeMB} MB.`, 'error')
+        continue
+      }
+      await uploadFile(file)
     }
   }
 
@@ -270,7 +270,6 @@ export default function AttachmentManager({
       showToast(`Endast ${filesToUpload.length} av ${files.length} filer kunde laddas upp (max ${maxAttachments} bilagor).`, 'error')
     }
 
-    setUploading(true)
     try {
       for (const file of filesToUpload) await onUpload(file)
 
@@ -282,8 +281,6 @@ export default function AttachmentManager({
     } catch (error) {
       console.error('Failed to upload:', error)
       showToast(labels.uploadError || 'Kunde inte ladda upp bilagan', 'error')
-    } finally {
-      setUploading(false)
     }
   }
 
@@ -566,31 +563,8 @@ export default function AttachmentManager({
         </div>
       )}
 
-      {/* Selected file preview */}
-      {selectedFile && (
-        <div className="space-y-3 mb-4">
-          <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border-2 border-dashed border-blue-200">
-            <FileText className="w-6 h-6 text-blue-600" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-blue-900">{selectedFile.name}</p>
-              <p className="text-xs text-blue-700">{formatFileSize(selectedFile.size)}</p>
-            </div>
-            <button onClick={() => setSelectedFile(null)} className="text-blue-600 hover:text-blue-800" title="Avbryt">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-          >
-            {uploading ? 'Laddar upp...' : labels.uploadButton}
-          </button>
-        </div>
-      )}
-
       {/* Empty state */}
-      {visibleAttachments.length === 0 && !selectedFile && (
+      {visibleAttachments.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           <Upload className="w-12 h-12 mx-auto mb-2 text-gray-300" />
           <p className="mb-4">{labels.emptyState}</p>
@@ -598,12 +572,12 @@ export default function AttachmentManager({
       )}
 
       {/* Upload buttons */}
-      {canUploadMore && !selectedFile && (
+      {canUploadMore && (
         <div className="flex gap-2">
           <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
             <Upload className="w-4 h-4" />
             {visibleAttachments.length > 0 ? (labels.addMoreButton || labels.uploadButton) : labels.uploadButton}
-            <input type="file" accept={acceptedFileTypes} onChange={handleFileSelect} className="hidden" />
+            <input type="file" accept={acceptedFileTypes} onChange={handleFileSelect} className="hidden" multiple />
           </label>
           {canSelectExisting && (
             <button

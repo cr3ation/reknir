@@ -33,7 +33,7 @@ export interface VerificationFormProps {
   onAttachmentClick?: (attachment: EntityAttachment, index: number) => void
   // Pending attachment IDs (lifted to parent to survive modal layout changes)
   pendingAttachmentIds?: number[]
-  onPendingAttachmentIdsChange?: (ids: number[]) => void
+  onPendingAttachmentIdsChange?: React.Dispatch<React.SetStateAction<number[]>>
 }
 
 // ============================================================================
@@ -637,7 +637,7 @@ export default function VerificationForm({
           }}
           onUpload={async (file) => {
             const response = await attachmentApi.upload(companyId, file)
-            setPendingAttachmentIds([...pendingAttachmentIds, response.data.id])
+            setPendingAttachmentIds(prev => [...prev, response.data.id])
           }}
           onDelete={async () => {}}
           onDownload={async (attachment) => {
