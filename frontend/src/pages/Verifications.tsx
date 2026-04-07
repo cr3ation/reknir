@@ -134,18 +134,9 @@ export default function Verifications() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex items-start justify-between">
         <h1 className="text-3xl font-bold">Verifikationer</h1>
-        <div className="flex items-center gap-4">
-          <FiscalYearSelector />
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Ny verifikation
-          </button>
-        </div>
+        <FiscalYearSelector />
       </div>
 
       {/* Statistics */}
@@ -162,6 +153,16 @@ export default function Verifications() {
           <h3 className="text-sm font-medium text-gray-500 mb-1">Olåsta</h3>
           <p className="text-2xl font-bold">{filteredVerifications.length - lockedCount}</p>
         </div>
+      </div>
+
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="btn btn-primary inline-flex items-center"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Ny verifikation
+        </button>
       </div>
 
       {/* Filters */}
