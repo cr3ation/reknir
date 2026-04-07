@@ -181,7 +181,7 @@ export default function SupplierInvoiceForm({
             <select
               value={supplierId}
               onChange={(e) => setSupplierId(parseInt(e.target.value))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               required
             >
               <option value={0}>Välj leverantör...</option>
@@ -201,7 +201,7 @@ export default function SupplierInvoiceForm({
               type="text"
               value={supplierInvoiceNumber}
               onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               placeholder="Leverantörens fakturanummer"
               required
             />
@@ -215,7 +215,7 @@ export default function SupplierInvoiceForm({
               type="date"
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               required
             />
           </div>
@@ -228,7 +228,7 @@ export default function SupplierInvoiceForm({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               required
             />
           </div>
@@ -241,7 +241,7 @@ export default function SupplierInvoiceForm({
               type="text"
               value={ocrNumber}
               onChange={(e) => setOcrNumber(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -253,7 +253,7 @@ export default function SupplierInvoiceForm({
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
@@ -265,7 +265,7 @@ export default function SupplierInvoiceForm({
             <button
               type="button"
               onClick={addLine}
-              className="text-sm text-indigo-600 hover:text-indigo-800"
+              className="text-sm text-primary-600 hover:text-primary-800"
             >
               + Lägg till rad
             </button>
@@ -281,7 +281,7 @@ export default function SupplierInvoiceForm({
                       placeholder="Beskrivning *"
                       value={line.description}
                       onChange={(e) => updateLine(index, 'description', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
@@ -296,7 +296,7 @@ export default function SupplierInvoiceForm({
                       }}
                       step="0.01"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
@@ -311,7 +311,7 @@ export default function SupplierInvoiceForm({
                       }}
                       step="0.01"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
@@ -319,7 +319,7 @@ export default function SupplierInvoiceForm({
                     <select
                       value={line.vat_rate}
                       onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                     >
                       <option value={0}>0%</option>
                       <option value={6}>6%</option>
@@ -344,7 +344,7 @@ export default function SupplierInvoiceForm({
                     <select
                       value={line.account_id || ''}
                       onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 text-sm"
                     >
                       <option value="">Auto (6570 - Övriga externa tjänster)</option>
                       {accounts.filter(a => a.account_number >= 4000 && a.account_number < 8000).map(account => (
@@ -431,7 +431,7 @@ export default function SupplierInvoiceForm({
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
           >
             {saving ? 'Registrerar...' : 'Registrera faktura'}
           </button>

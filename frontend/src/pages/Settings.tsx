@@ -937,7 +937,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('company')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'company'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -947,7 +947,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('fiscal')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'fiscal'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -957,7 +957,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('templates')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'templates'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -967,7 +967,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('import')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'import'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -977,7 +977,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('layout')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'layout'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -1261,7 +1261,7 @@ export default function SettingsPage() {
                       type="checkbox"
                       checked={companyForm.is_vat_registered}
                       onChange={(e) => setCompanyForm({ ...companyForm, is_vat_registered: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                     />
                     <span className="text-sm font-medium text-gray-700">
                       Företaget är momsregistrerat
@@ -1790,7 +1790,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={scheduleForm.enabled}
                     onChange={(e) => setScheduleForm(prev => ({ ...prev, enabled: e.target.checked }))}
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   />
                   <span className="text-sm text-gray-700">Aktivera schemalagd backup</span>
                 </label>

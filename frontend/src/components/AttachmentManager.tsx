@@ -518,7 +518,7 @@ export default function AttachmentManager({
           {visibleAttachments.map((attachment, index) => (
             <div
               key={attachment.link_id}
-              className={`flex items-center gap-3 p-3 ${pendingMode ? 'bg-indigo-50' : 'bg-gray-50'} rounded-lg ${
+              className={`flex items-center gap-3 p-3 ${pendingMode ? 'bg-primary-50' : 'bg-gray-50'} rounded-lg ${
                 isPreviewable(attachment.mime_type) ? 'cursor-pointer hover:bg-gray-100' : ''
               }`}
               onClick={() => {
@@ -531,7 +531,7 @@ export default function AttachmentManager({
                 }
               }}
             >
-              <FileText className={`w-6 h-6 ${pendingMode ? 'text-indigo-600' : 'text-gray-400'}`} />
+              <FileText className={`w-6 h-6 ${pendingMode ? 'text-primary-600' : 'text-gray-400'}`} />
               <div className="flex-1">
                 <p className="text-sm font-medium">{attachment.original_filename}</p>
                 <p className="text-xs text-gray-500">{formatFileSize(attachment.size_bytes)}</p>

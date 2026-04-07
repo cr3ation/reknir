@@ -349,7 +349,7 @@ export default function VerificationDetail() {
               {!verification.locked && (
                 <Link
                   to="/verifications"
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <FileText className="w-4 h-4" />
                   Redigera

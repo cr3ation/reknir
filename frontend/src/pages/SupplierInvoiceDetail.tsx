@@ -384,7 +384,7 @@ export default function SupplierInvoiceDetail() {
               {invoice.status === InvoiceStatus.DRAFT && (
                 <button
                   onClick={handleRegister}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <BookOpen className="w-4 h-4" />
                   {selectedCompany?.accounting_basis === 'accrual' ? 'Registrera och bokför' : 'Registrera'}
@@ -393,7 +393,7 @@ export default function SupplierInvoiceDetail() {
               {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                 <button
                   onClick={handleMarkPaid}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <DollarSign className="w-4 h-4" />
                   Markera som betald

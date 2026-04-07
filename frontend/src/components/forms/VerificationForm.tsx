@@ -284,7 +284,7 @@ export default function VerificationForm({
             maxLength={10}
             value={formData.series}
             onChange={(e) => setFormData({ ...formData, series: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             disabled={isEditing}
           />
         </div>
@@ -298,7 +298,7 @@ export default function VerificationForm({
             required
             value={formData.transaction_date}
             onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
 
@@ -311,7 +311,7 @@ export default function VerificationForm({
             required
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="t.ex. Inköp av material"
           />
         </div>
@@ -324,7 +324,7 @@ export default function VerificationForm({
           <button
             type="button"
             onClick={addLine}
-            className="text-sm text-indigo-600 hover:text-indigo-800"
+            className="text-sm text-primary-600 hover:text-primary-800"
             disabled={isEditing}
           >
             + Lägg till rad
@@ -519,7 +519,7 @@ export default function VerificationForm({
             type="button"
             onClick={handleSubmit}
             disabled={loading || !isBalanced || isEditing}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
               ? 'Sparar...'

@@ -265,7 +265,7 @@ export default function ExpenseDetail() {
           {canEdit && !editing && (
             <button
               onClick={() => setEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
             >
               <Edit2 className="w-4 h-4" />
               Redigera
@@ -367,7 +367,7 @@ export default function ExpenseDetail() {
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={handleSave}
-                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                   >
                     Spara ändringar
                   </button>
@@ -478,7 +478,7 @@ export default function ExpenseDetail() {
               {expense.status === 'approved' && !expense.verification_id && (
                 <button
                   onClick={handleBook}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <BookOpen className="w-4 h-4" />
                   Bokför
@@ -487,7 +487,7 @@ export default function ExpenseDetail() {
               {expense.status === 'approved' && (
                 <button
                   onClick={handleMarkPaid}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <DollarSign className="w-4 h-4" />
                   Markera som utbetald

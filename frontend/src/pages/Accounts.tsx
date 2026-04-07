@@ -413,7 +413,7 @@ export default function Accounts() {
             onClick={() => setActiveTab('accounts')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'accounts'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -423,7 +423,7 @@ export default function Accounts() {
             onClick={() => setActiveTab('defaults')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'defaults'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -503,7 +503,7 @@ export default function Accounts() {
               placeholder="Kontonummer eller namn..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
           <div>
@@ -513,7 +513,7 @@ export default function Accounts() {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="all">Alla typer ({accounts.length})</option>
               {Object.entries(typeLabels).map(([type, label]) => {
@@ -593,11 +593,11 @@ export default function Accounts() {
                               step="0.01"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
-                              className="w-32 px-2 py-1 text-right border border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500"
+                              className="w-32 px-2 py-1 text-right border border-primary-300 rounded focus:ring-2 focus:ring-primary-500"
                               autoFocus
                             />
                           ) : (
-                            <span className={account.opening_balance !== 0 ? 'text-indigo-600 font-medium' : ''}>
+                            <span className={account.opening_balance !== 0 ? 'text-primary-600 font-medium' : ''}>
                               {account.opening_balance.toLocaleString('sv-SE', {
                                 style: 'currency',
                                 currency: 'SEK',
@@ -640,7 +640,7 @@ export default function Accounts() {
                               </Link>
                               <button
                                 onClick={() => startEdit(account)}
-                                className="p-1 text-indigo-600 hover:text-indigo-800"
+                                className="p-1 text-primary-600 hover:text-primary-800"
                                 title="Sätt ingående balans"
                               >
                                 <Edit2 className="w-4 h-4" />
@@ -712,11 +712,11 @@ export default function Accounts() {
                           step="0.01"
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
-                          className="w-32 px-2 py-1 text-right border border-indigo-300 rounded focus:ring-2 focus:ring-indigo-500"
+                          className="w-32 px-2 py-1 text-right border border-primary-300 rounded focus:ring-2 focus:ring-primary-500"
                           autoFocus
                         />
                       ) : (
-                        <span className={account.opening_balance !== 0 ? 'text-indigo-600 font-medium' : ''}>
+                        <span className={account.opening_balance !== 0 ? 'text-primary-600 font-medium' : ''}>
                           {account.opening_balance.toLocaleString('sv-SE', {
                             style: 'currency',
                             currency: 'SEK',
@@ -759,7 +759,7 @@ export default function Accounts() {
                           </Link>
                           <button
                             onClick={() => startEdit(account)}
-                            className="p-1 text-indigo-600 hover:text-indigo-800"
+                            className="p-1 text-primary-600 hover:text-primary-800"
                             title="Sätt ingående balans"
                           >
                             <Edit2 className="w-4 h-4" />

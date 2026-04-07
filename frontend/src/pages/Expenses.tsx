@@ -513,7 +513,7 @@ export default function Expenses() {
           <div className="flex items-end">
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
             >
               <Plus className="w-4 h-4" />
               Nytt utlägg
@@ -581,7 +581,7 @@ export default function Expenses() {
                           <>
                             <button
                               onClick={() => handleEdit(expense)}
-                              className="p-1 text-indigo-600 hover:text-indigo-800"
+                              className="p-1 text-primary-600 hover:text-primary-800"
                               title="Redigera"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -606,7 +606,7 @@ export default function Expenses() {
                           <>
                             <button
                               onClick={() => handleEdit(expense)}
-                              className="p-1 text-indigo-600 hover:text-indigo-800"
+                              className="p-1 text-primary-600 hover:text-primary-800"
                               title="Redigera"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -632,7 +632,7 @@ export default function Expenses() {
                             {!expense.verification_id && (
                               <button
                                 onClick={() => handleBook(expense.id)}
-                                className="p-1 text-indigo-600 hover:text-indigo-800"
+                                className="p-1 text-primary-600 hover:text-primary-800"
                                 title="Bokför (skapa verifikation)"
                               >
                                 <BookOpen className="w-4 h-4" />
@@ -640,7 +640,7 @@ export default function Expenses() {
                             )}
                             <button
                               onClick={() => handleMarkPaid(expense.id)}
-                              className="p-1 text-purple-600 hover:text-purple-800"
+                              className="p-1 text-primary-600 hover:text-primary-800"
                               title="Markera som utbetald"
                             >
                               <DollarSign className="w-4 h-4" />
@@ -820,7 +820,7 @@ export default function Expenses() {
                 <div className="flex gap-3 mt-6">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                   >
                     {editingExpense ? 'Spara ändringar' : 'Skapa utlägg'}
                   </button>

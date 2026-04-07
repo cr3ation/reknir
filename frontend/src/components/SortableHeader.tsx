@@ -50,14 +50,14 @@ export default function SortableHeader({
       onClick={() => onSort(sortKey)}
     >
       <div className={`flex items-center gap-1 ${justifyClass}`}>
-        <span className={isActive ? 'text-indigo-600' : 'text-gray-500 group-hover:text-gray-700'}>
+        <span className={isActive ? 'text-primary-600' : 'text-gray-500 group-hover:text-gray-700'}>
           {label}
         </span>
         <span className="w-4 h-4 flex items-center justify-center">
           {direction === 'asc' ? (
-            <ChevronUp className="w-4 h-4 text-indigo-600" />
+            <ChevronUp className="w-4 h-4 text-primary-600" />
           ) : direction === 'desc' ? (
-            <ChevronDown className="w-4 h-4 text-indigo-600" />
+            <ChevronDown className="w-4 h-4 text-primary-600" />
           ) : (
             <ChevronsUpDown className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
           )}

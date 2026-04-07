@@ -222,7 +222,7 @@ export default function Setup() {
   const currentStepIndex = steps.findIndex(s => s.id === currentStep)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-primary-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-3xl w-full">
         {/* Header */}
         <div className="text-center mb-8">
@@ -243,7 +243,7 @@ export default function Setup() {
                 return (
                   <div key={step.id} className="flex flex-col items-center relative">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      isCompleted ? 'bg-green-500' : isActive ? 'bg-indigo-600' : 'bg-gray-300'
+                      isCompleted ? 'bg-green-500' : isActive ? 'bg-primary-600' : 'bg-gray-300'
                     } text-white mb-2 z-10`}>
                       {isCompleted ? (
                         <CheckCircle className="w-6 h-6" />
@@ -252,7 +252,7 @@ export default function Setup() {
                       )}
                     </div>
                     <span className={`text-sm font-medium text-center whitespace-nowrap ${
-                      isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                      isActive ? 'text-primary-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
                     }`}>
                       {step.label}
                     </span>
@@ -297,7 +297,7 @@ export default function Setup() {
                   required
                   value={adminData.full_name}
                   onChange={(e) => setAdminData({ ...adminData, full_name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Ditt fullständiga namn"
                 />
               </div>
@@ -311,7 +311,7 @@ export default function Setup() {
                   required
                   value={adminData.email}
                   onChange={(e) => setAdminData({ ...adminData, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="din@epost.se"
                 />
               </div>
@@ -325,7 +325,7 @@ export default function Setup() {
                   required
                   value={adminData.password}
                   onChange={(e) => setAdminData({ ...adminData, password: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Minst 8 tecken"
                 />
               </div>
@@ -339,7 +339,7 @@ export default function Setup() {
                   required
                   value={adminData.confirmPassword}
                   onChange={(e) => setAdminData({ ...adminData, confirmPassword: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Skriv lösenordet igen"
                 />
               </div>
@@ -348,7 +348,7 @@ export default function Setup() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 font-medium"
+              className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 font-medium"
             >
               {loading ? 'Skapar konto...' : 'Nästa: Skapa företag'}
             </button>
@@ -368,7 +368,7 @@ export default function Setup() {
                   required
                   value={companyData.name}
                   onChange={(e) => setCompanyData({ ...companyData, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="t.ex. Min Företag AB"
                 />
               </div>
@@ -397,7 +397,7 @@ export default function Setup() {
 
                     setCompanyData({ ...companyData, org_number: value })
                   }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono tracking-wider"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono tracking-wider"
                   placeholder="XXXXXX-XXXX"
                   maxLength={11}
                 />
@@ -410,7 +410,7 @@ export default function Setup() {
                     type="checkbox"
                     checked={companyData.is_vat_registered}
                     onChange={(e) => setCompanyData({ ...companyData, is_vat_registered: e.target.checked })}
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <span className="text-sm font-medium text-gray-700">
                     Företaget är momsregistrerat
@@ -430,7 +430,7 @@ export default function Setup() {
                     <select
                       value={companyData.accounting_basis}
                       onChange={(e) => setCompanyData({ ...companyData, accounting_basis: e.target.value as AccountingBasis })}
-                      className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-gray-900 font-medium"
+                      className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 cursor-pointer text-gray-900 font-medium"
                     >
                       <option value="accrual">Fakturametoden</option>
                       <option value="cash">Kontantmetoden</option>
@@ -452,7 +452,7 @@ export default function Setup() {
                       value={companyData.vat_reporting_period}
                       onChange={(e) => setCompanyData({ ...companyData, vat_reporting_period: e.target.value as any })}
                       disabled={!companyData.is_vat_registered}
-                      className={`w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium ${
+                      className={`w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg appearance-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-medium ${
                         companyData.is_vat_registered
                           ? 'bg-white cursor-pointer text-gray-900'
                           : 'bg-gray-100 cursor-not-allowed text-gray-400'
@@ -480,7 +480,7 @@ export default function Setup() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 font-medium"
+              className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 font-medium"
             >
               {loading ? 'Skapar företag...' : 'Nästa: Ange räkenskapsår'}
             </button>
@@ -508,7 +508,7 @@ export default function Setup() {
                   required
                   value={fiscalYearData.start_date}
                   onChange={(e) => setFiscalYearData({ ...fiscalYearData, start_date: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
 
@@ -521,7 +521,7 @@ export default function Setup() {
                   required
                   value={fiscalYearData.end_date}
                   onChange={(e) => setFiscalYearData({ ...fiscalYearData, end_date: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>
             </div>
@@ -534,7 +534,7 @@ export default function Setup() {
                 type="text"
                 value={fiscalYearData.label}
                 onChange={(e) => setFiscalYearData({ ...fiscalYearData, label: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder={`t.ex. ${currentYear}`}
               />
               <p className="mt-1 text-sm text-gray-500">
@@ -545,7 +545,7 @@ export default function Setup() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 font-medium"
+              className="w-full bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 font-medium"
             >
               {loading ? 'Skapar räkenskapsår...' : 'Nästa: Välj kontoplan'}
             </button>
@@ -569,12 +569,12 @@ export default function Setup() {
               <button
                 onClick={() => handleChartOfAccountsChoice(true)}
                 disabled={loading}
-                className="p-6 border-2 border-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors text-left disabled:opacity-50"
+                className="p-6 border-2 border-primary-600 rounded-lg hover:bg-primary-50 transition-colors text-left disabled:opacity-50"
               >
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
-                    <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-indigo-600" />
+                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-primary-600" />
                     </div>
                   </div>
                   <div className="ml-4">
@@ -625,7 +625,7 @@ export default function Setup() {
 
             {loading && (
               <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-2"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-2"></div>
                 <p className="text-gray-600">
                   {importBAS ? 'Importerar BAS-kontoplan...' : 'Slutför installation...'}
                 </p>

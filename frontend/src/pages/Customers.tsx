@@ -98,7 +98,7 @@ export default function Customers() {
             onClick={() => setActiveTab('customers')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'customers'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -108,7 +108,7 @@ export default function Customers() {
             onClick={() => setActiveTab('suppliers')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'suppliers'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -172,7 +172,7 @@ export default function Customers() {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => setEditingCustomer(customer)}
-                            className="text-indigo-600 hover:text-indigo-800 p-1"
+                            className="text-primary-600 hover:text-primary-800 p-1"
                             title="Redigera"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -250,7 +250,7 @@ export default function Customers() {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => setEditingSupplier(supplier)}
-                            className="text-indigo-600 hover:text-indigo-800 p-1"
+                            className="text-primary-600 hover:text-primary-800 p-1"
                             title="Redigera"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -397,7 +397,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 required
               />
             </div>
@@ -410,7 +410,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.org_number}
                 onChange={(e) => setFormData({ ...formData, org_number: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="XXXXXX-XXXX"
               />
             </div>
@@ -423,7 +423,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.contact_person}
                 onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -435,7 +435,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -447,7 +447,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -459,7 +459,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -471,7 +471,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.postal_code}
                 onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="123 45"
               />
             </div>
@@ -484,7 +484,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -496,7 +496,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="text"
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -508,7 +508,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
                 type="number"
                 value={formData.payment_terms_days}
                 onChange={(e) => setFormData({ ...formData, payment_terms_days: parseInt(e.target.value) || 30 })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 min="0"
               />
             </div>
@@ -525,7 +525,7 @@ function CreateCustomerModal({ companyId, customer, onClose, onSuccess }: Create
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
               {saving ? (isEditing ? 'Uppdaterar...' : 'Skapar...') : (isEditing ? 'Uppdatera' : 'Skapa kund')}
             </button>
@@ -627,7 +627,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 required
               />
             </div>
@@ -640,7 +640,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.org_number}
                 onChange={(e) => setFormData({ ...formData, org_number: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="XXXXXX-XXXX"
               />
             </div>
@@ -653,7 +653,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.contact_person}
                 onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -665,7 +665,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -677,7 +677,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -689,7 +689,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -701,7 +701,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.postal_code}
                 onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="123 45"
               />
             </div>
@@ -714,7 +714,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -726,7 +726,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -738,7 +738,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="number"
                 value={formData.payment_terms_days}
                 onChange={(e) => setFormData({ ...formData, payment_terms_days: parseInt(e.target.value) || 30 })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 min="0"
               />
             </div>
@@ -751,7 +751,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.bank_account}
                 onChange={(e) => setFormData({ ...formData, bank_account: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
 
@@ -763,7 +763,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
                 type="text"
                 value={formData.bank_name}
                 onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -779,7 +779,7 @@ function CreateSupplierModal({ companyId, supplier, onClose, onSuccess }: Create
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
               {saving ? (isEditing ? 'Uppdaterar...' : 'Skapar...') : (isEditing ? 'Uppdatera' : 'Skapa leverantör')}
             </button>

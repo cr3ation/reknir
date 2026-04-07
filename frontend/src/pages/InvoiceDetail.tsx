@@ -345,7 +345,7 @@ export default function InvoiceDetail() {
                               {payment.verification_id ? (
                                 <Link
                                   to={`/verifications/${payment.verification_id}`}
-                                  className="text-purple-600 hover:text-purple-800 font-medium"
+                                  className="text-primary-600 hover:text-primary-800 font-medium"
                                 >
                                   Visa →
                                 </Link>
@@ -460,7 +460,7 @@ export default function InvoiceDetail() {
               {invoice.status === InvoiceStatus.DRAFT && (
                 <button
                   onClick={handleSendInvoice}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <FileText className="w-4 h-4" />
                   {selectedCompany?.accounting_basis === 'accrual' ? 'Skicka och bokför' : 'Skicka'}
@@ -469,7 +469,7 @@ export default function InvoiceDetail() {
               {invoice.status === InvoiceStatus.ISSUED && invoice.payment_status !== PaymentStatus.PAID && (
                 <button
                   onClick={openPaymentModal}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <DollarSign className="w-4 h-4" />
                   Markera som betald
@@ -573,10 +573,10 @@ export default function InvoiceDetail() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div className="bg-purple-50 px-6 py-4 border-b border-purple-100">
+            <div className="bg-primary-50 px-6 py-4 border-b border-primary-100">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-purple-600" />
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -602,7 +602,7 @@ export default function InvoiceDetail() {
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
@@ -620,7 +620,7 @@ export default function InvoiceDetail() {
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
                   <span className="text-gray-700">Att betala:</span>
-                  <span className="text-purple-600">
+                  <span className="text-primary-600">
                     {(invoice.total_amount - invoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
                   </span>
                 </div>
@@ -632,14 +632,14 @@ export default function InvoiceDetail() {
               <button
                 onClick={() => setShowPaymentModal(false)}
                 disabled={payingInvoice}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Avbryt
               </button>
               <button
                 onClick={handleMarkPaid}
                 disabled={payingInvoice}
-                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {payingInvoice ? (
                   <>
