@@ -175,8 +175,6 @@ export default function AttachmentManager({
     } catch (error) {
       console.error('Failed to upload attachment:', error)
       showToast(labels.uploadError || 'Kunde inte ladda upp bilagan', 'error')
-    } finally {
-
     }
   }
 
