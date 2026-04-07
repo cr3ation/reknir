@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -115,7 +115,19 @@ async def list_verifications(
     # Verify user has access to this company
     await verify_company_access(company_id, current_user, db)
 
-    query = db.query(Verification).filter(Verification.company_id == company_id)
+    attachment_count_subq = (
+        db.query(func.count(AttachmentLink.id))
+        .filter(
+            AttachmentLink.entity_type == EntityType.VERIFICATION,
+            AttachmentLink.entity_id == Verification.id,
+        )
+        .correlate(Verification)
+        .scalar_subquery()
+    )
+
+    query = db.query(Verification, attachment_count_subq.label("attachment_count")).filter(
+        Verification.company_id == company_id
+    )
 
     if fiscal_year_id:
         query = query.filter(Verification.fiscal_year_id == fiscal_year_id)
@@ -126,7 +138,7 @@ async def list_verifications(
     if series:
         query = query.filter(Verification.series == series)
 
-    verifications = (
+    results = (
         query.order_by(desc(Verification.transaction_date), desc(Verification.verification_number))
         .limit(limit)
         .offset(offset)
@@ -142,8 +154,9 @@ async def list_verifications(
             description=v.description,
             total_amount=Decimal(str(v.total_amount)),
             locked=v.locked,
+            attachment_count=count,
         )
-        for v in verifications
+        for v, count in results
     ]
 
 

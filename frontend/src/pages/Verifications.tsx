@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Edit, Trash2, Lock, CheckCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, CheckCircle } from 'lucide-react'
 import { verificationApi, accountApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification, EntityAttachment } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -217,7 +217,7 @@ export default function Verifications() {
                 <SortableHeader label="Beskrivning" sortKey="description" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                  Status
+                  Underlag
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                   Åtgärder
@@ -245,12 +245,8 @@ export default function Verifications() {
                     })}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {verification.locked ? (
-                      <span className="inline-flex items-center text-gray-600" title="Låst">
-                        <Lock className="w-4 h-4" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center text-green-600" title="Olåst">
+                    {verification.attachment_count > 0 && (
+                      <span className="inline-flex items-center text-green-600" title={`${verification.attachment_count} underlag`}>
                         <CheckCircle className="w-4 h-4" />
                       </span>
                     )}
