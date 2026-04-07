@@ -212,7 +212,6 @@ export default function Verifications() {
             <thead>
               <tr>
                 <SortableHeader label="Ver.nr" sortKey="verification_number" sortConfig={sortConfig} onSort={requestSort} />
-                <SortableHeader label="Serie" sortKey="series" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Datum" sortKey="transaction_date" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Beskrivning" sortKey="description" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
@@ -232,9 +231,8 @@ export default function Verifications() {
                   onClick={() => navigate(`/verifications/${verification.id}`)}
                 >
                   <td className="px-4 py-3 text-sm font-medium">
-                    {verification.verification_number}
+                    {verification.series}{verification.verification_number}
                   </td>
-                  <td className="px-4 py-3 text-sm">{verification.series}</td>
                   <td className="px-4 py-3 text-sm">{verification.transaction_date}</td>
                   <td className="px-4 py-3 text-sm max-w-md truncate">
                     {verification.description}
