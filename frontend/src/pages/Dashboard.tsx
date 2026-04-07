@@ -242,7 +242,7 @@ export default function Dashboard() {
               <div>
                 <h3 className="font-semibold text-red-900">Förfallna fakturor</h3>
                 <p className="text-sm text-red-800 mt-1">
-                  Du har <strong>{data.overdue_invoices.count}</strong> förfallen{data.overdue_invoices.count !== 1 ? 'a' : ''} faktur{data.overdue_invoices.count !== 1 ? 'or' : ''}
+                  Du har <strong>{data.overdue_invoices.count}</strong> förfallen{data.overdue_invoices.count !== 1 ? 'a' : ''} faktura{data.overdue_invoices.count !== 1 ? 'or' : ''}
                   {' '}på totalt <strong>{formatCurrency(data.overdue_invoices.amount)}</strong>
                 </p>
               </div>

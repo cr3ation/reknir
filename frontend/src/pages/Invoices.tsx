@@ -58,6 +58,10 @@ export default function Invoices() {
   const [payingInvoice, setPayingInvoice] = useState(false)
   const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
 
+  // Filter states
+  const [invoiceFilter, setInvoiceFilter] = useState<string>('all')
+  const [supplierInvoiceFilter, setSupplierInvoiceFilter] = useState<string>('all')
+
   // Track attachments from supplier invoice form for preview controller
   const [supplierInvoiceAttachments, setSupplierInvoiceAttachments] = useState<EntityAttachment[]>([])
 
@@ -295,6 +299,41 @@ export default function Invoices() {
     )
   }
 
+  const isInvoiceOverdue = (status: InvoiceStatus, paymentStatus: PaymentStatus, dueDate: string) =>
+    status === InvoiceStatus.ISSUED &&
+    paymentStatus !== PaymentStatus.PAID &&
+    new Date(dueDate) < new Date()
+
+  const filterInvoices = <T extends { status: InvoiceStatus; payment_status: PaymentStatus; due_date: string }>(
+    items: T[],
+    filter: string
+  ): T[] => {
+    if (filter === 'all') return items
+    return items.filter((inv) => {
+      const overdue = isInvoiceOverdue(inv.status, inv.payment_status, inv.due_date)
+      switch (filter) {
+        case 'draft': return inv.status === InvoiceStatus.DRAFT
+        case 'issued': return inv.status === InvoiceStatus.ISSUED && !overdue
+        case 'overdue': return overdue
+        case 'paid': return inv.payment_status === PaymentStatus.PAID
+        case 'cancelled': return inv.status === InvoiceStatus.CANCELLED
+        default: return true
+      }
+    })
+  }
+
+  const filteredInvoices = filterInvoices(sortedInvoices, invoiceFilter)
+  const filteredSupplierInvoices = filterInvoices(sortedSupplierInvoices, supplierInvoiceFilter)
+
+  const filterButtons = [
+    { key: 'all', label: 'Alla' },
+    { key: 'draft', label: 'Utkast' },
+    { key: 'issued', label: 'Skickade' },
+    { key: 'overdue', label: 'Förfallna' },
+    { key: 'paid', label: 'Betalda' },
+    { key: 'cancelled', label: 'Makulerade' },
+  ]
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -323,6 +362,22 @@ export default function Invoices() {
           </button>
         </div>
 
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {filterButtons.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setInvoiceFilter(f.key)}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                invoiceFilter === f.key
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {invoices.length === 0 ? (
           <div className="card">
             <p className="text-gray-600">Inga kundfakturor ännu. Skapa din första faktura!</p>
@@ -346,11 +401,13 @@ export default function Invoices() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedInvoices.map((invoice) => (
+                {filteredInvoices.map((invoice) => {
+                  const overdue = isInvoiceOverdue(invoice.status, invoice.payment_status, invoice.due_date)
+                  return (
                   <tr
                     key={invoice.id}
                     onClick={() => navigate(`/invoices/${invoice.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={`cursor-pointer ${overdue ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.invoice_number}
@@ -420,7 +477,8 @@ export default function Invoices() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -438,6 +496,22 @@ export default function Invoices() {
             <Plus className="w-4 h-4 mr-2" />
             Registrera faktura
           </button>
+        </div>
+
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {filterButtons.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setSupplierInvoiceFilter(f.key)}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                supplierInvoiceFilter === f.key
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         {supplierInvoices.length === 0 ? (
@@ -463,11 +537,13 @@ export default function Invoices() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedSupplierInvoices.map((invoice) => (
+                {filteredSupplierInvoices.map((invoice) => {
+                  const overdue = isInvoiceOverdue(invoice.status, invoice.payment_status, invoice.due_date)
+                  return (
                   <tr
                     key={invoice.id}
                     onClick={() => navigate(`/supplier-invoices/${invoice.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={`cursor-pointer ${overdue ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.supplier_invoice_number}
@@ -526,7 +602,8 @@ export default function Invoices() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
