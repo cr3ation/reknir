@@ -49,7 +49,7 @@ def create_backup() -> Path:
         RuntimeError: If pg_dump fails or archive creation fails.
     """
     now = datetime.now(UTC)
-    timestamp_label = now.strftime("%Y%m%d_%H%M%S")
+    timestamp_label = now.strftime("%Y-%m-%d_%H.%M.%S")
     timestamp = now.isoformat()
 
     with tempfile.TemporaryDirectory(prefix="reknir_backup_") as tmp_dir:
