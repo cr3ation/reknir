@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AlertCircle, CheckCircle, FileText, Trash2 } from 'lucide-react'
 import type { Account, Verification, PostingTemplate, TransactionLine, EntityAttachment } from '@/types'
 import { verificationApi, postingTemplateApi, attachmentApi } from '@/services/api'
@@ -33,7 +33,170 @@ export interface VerificationFormProps {
   onAttachmentClick?: (attachment: EntityAttachment, index: number) => void
   // Pending attachment IDs (lifted to parent to survive modal layout changes)
   pendingAttachmentIds?: number[]
-  onPendingAttachmentIdsChange?: (ids: number[]) => void
+  onPendingAttachmentIdsChange?: React.Dispatch<React.SetStateAction<number[]>>
+}
+
+// ============================================================================
+// Account Combobox Component
+// ============================================================================
+
+function AccountCombobox({
+  accounts,
+  value,
+  onChange,
+  disabled,
+}: {
+  accounts: Account[]
+  value: number
+  onChange: (accountId: number) => void
+  disabled?: boolean
+}) {
+  const [query, setQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(0)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  const selectedAccount = accounts.find(a => a.id === value)
+
+  const filtered = query
+    ? accounts.filter(a =>
+        a.account_number.toString().startsWith(query) ||
+        a.name.toLowerCase().includes(query.toLowerCase())
+      )
+    : accounts
+
+  useEffect(() => {
+    setHighlightIndex(0)
+  }, [query])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const openDropdown = () => {
+    setIsOpen(true)
+    setQuery('')
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownStyle({
+        position: 'fixed',
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: rect.width,
+        width: 'max-content',
+      })
+    }
+    if (selectedAccount) {
+      const idx = accounts.findIndex(a => a.id === selectedAccount.id)
+      if (idx >= 0) {
+        setHighlightIndex(idx)
+        requestAnimationFrame(() => {
+          const list = listRef.current
+          const item = list?.children[idx] as HTMLElement | undefined
+          if (list && item) {
+            list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.clientHeight / 2
+          }
+        })
+      }
+    }
+  }
+
+  const selectAccount = (account: Account) => {
+    onChange(account.id)
+    setQuery('')
+    setIsOpen(false)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        openDropdown()
+        e.preventDefault()
+      }
+      return
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setHighlightIndex(i => Math.min(i + 1, filtered.length - 1))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setHighlightIndex(i => Math.max(i - 1, 0))
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (filtered[highlightIndex]) {
+          selectAccount(filtered[highlightIndex])
+        }
+        break
+      case 'Escape':
+        setIsOpen(false)
+        setQuery('')
+        break
+      case 'Tab':
+        if (filtered[highlightIndex]) {
+          selectAccount(filtered[highlightIndex])
+        }
+        setIsOpen(false)
+        setQuery('')
+        break
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={isOpen ? query : (selectedAccount ? `${selectedAccount.account_number} - ${selectedAccount.name}` : '')}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          if (!isOpen) openDropdown()
+        }}
+        onFocus={openDropdown}
+        onKeyDown={handleKeyDown}
+        placeholder="Välj konto..."
+        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {isOpen && !disabled && (
+        <ul
+          ref={listRef}
+          style={dropdownStyle}
+          className="z-50 max-h-80 overflow-y-auto bg-white border border-gray-300 rounded shadow-lg text-sm"
+        >
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-gray-400">Inget konto hittades</li>
+          ) : (
+            filtered.map((account, i) => (
+              <li
+                key={account.id}
+                onMouseDown={() => selectAccount(account)}
+                className={`px-3 py-1.5 cursor-pointer ${
+                  i === highlightIndex ? 'bg-primary-100 text-primary-900' : 'hover:bg-gray-100'
+                }`}
+              >
+                <span className="font-mono">{account.account_number}</span> - {account.name}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 // ============================================================================
@@ -284,7 +447,7 @@ export default function VerificationForm({
             maxLength={10}
             value={formData.series}
             onChange={(e) => setFormData({ ...formData, series: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             disabled={isEditing}
           />
         </div>
@@ -298,7 +461,7 @@ export default function VerificationForm({
             required
             value={formData.transaction_date}
             onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
 
@@ -311,7 +474,7 @@ export default function VerificationForm({
             required
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             placeholder="t.ex. Inköp av material"
           />
         </div>
@@ -324,7 +487,7 @@ export default function VerificationForm({
           <button
             type="button"
             onClick={addLine}
-            className="text-sm text-indigo-600 hover:text-indigo-800"
+            className="text-sm text-primary-600 hover:text-primary-800"
             disabled={isEditing}
           >
             + Lägg till rad
@@ -343,8 +506,8 @@ export default function VerificationForm({
           <table className="min-w-full border border-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Konto *</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Beskrivning</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 w-2/5">Konto *</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 w-1/5">Beskrivning</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Debet</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Kredit</th>
                 {!isEditing && (
@@ -360,25 +523,27 @@ export default function VerificationForm({
                 return (
                   <tr key={index}>
                     <td className="px-4 py-2">
-                      <select
-                        required
-                        value={line.account_id}
-                        onChange={(e) => updateLine(index, 'account_id', e.target.value)}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        disabled={isEditing}
-                      >
-                        <option value={0}>Välj konto...</option>
-                        {isEditing && !accountExists && lineHasAccount && (
-                          <option key={line.account_id} value={line.account_id}>
-                            ⚠ {line.account_number} - {line.account_name}
-                          </option>
-                        )}
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.account_number} - {account.name}
-                          </option>
-                        ))}
-                      </select>
+                      {isEditing ? (
+                        <select
+                          value={line.account_id}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          disabled
+                        >
+                          {!accountExists && lineHasAccount ? (
+                            <option value={line.account_id}>⚠ {line.account_number} - {line.account_name}</option>
+                          ) : (
+                            <option value={line.account_id}>
+                              {accountExists ? `${accountExists.account_number} - ${accountExists.name}` : 'Okänt konto'}
+                            </option>
+                          )}
+                        </select>
+                      ) : (
+                        <AccountCombobox
+                          accounts={accounts}
+                          value={line.account_id}
+                          onChange={(id) => updateLine(index, 'account_id', id)}
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-2">
                       <input
@@ -393,7 +558,7 @@ export default function VerificationForm({
                     <td className="px-4 py-2">
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         value={line.debit || ''}
                         onChange={(e) => updateLine(index, 'debit', e.target.value)}
@@ -404,7 +569,7 @@ export default function VerificationForm({
                     <td className="px-4 py-2">
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         value={line.credit || ''}
                         onChange={(e) => updateLine(index, 'credit', e.target.value)}
@@ -431,8 +596,8 @@ export default function VerificationForm({
             <tfoot className="bg-gray-50">
               <tr>
                 <td colSpan={2} className="px-4 py-2 text-right font-medium">Totalt:</td>
-                <td className="px-4 py-2 text-right font-mono font-bold">{totalDebit.toFixed(2)}</td>
-                <td className="px-4 py-2 text-right font-mono font-bold">{totalCredit.toFixed(2)}</td>
+                <td className="px-4 py-2 text-right font-mono font-bold">{totalDebit.toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                <td className="px-4 py-2 text-right font-mono font-bold">{totalCredit.toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                 {!isEditing && <td></td>}
               </tr>
               <tr>
@@ -445,7 +610,7 @@ export default function VerificationForm({
                   ) : (
                     <span className="inline-flex items-center text-red-600 font-medium">
                       <AlertCircle className="w-4 h-4 mr-2" />
-                      Ej i balans (skillnad: {Math.abs(totalDebit - totalCredit).toFixed(2)})
+                      Ej i balans (skillnad: {Math.abs(totalDebit - totalCredit).toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })})
                     </span>
                   )}
                 </td>
@@ -472,7 +637,7 @@ export default function VerificationForm({
           }}
           onUpload={async (file) => {
             const response = await attachmentApi.upload(companyId, file)
-            setPendingAttachmentIds([...pendingAttachmentIds, response.data.id])
+            setPendingAttachmentIds(prev => [...prev, response.data.id])
           }}
           onDelete={async () => {}}
           onDownload={async (attachment) => {
@@ -519,7 +684,7 @@ export default function VerificationForm({
             type="button"
             onClick={handleSubmit}
             disabled={loading || !isBalanced || isEditing}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading
               ? 'Sparar...'

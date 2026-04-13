@@ -15,6 +15,7 @@ import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
+import { useToast } from '@/contexts/ToastContext'
 
 // Format number with Swedish thousand separators (space)
 const formatNumberWithSeparator = (value: number): string => {
@@ -32,6 +33,7 @@ const parseFormattedNumber = (value: string): number => {
 
 export default function Invoices() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
@@ -55,6 +57,10 @@ export default function Invoices() {
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [payingInvoice, setPayingInvoice] = useState(false)
   const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
+
+  // Filter states
+  const [invoiceFilter, setInvoiceFilter] = useState<string>('all')
+  const [supplierInvoiceFilter, setSupplierInvoiceFilter] = useState<string>('all')
 
   // Track attachments from supplier invoice form for preview controller
   const [supplierInvoiceAttachments, setSupplierInvoiceAttachments] = useState<EntityAttachment[]>([])
@@ -134,7 +140,7 @@ export default function Invoices() {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Failed to download PDF:', error)
-      alert('Kunde inte ladda ner PDF')
+      showToast('Kunde inte ladda ner PDF', 'error')
     }
   }
 
@@ -148,7 +154,7 @@ export default function Invoices() {
       setConfirmSendInvoice(null)
     } catch (error) {
       console.error('Failed to send invoice:', error)
-      alert('Kunde inte skicka fakturan')
+      showToast('Kunde inte skicka fakturan', 'error')
     } finally {
       setSendingInvoice(false)
     }
@@ -164,7 +170,7 @@ export default function Invoices() {
       setConfirmRegisterSupplierInvoice(null)
     } catch (error) {
       console.error('Failed to register supplier invoice:', error)
-      alert('Kunde inte bokföra leverantörsfakturan')
+      showToast('Kunde inte bokföra leverantörsfakturan', 'error')
     } finally {
       setRegisteringSupplierInvoice(false)
     }
@@ -202,12 +208,12 @@ export default function Invoices() {
       await loadInvoices()
       setConfirmPayInvoice(null)
       const isPartialPayment = paymentAmount < remainingAmount
-      alert(isPartialPayment
+      showToast(isPartialPayment
         ? `Delbetalning på ${paymentAmount.toLocaleString('sv-SE')} kr har registrerats`
-        : 'Fakturan har markerats som betald och en betalningsverifikation har skapats')
+        : 'Fakturan har markerats som betald och en betalningsverifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to mark invoice as paid:', error)
-      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     } finally {
       setPayingInvoice(false)
     }
@@ -245,12 +251,12 @@ export default function Invoices() {
       await loadInvoices()
       setConfirmPaySupplierInvoice(null)
       const isPartialPayment = paymentAmount < remainingAmount
-      alert(isPartialPayment
+      showToast(isPartialPayment
         ? `Delbetalning på ${paymentAmount.toLocaleString('sv-SE')} kr har registrerats`
-        : 'Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats')
+        : 'Leverantörsfakturan har markerats som betald och en betalningsverifikation har skapats', 'success')
     } catch (error) {
       console.error('Failed to mark supplier invoice as paid:', error)
-      alert(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`)
+      showToast(`Kunde inte markera som betald: ${getErrorMessage(error, 'Unknown error')}`, 'error')
     } finally {
       setPayingSupplierInvoice(false)
     }
@@ -293,6 +299,41 @@ export default function Invoices() {
     )
   }
 
+  const isInvoiceOverdue = (status: InvoiceStatus, paymentStatus: PaymentStatus, dueDate: string) =>
+    status === InvoiceStatus.ISSUED &&
+    paymentStatus !== PaymentStatus.PAID &&
+    new Date(dueDate) < new Date()
+
+  const filterInvoices = <T extends { status: InvoiceStatus; payment_status: PaymentStatus; due_date: string }>(
+    items: T[],
+    filter: string
+  ): T[] => {
+    if (filter === 'all') return items
+    return items.filter((inv) => {
+      const overdue = isInvoiceOverdue(inv.status, inv.payment_status, inv.due_date)
+      switch (filter) {
+        case 'draft': return inv.status === InvoiceStatus.DRAFT
+        case 'issued': return inv.status === InvoiceStatus.ISSUED && !overdue
+        case 'overdue': return overdue
+        case 'paid': return inv.payment_status === PaymentStatus.PAID
+        case 'cancelled': return inv.status === InvoiceStatus.CANCELLED
+        default: return true
+      }
+    })
+  }
+
+  const filteredInvoices = filterInvoices(sortedInvoices, invoiceFilter)
+  const filteredSupplierInvoices = filterInvoices(sortedSupplierInvoices, supplierInvoiceFilter)
+
+  const filterButtons = [
+    { key: 'all', label: 'Alla' },
+    { key: 'draft', label: 'Utkast' },
+    { key: 'issued', label: 'Skickade' },
+    { key: 'overdue', label: 'Förfallna' },
+    { key: 'paid', label: 'Betalda' },
+    { key: 'cancelled', label: 'Makulerade' },
+  ]
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -321,6 +362,22 @@ export default function Invoices() {
           </button>
         </div>
 
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {filterButtons.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setInvoiceFilter(f.key)}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                invoiceFilter === f.key
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {invoices.length === 0 ? (
           <div className="card">
             <p className="text-gray-600">Inga kundfakturor ännu. Skapa din första faktura!</p>
@@ -344,11 +401,13 @@ export default function Invoices() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedInvoices.map((invoice) => (
+                {filteredInvoices.map((invoice) => {
+                  const overdue = isInvoiceOverdue(invoice.status, invoice.payment_status, invoice.due_date)
+                  return (
                   <tr
                     key={invoice.id}
                     onClick={() => navigate(`/invoices/${invoice.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={`cursor-pointer ${overdue ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.invoice_number}
@@ -383,7 +442,7 @@ export default function Invoices() {
                               e.stopPropagation()
                               setConfirmSendInvoice(invoice)
                             }}
-                            className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                             title={selectedCompany?.accounting_basis === 'accrual' ? 'Skicka och bokför faktura' : 'Skicka faktura'}
                           >
                             Skicka
@@ -398,7 +457,7 @@ export default function Invoices() {
                               setPaymentError(null)
                               setConfirmPayInvoice(invoice)
                             }}
-                            className="p-1 text-purple-600 hover:text-purple-800"
+                            className="p-1 text-primary-600 hover:text-primary-800"
                             title="Markera som betald"
                           >
                             <DollarSign className="w-4 h-4" />
@@ -418,7 +477,8 @@ export default function Invoices() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -436,6 +496,22 @@ export default function Invoices() {
             <Plus className="w-4 h-4 mr-2" />
             Registrera faktura
           </button>
+        </div>
+
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {filterButtons.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setSupplierInvoiceFilter(f.key)}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                supplierInvoiceFilter === f.key
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         {supplierInvoices.length === 0 ? (
@@ -461,11 +537,13 @@ export default function Invoices() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedSupplierInvoices.map((invoice) => (
+                {filteredSupplierInvoices.map((invoice) => {
+                  const overdue = isInvoiceOverdue(invoice.status, invoice.payment_status, invoice.due_date)
+                  return (
                   <tr
                     key={invoice.id}
                     onClick={() => navigate(`/supplier-invoices/${invoice.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={`cursor-pointer ${overdue ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3 text-sm font-medium">
                       {invoice.supplier_invoice_number}
@@ -500,7 +578,7 @@ export default function Invoices() {
                               e.stopPropagation()
                               setConfirmRegisterSupplierInvoice(invoice)
                             }}
-                            className="inline-flex items-center px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            className="inline-flex items-center px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                             title="Bokför faktura"
                           >
                             Bokför
@@ -515,7 +593,7 @@ export default function Invoices() {
                               setPaymentError(null)
                               setConfirmPaySupplierInvoice(invoice)
                             }}
-                            className="p-1 text-purple-600 hover:text-purple-800"
+                            className="p-1 text-primary-600 hover:text-primary-800"
                             title="Markera som betald"
                           >
                             <DollarSign className="w-4 h-4" />
@@ -524,7 +602,8 @@ export default function Invoices() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -603,10 +682,10 @@ export default function Invoices() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100">
+            <div className="bg-primary-50 px-6 py-4 border-b border-primary-100">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <Send className="w-5 h-5 text-indigo-600" />
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -644,14 +723,14 @@ export default function Invoices() {
               <button
                 onClick={() => setConfirmSendInvoice(null)}
                 disabled={sendingInvoice}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Avbryt
               </button>
               <button
                 onClick={handleSendInvoice}
                 disabled={sendingInvoice}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {sendingInvoice ? (
                   <>
@@ -678,10 +757,10 @@ export default function Invoices() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-100">
+            <div className="bg-primary-50 px-6 py-4 border-b border-primary-100">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-indigo-600" />
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -717,14 +796,14 @@ export default function Invoices() {
               <button
                 onClick={() => setConfirmRegisterSupplierInvoice(null)}
                 disabled={registeringSupplierInvoice}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Avbryt
               </button>
               <button
                 onClick={handleRegisterSupplierInvoice}
                 disabled={registeringSupplierInvoice}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {registeringSupplierInvoice ? (
                   <>
@@ -751,10 +830,10 @@ export default function Invoices() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div className="bg-purple-50 px-6 py-4 border-b border-purple-100">
+            <div className="bg-primary-50 px-6 py-4 border-b border-primary-100">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-purple-600" />
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -795,7 +874,7 @@ export default function Invoices() {
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
                   <span className="text-gray-700">Återstår:</span>
-                  <span className="text-purple-600">
+                  <span className="text-primary-600">
                     {(confirmPayInvoice.total_amount - confirmPayInvoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
                   </span>
                 </div>
@@ -810,7 +889,7 @@ export default function Invoices() {
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
@@ -828,7 +907,7 @@ export default function Invoices() {
                       setPaymentAmount(parseFormattedNumber(e.target.value))
                       setPaymentError(null)
                     }}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">SEK</span>
                 </div>
@@ -843,14 +922,14 @@ export default function Invoices() {
               <button
                 onClick={() => setConfirmPayInvoice(null)}
                 disabled={payingInvoice}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Avbryt
               </button>
               <button
                 onClick={handlePayInvoice}
                 disabled={payingInvoice}
-                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {payingInvoice ? (
                   <>
@@ -877,10 +956,10 @@ export default function Invoices() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
-            <div className="bg-purple-50 px-6 py-4 border-b border-purple-100">
+            <div className="bg-primary-50 px-6 py-4 border-b border-primary-100">
               <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-purple-600" />
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-primary-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -921,7 +1000,7 @@ export default function Invoices() {
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
                   <span className="text-gray-700">Återstår:</span>
-                  <span className="text-purple-600">
+                  <span className="text-primary-600">
                     {(confirmPaySupplierInvoice.total_amount - confirmPaySupplierInvoice.paid_amount).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK' })}
                   </span>
                 </div>
@@ -936,7 +1015,7 @@ export default function Invoices() {
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
@@ -954,7 +1033,7 @@ export default function Invoices() {
                       setPaymentAmount(parseFormattedNumber(e.target.value))
                       setPaymentError(null)
                     }}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">SEK</span>
                 </div>
@@ -969,14 +1048,14 @@ export default function Invoices() {
               <button
                 onClick={() => setConfirmPaySupplierInvoice(null)}
                 disabled={payingSupplierInvoice}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Avbryt
               </button>
               <button
                 onClick={handlePaySupplierInvoice}
                 disabled={payingSupplierInvoice}
-                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {payingSupplierInvoice ? (
                   <>

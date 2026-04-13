@@ -113,6 +113,7 @@ export interface VerificationListItem {
   description: string
   total_amount: number
   locked: boolean
+  attachment_count: number
 }
 
 // Posting Templates

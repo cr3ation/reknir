@@ -73,7 +73,7 @@ class PostingTemplate(Base):
                     f"Please ensure the account exists in the target fiscal year."
                 )
 
-            evaluated_amount = line.evaluate_formula(amount)
+            evaluated_amount = round(line.evaluate_formula(amount), 2)
 
             # Positive amounts become debits, negative become credits
             debit = max(0, evaluated_amount)

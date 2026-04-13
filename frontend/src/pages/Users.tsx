@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users as UsersIcon, Plus, Building2, Trash2 } from 'lucide-react'
 import api from '../services/api'
 import { getErrorMessage } from '../utils/errors'
+import { useToast } from '@/contexts/ToastContext'
 
 interface User {
   id: number
@@ -19,6 +20,7 @@ interface Company {
 
 export default function Users() {
   const [users, setUsers] = useState<User[]>([])
+  const { showToast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -77,7 +79,7 @@ export default function Users() {
       setNewUser({ email: '', full_name: '', password: '' })
       loadUsers()
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to create user'))
+      showToast(getErrorMessage(error, 'Failed to create user'), 'error')
     }
   }
 
@@ -92,7 +94,7 @@ export default function Users() {
       loadUserCompanies(selectedUser.id)
       setSelectedCompanyId(null)
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to grant access'))
+      showToast(getErrorMessage(error, 'Failed to grant access'), 'error')
     }
   }
 
@@ -105,7 +107,7 @@ export default function Users() {
         loadUserCompanies(selectedUser.id)
       }
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to revoke access'))
+      showToast(getErrorMessage(error, 'Failed to revoke access'), 'error')
     }
   }
 
@@ -132,7 +134,7 @@ export default function Users() {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
         >
           <Plus className="w-5 h-5" />
           Ny användare
@@ -260,7 +262,7 @@ export default function Users() {
               <div className="flex gap-3 mt-6">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
                 >
                   Skapa
                 </button>
@@ -286,8 +288,8 @@ export default function Users() {
             </h2>
 
             {selectedUser.is_admin ? (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-                <p className="text-purple-800">
+              <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-4">
+                <p className="text-primary-800">
                   <strong>Admin-användare</strong> har automatiskt åtkomst till alla företag.
                 </p>
               </div>
@@ -351,7 +353,7 @@ export default function Users() {
                     <button
                       onClick={handleGrantAccess}
                       disabled={!selectedCompanyId}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
                       Lägg till
                     </button>

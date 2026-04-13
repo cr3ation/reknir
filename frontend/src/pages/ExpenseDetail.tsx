@@ -7,9 +7,11 @@ import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import AttachmentManager from '@/components/AttachmentManager'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function ExpenseDetail() {
   const { expenseId } = useParams<{ expenseId: string }>()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
@@ -55,7 +57,7 @@ export default function ExpenseDetail() {
       setLoading(false)
     } catch (error) {
       console.error('Failed to load expense:', error)
-      alert('Kunde inte ladda utlägget')
+      showToast('Kunde inte ladda utlägget', 'error')
       navigate('/expenses')
     }
   }
@@ -89,7 +91,7 @@ export default function ExpenseDetail() {
       await loadExpense()
     } catch (error) {
       console.error('Failed to save expense:', error)
-      alert('Kunde inte spara utlägget')
+      showToast('Kunde inte spara utlägget', 'error')
     }
   }
 
@@ -99,7 +101,7 @@ export default function ExpenseDetail() {
       await loadExpense()
     } catch (error) {
       console.error('Failed to approve:', error)
-      alert('Kunde inte godkänna utlägget')
+      showToast('Kunde inte godkänna utlägget', 'error')
     }
   }
 
@@ -109,7 +111,7 @@ export default function ExpenseDetail() {
       await loadExpense()
     } catch (error) {
       console.error('Failed to reject:', error)
-      alert('Kunde inte avslå utlägget')
+      showToast('Kunde inte avslå utlägget', 'error')
     }
   }
 
@@ -117,7 +119,7 @@ export default function ExpenseDetail() {
     const liabilityAccounts = accounts.filter(a => a.account_number >= 2890 && a.account_number < 2900)
 
     if (liabilityAccounts.length === 0) {
-      alert('Inget skuldkonto hittades (t.ex. 2890). Lägg till ett konto för anställdas utlägg först.')
+      showToast('Inget skuldkonto hittades (t.ex. 2890). Lägg till ett konto för anställdas utlägg först.', 'error')
       return
     }
 
@@ -132,7 +134,7 @@ export default function ExpenseDetail() {
 
       const selectedAccount = liabilityAccounts.find(a => a.account_number.toString() === accountNumber)
       if (!selectedAccount) {
-        alert('Ogiltigt kontonummer')
+        showToast('Ogiltigt kontonummer', 'error')
         return
       }
       employeePayableAccountId = selectedAccount.id
@@ -141,10 +143,10 @@ export default function ExpenseDetail() {
     try {
       await expenseApi.book(parseInt(expenseId!), employeePayableAccountId)
       await loadExpense()
-      alert('Utlägget har bokförts och en verifikation har skapats')
+      showToast('Utlägget har bokförts och en verifikation har skapats', 'success')
     } catch (error: any) {
       console.error('Failed to book:', error)
-      alert(`Kunde inte bokföra: ${error.response?.data?.detail || error.message}`)
+      showToast(`Kunde inte bokföra: ${error.response?.data?.detail || error.message}`, 'error')
     }
   }
 
@@ -156,17 +158,17 @@ export default function ExpenseDetail() {
     const bankAccount = accounts.find(a => a.account_number === 1930)
 
     if (!bankAccount) {
-      alert('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.')
+      showToast('Bankkonto 1930 hittades inte. Lägg till konto 1930 (Företagskonto/Bankgiro) först.', 'error')
       return
     }
 
     try {
       await expenseApi.markPaid(parseInt(expenseId!), paidDate, bankAccount.id)
       await loadExpense()
-      alert('Utlägget har markerats som utbetalt och en verifikation har skapats')
+      showToast('Utlägget har markerats som utbetalt och en verifikation har skapats', 'success')
     } catch (error: any) {
       console.error('Failed to mark paid:', error)
-      alert(`Kunde inte markera som utbetald: ${error.response?.data?.detail || error.message}`)
+      showToast(`Kunde inte markera som utbetald: ${error.response?.data?.detail || error.message}`, 'error')
     }
   }
 
@@ -265,7 +267,7 @@ export default function ExpenseDetail() {
           {canEdit && !editing && (
             <button
               onClick={() => setEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
             >
               <Edit2 className="w-4 h-4" />
               Redigera
@@ -367,7 +369,7 @@ export default function ExpenseDetail() {
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={handleSave}
-                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                   >
                     Spara ändringar
                   </button>
@@ -478,7 +480,7 @@ export default function ExpenseDetail() {
               {expense.status === 'approved' && !expense.verification_id && (
                 <button
                   onClick={handleBook}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <BookOpen className="w-4 h-4" />
                   Bokför
@@ -487,7 +489,7 @@ export default function ExpenseDetail() {
               {expense.status === 'approved' && (
                 <button
                   onClick={handleMarkPaid}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <DollarSign className="w-4 h-4" />
                   Markera som utbetald

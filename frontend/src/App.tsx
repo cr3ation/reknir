@@ -23,6 +23,7 @@ import { LayoutSettingsProvider } from './contexts/LayoutSettingsContext'
 import CompanySelector from './components/CompanySelector'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ToastProvider } from './contexts/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <LayoutSettingsProvider>
+          <ToastProvider>
           <CompanyProvider>
             <FiscalYearProvider>
               <Routes>
@@ -40,6 +42,7 @@ function App() {
               </Routes>
             </FiscalYearProvider>
           </CompanyProvider>
+          </ToastProvider>
         </LayoutSettingsProvider>
       </AuthProvider>
     </Router>

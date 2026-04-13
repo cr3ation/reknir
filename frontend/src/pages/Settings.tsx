@@ -10,9 +10,11 @@ import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useLayoutSettings, ModalType } from '@/contexts/LayoutSettingsContext'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function SettingsPage() {
   const { selectedCompany, setSelectedCompany, companies, loadCompanies } = useCompany()
+  const { showToast } = useToast()
   const { selectedFiscalYear } = useFiscalYear()
   const { settings: layoutSettings, updateSettings: updateLayoutSettings } = useLayoutSettings()
   const [allAccounts, setAllAccounts] = useState<Account[]>([])
@@ -30,8 +32,6 @@ export default function SettingsPage() {
     template_lines: []
   })
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [activeTab, setActiveTab] = useState<'company' | 'fiscal' | 'templates' | 'import' | 'layout'>('company')
   const [showCreateFiscalYear, setShowCreateFiscalYear] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -169,7 +169,7 @@ export default function SettingsPage() {
       }
     } catch (error: any) {
       console.error('Failed to load data:', error)
-      showMessage('Kunde inte ladda data', 'error')
+      showToast('Kunde inte ladda data', 'error')
     } finally {
       setLoading(false)
     }
@@ -193,10 +193,10 @@ export default function SettingsPage() {
     try {
       await attachmentApi.delete(id)
       setAttachments(prev => prev.filter(a => a.id !== id))
-      showMessage('Bilagan har raderats', 'success')
+      showToast('Bilagan har raderats', 'success')
     } catch (err: any) {
       const detail = err.response?.data?.detail || 'Kunde inte radera bilagan'
-      showMessage(detail, 'error')
+      showToast(detail, 'error')
     } finally {
       setDeletingAttachment(null)
     }
@@ -260,20 +260,16 @@ export default function SettingsPage() {
       })
       await loadCompanies()
       setEditingPaymentInfo(false)
-      showMessage('Betalningsuppgifter uppdaterade', 'success')
+      showToast('Betalningsuppgifter uppdaterade', 'success')
     } catch (error: any) {
       const detail = error.response?.data?.detail || 'Kunde inte uppdatera betalningsuppgifter'
-      showMessage(detail, 'error')
+      showToast(detail, 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  const showMessage = (msg: string, type: 'success' | 'error' = 'success') => {
-    setMessage(msg)
-    setMessageType(type)
-    setTimeout(() => setMessage(''), 5000)
-  }
+
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!selectedCompany || !event.target.files || event.target.files.length === 0) return
@@ -282,18 +278,18 @@ export default function SettingsPage() {
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      showMessage('Filen måste vara en bild', 'error')
+      showToast('Filen måste vara en bild', 'error')
       return
     }
     
     if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-      showMessage('Endast PNG och JPG filer är tillåtna', 'error')
+      showToast('Endast PNG och JPG filer är tillåtna', 'error')
       return
     }
     
     // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
-      showMessage('Filstorleken får inte överstiga 5MB', 'error')
+      showToast('Filstorleken får inte överstiga 5MB', 'error')
       return
     }
 
@@ -301,13 +297,13 @@ export default function SettingsPage() {
     try {
       const response = await companyApi.uploadLogo(selectedCompany.id, file)
       setSelectedCompany(response.data)
-      showMessage('Logotyp uppladdad', 'success')
+      showToast('Logotyp uppladdad', 'success')
       
       // Clear the input so the same file can be selected again if needed
       event.target.value = ''
     } catch (error: any) {
       console.error('Logo upload failed:', error)
-      showMessage(error.response?.data?.detail || 'Uppladdning misslyckades', 'error')
+      showToast(error.response?.data?.detail || 'Uppladdning misslyckades', 'error')
     } finally {
       setUploadingLogo(false)
     }
@@ -321,10 +317,10 @@ export default function SettingsPage() {
     try {
       const response = await companyApi.deleteLogo(selectedCompany.id)
       setSelectedCompany(response.data)
-      showMessage('Logotyp borttagen', 'success')
+      showToast('Logotyp borttagen', 'success')
     } catch (error: any) {
       console.error('Logo delete failed:', error)
-      showMessage(error.response?.data?.detail || 'Borttagning misslyckades', 'error')
+      showToast(error.response?.data?.detail || 'Borttagning misslyckades', 'error')
     }
   }
 
@@ -395,12 +391,12 @@ export default function SettingsPage() {
       setLoading(true)
       const response = await companyApi.update(selectedCompany.id, companyForm)
       setSelectedCompany(response.data)
-      showMessage('Företagsinformation uppdaterad!', 'success')
+      showToast('Företagsinformation uppdaterad!', 'success')
       setEditingCompany(false)
       await loadCompanies()
     } catch (error: any) {
       console.error('Failed to update company:', error)
-      showMessage(formatErrorMessage(error), 'error')
+      showToast(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
     }
@@ -410,7 +406,7 @@ export default function SettingsPage() {
     try {
       setLoading(true)
       const response = await companyApi.create(companyForm)
-      showMessage('Nytt företag skapat!', 'success')
+      showToast('Nytt företag skapat!', 'success')
       setShowCreateCompany(false)
       setCompanyForm({
         name: '',
@@ -431,7 +427,7 @@ export default function SettingsPage() {
       setSelectedCompany(response.data)
     } catch (error: any) {
       console.error('Failed to create company:', error)
-      showMessage(formatErrorMessage(error), 'error')
+      showToast(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
     }
@@ -439,7 +435,7 @@ export default function SettingsPage() {
 
   const handleSIE4Export = async (includeVerifications: boolean) => {
     if (!selectedCompany || !selectedFiscalYear) {
-      showMessage('Välj ett räkenskapsår först', 'error')
+      showToast('Välj ett räkenskapsår först', 'error')
       return
     }
 
@@ -458,10 +454,10 @@ export default function SettingsPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      showMessage('Export lyckades!', 'success')
+      showToast('Export lyckades!', 'success')
     } catch (error: any) {
       console.error('SIE4 export failed:', error)
-      showMessage('Export misslyckades', 'error')
+      showToast('Export misslyckades', 'error')
     } finally {
       setLoading(false)
     }
@@ -474,7 +470,7 @@ export default function SettingsPage() {
       setBackups(response.data)
     } catch (error: any) {
       console.error('Failed to load backups:', error)
-      showMessage('Kunde inte ladda backups', 'error')
+      showToast('Kunde inte ladda backups', 'error')
     } finally {
       setLoadingBackups(false)
     }
@@ -484,11 +480,11 @@ export default function SettingsPage() {
     setCreatingBackup(true)
     try {
       await backupApi.create()
-      showMessage('Backup skapad!', 'success')
+      showToast('Backup skapad!', 'success')
       loadBackups()
     } catch (error: any) {
       console.error('Backup creation failed:', error)
-      showMessage(error.response?.data?.detail || 'Kunde inte skapa backup', 'error')
+      showToast(error.response?.data?.detail || 'Kunde inte skapa backup', 'error')
     } finally {
       setCreatingBackup(false)
     }
@@ -499,10 +495,10 @@ export default function SettingsPage() {
     setDeletingBackup(backupToDelete)
     try {
       await backupApi.delete(backupToDelete)
-      showMessage('Backup raderad', 'success')
+      showToast('Backup raderad', 'success')
       loadBackups()
     } catch (error: any) {
-      showMessage(error.response?.data?.detail || 'Kunde inte radera backup', 'error')
+      showToast(error.response?.data?.detail || 'Kunde inte radera backup', 'error')
     } finally {
       setDeletingBackup(null)
       setBackupToDelete(null)
@@ -530,9 +526,9 @@ export default function SettingsPage() {
       const payload = { ...scheduleForm, preferred_time: localTimeToUtc(scheduleForm.preferred_time) }
       const response = await backupApi.updateSchedule(payload)
       setSchedule(response.data)
-      showMessage('Schemaläggning sparad!', 'success')
+      showToast('Schemaläggning sparad!', 'success')
     } catch (error: any) {
-      showMessage(error.response?.data?.detail || 'Kunde inte spara schemaläggning', 'error')
+      showToast(error.response?.data?.detail || 'Kunde inte spara schemaläggning', 'error')
     } finally {
       setSavingSchedule(false)
     }
@@ -553,10 +549,10 @@ export default function SettingsPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      showMessage('Backup nedladdad', 'success')
+      showToast('Backup nedladdad', 'success')
     } catch (error: any) {
       console.error('Backup download failed:', error)
-      showMessage('Kunde inte ladda ner backup', 'error')
+      showToast('Kunde inte ladda ner backup', 'error')
     } finally {
       setDownloadingBackup(null)
     }
@@ -598,10 +594,10 @@ export default function SettingsPage() {
       setLoading(true)
       await companyApi.update(selectedCompany.id, { vat_reporting_period: newPeriod })
       setSelectedCompany({ ...selectedCompany, vat_reporting_period: newPeriod })
-      showMessage('Momsredovisningsperiod uppdaterad!', 'success')
+      showToast('Momsredovisningsperiod uppdaterad!', 'success')
     } catch (error: any) {
       console.error('Failed to update VAT reporting period:', error)
-      showMessage('Kunde inte uppdatera momsredovisningsperiod', 'error')
+      showToast('Kunde inte uppdatera momsredovisningsperiod', 'error')
     } finally {
       setLoading(false)
     }
@@ -611,7 +607,7 @@ export default function SettingsPage() {
     if (!selectedCompany) return
 
     if (!newFiscalYear.label || !newFiscalYear.start_date || !newFiscalYear.end_date) {
-      showMessage('Fyll i alla fält', 'error')
+      showToast('Fyll i alla fält', 'error')
       return
     }
 
@@ -632,15 +628,15 @@ export default function SettingsPage() {
 
       // Step 2: Copy chart of accounts from previous fiscal year
       // This automatically finds the most recent previous fiscal year
-      showMessage('Räkenskapsår skapat! Kopierar kontoplan från föregående år...', 'success')
+      showToast('Räkenskapsår skapat! Kopierar kontoplan från föregående år...', 'success')
 
       try {
         const copyResponse = await fiscalYearApi.copyChartOfAccounts(newFiscalYearId)
-        showMessage(`Räkenskapsår och kontoplan skapade! ${copyResponse.data.accounts_copied} konton kopierade från ${copyResponse.data.source_fiscal_year_label}.`, 'success')
+        showToast(`Räkenskapsår och kontoplan skapade! ${copyResponse.data.accounts_copied} konton kopierade från ${copyResponse.data.source_fiscal_year_label}.`, 'success')
       } catch (copyError: any) {
         console.error('Failed to copy chart of accounts:', copyError)
         const errorDetail = copyError.response?.data?.detail || 'Kunde inte kopiera kontoplan'
-        showMessage(`Räkenskapsår skapat, men ${errorDetail}. Du kan importera BAS-kontoplan manuellt i fliken "Import".`, 'error')
+        showToast(`Räkenskapsår skapat, men ${errorDetail}. Du kan importera BAS-kontoplan manuellt i fliken "Import".`, 'error')
       }
 
       await loadData()
@@ -651,7 +647,7 @@ export default function SettingsPage() {
       }, 100)
     } catch (error: any) {
       console.error('Failed to create fiscal year:', error)
-      showMessage(error.response?.data?.detail || 'Kunde inte skapa räkenskapsår', 'error')
+      showToast(error.response?.data?.detail || 'Kunde inte skapa räkenskapsår', 'error')
     } finally {
       setLoading(false)
     }
@@ -674,11 +670,11 @@ export default function SettingsPage() {
     try {
       setLoading(true)
       await fiscalYearApi.delete(fiscalYearId)
-      showMessage('Räkenskapsår raderat', 'success')
+      showToast('Räkenskapsår raderat', 'success')
       await loadData()
     } catch (error: any) {
       console.error('Failed to delete fiscal year:', error)
-      showMessage('Kunde inte radera räkenskapsår', 'error')
+      showToast('Kunde inte radera räkenskapsår', 'error')
     } finally {
       setLoading(false)
     }
@@ -692,11 +688,11 @@ export default function SettingsPage() {
     try {
       setLoading(true)
       const result = await fiscalYearApi.assignVerifications(fiscalYearId)
-      showMessage(result.data.message, 'success')
+      showToast(result.data.message, 'success')
       await loadData()
     } catch (error: any) {
       console.error('Failed to assign verifications:', error)
-      showMessage('Kunde inte tilldela verifikationer', 'error')
+      showToast('Kunde inte tilldela verifikationer', 'error')
     } finally {
       setLoading(false)
     }
@@ -746,7 +742,7 @@ export default function SettingsPage() {
       setTemplateForm(response.data)
       setShowCreateTemplate(true)
     } catch (error) {
-      showMessage('Kunde inte ladda mall', 'error')
+      showToast('Kunde inte ladda mall', 'error')
     }
   }
 
@@ -754,14 +750,14 @@ export default function SettingsPage() {
     if (!selectedCompany) return
 
     if (!templateForm.name || !templateForm.description || templateForm.template_lines.length === 0) {
-      showMessage('Fyll i alla obligatoriska fält', 'error')
+      showToast('Fyll i alla obligatoriska fält', 'error')
       return
     }
 
     // Validate template lines
     for (const line of templateForm.template_lines) {
       if (!line.account_number || !line.formula) {
-        showMessage('Alla rader måste ha konto och formel', 'error')
+        showToast('Alla rader måste ha konto och formel', 'error')
         return
       }
     }
@@ -771,17 +767,17 @@ export default function SettingsPage() {
 
       if (editingTemplate && editingTemplate.id) {
         await postingTemplateApi.update(editingTemplate.id, templateForm)
-        showMessage('Mall uppdaterad', 'success')
+        showToast('Mall uppdaterad', 'success')
       } else {
         await postingTemplateApi.create(templateForm)
-        showMessage('Mall skapad', 'success')
+        showToast('Mall skapad', 'success')
       }
 
       setShowCreateTemplate(false)
       setEditingTemplate(null)
       loadData()
     } catch (error: any) {
-      showMessage(error.response?.data?.detail || 'Kunde inte spara mall', 'error')
+      showToast(error.response?.data?.detail || 'Kunde inte spara mall', 'error')
     } finally {
       setLoading(false)
     }
@@ -904,11 +900,11 @@ export default function SettingsPage() {
       }))
 
       await postingTemplateApi.reorder(selectedCompany.id, templateOrders)
-      showMessage('Ordning uppdaterad', 'success')
+      showToast('Ordning uppdaterad', 'success')
     } catch (error: any) {
       // Revert the local change if API call fails
       setTemplates(templates)
-      showMessage('Kunde inte uppdatera ordning', 'error')
+      showToast('Kunde inte uppdatera ordning', 'error')
     }
   }
 
@@ -937,7 +933,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('company')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'company'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -947,7 +943,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('fiscal')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'fiscal'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -957,7 +953,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('templates')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'templates'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -967,7 +963,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('import')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'import'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -977,7 +973,7 @@ export default function SettingsPage() {
             onClick={() => setActiveTab('layout')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'layout'
-                ? 'border-indigo-500 text-indigo-600'
+                ? 'border-primary-500 text-primary-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
@@ -985,18 +981,6 @@ export default function SettingsPage() {
           </button>
         </nav>
       </div>
-
-      {message && (
-        <div
-          className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 p-4 rounded-lg shadow-lg max-w-xl ${
-            messageType === 'success'
-              ? 'bg-green-100 text-green-800 border border-green-300'
-              : 'bg-red-100 text-red-800 border border-red-300'
-          }`}
-        >
-          <pre className="whitespace-pre-wrap font-sans text-sm">{message}</pre>
-        </div>
-      )}
 
       {/* Company Tab */}
       {activeTab === 'company' && (
@@ -1261,7 +1245,7 @@ export default function SettingsPage() {
                       type="checkbox"
                       checked={companyForm.is_vat_registered}
                       onChange={(e) => setCompanyForm({ ...companyForm, is_vat_registered: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                     />
                     <span className="text-sm font-medium text-gray-700">
                       Företaget är momsregistrerat
@@ -1790,7 +1774,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={scheduleForm.enabled}
                     onChange={(e) => setScheduleForm(prev => ({ ...prev, enabled: e.target.checked }))}
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   />
                   <span className="text-sm text-gray-700">Aktivera schemalagd backup</span>
                 </label>
@@ -2255,9 +2239,9 @@ export default function SettingsPage() {
                           try {
                             await postingTemplateApi.delete(template.id)
                             setTemplates((prev: any) => prev.filter((t: any) => t.id !== template.id))
-                            showMessage('Mall raderad', 'success')
+                            showToast('Mall raderad', 'success')
                           } catch (error: any) {
-                            showMessage('Kunde inte radera mall', 'error')
+                            showToast('Kunde inte radera mall', 'error')
                           }
                         }}
                         className="text-red-600 hover:text-red-800 p-1 rounded"

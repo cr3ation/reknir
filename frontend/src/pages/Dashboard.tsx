@@ -7,6 +7,7 @@ import StatCard from '../components/StatCard'
 import RevenueExpenseChart from '../components/RevenueExpenseChart'
 import MonthVerificationsModal from '../components/MonthVerificationsModal'
 import FiscalYearSelector from '../components/FiscalYearSelector'
+import { useToast } from '@/contexts/ToastContext'
 
 interface MonthVerification {
   id: number
@@ -59,6 +60,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const { selectedCompany } = useCompany()
+  const { showToast } = useToast()
   const { selectedFiscalYear, loadFiscalYears } = useFiscalYear()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -122,7 +124,7 @@ export default function Dashboard() {
       setMonthVerifications(response.data)
     } catch (error) {
       console.error('Failed to load month verifications:', error)
-      alert('Kunde inte ladda verifikationer för denna månad')
+      showToast('Kunde inte ladda verifikationer för denna månad', 'error')
       setSelectedMonth(null)
     } finally {
       setLoadingVerifications(false)
@@ -240,7 +242,7 @@ export default function Dashboard() {
               <div>
                 <h3 className="font-semibold text-red-900">Förfallna fakturor</h3>
                 <p className="text-sm text-red-800 mt-1">
-                  Du har <strong>{data.overdue_invoices.count}</strong> förfallen{data.overdue_invoices.count !== 1 ? 'a' : ''} faktur{data.overdue_invoices.count !== 1 ? 'or' : ''}
+                  Du har <strong>{data.overdue_invoices.count}</strong> förfallen{data.overdue_invoices.count !== 1 ? 'a' : ''} faktura{data.overdue_invoices.count !== 1 ? 'or' : ''}
                   {' '}på totalt <strong>{formatCurrency(data.overdue_invoices.amount)}</strong>
                 </p>
               </div>

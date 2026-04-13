@@ -160,7 +160,7 @@ export default function InvoiceForm({
             <select
               value={customerId}
               onChange={(e) => setCustomerId(parseInt(e.target.value))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               required
             >
               <option value={0}>Välj kund...</option>
@@ -180,7 +180,7 @@ export default function InvoiceForm({
               type="date"
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               required
             />
           </div>
@@ -193,7 +193,7 @@ export default function InvoiceForm({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               required
             />
           </div>
@@ -206,7 +206,7 @@ export default function InvoiceForm({
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -218,7 +218,7 @@ export default function InvoiceForm({
               type="text"
               value={ourReference}
               onChange={(e) => setOurReference(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function InvoiceForm({
             <button
               type="button"
               onClick={addLine}
-              className="text-sm text-indigo-600 hover:text-indigo-800"
+              className="text-sm text-primary-600 hover:text-primary-800"
             >
               + Lägg till rad
             </button>
@@ -249,7 +249,7 @@ export default function InvoiceForm({
                       placeholder="Beskrivning av vara/tjänst"
                       value={line.description}
                       onChange={(e) => updateLine(index, 'description', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
@@ -267,7 +267,7 @@ export default function InvoiceForm({
                       }}
                       step="1"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
@@ -280,7 +280,7 @@ export default function InvoiceForm({
                       placeholder="st"
                       value={line.unit}
                       onChange={(e) => updateLine(index, 'unit', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                   <div className="col-span-2">
@@ -297,7 +297,7 @@ export default function InvoiceForm({
                       }}
                       step="0.01"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                       required
                     />
                   </div>
@@ -308,7 +308,7 @@ export default function InvoiceForm({
                     <select
                       value={line.vat_rate}
                       onChange={(e) => updateLine(index, 'vat_rate', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                     >
                       <option value={0}>0%</option>
                       <option value={6}>6%</option>
@@ -341,7 +341,7 @@ export default function InvoiceForm({
                     <select
                       value={line.account_id || ''}
                       onChange={(e) => updateLine(index, 'account_id', e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 text-sm"
                     >
                       <option value="">Auto (baserat på moms)</option>
                       {accounts.filter(a => a.account_number >= 3000 && a.account_number < 4000).map(account => (
@@ -385,7 +385,7 @@ export default function InvoiceForm({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             placeholder="T.ex. betalningsvillkor eller övrig information..."
           />
         </div>
@@ -412,7 +412,7 @@ export default function InvoiceForm({
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
           >
             {saving ? 'Skapar...' : 'Skapa faktura'}
           </button>

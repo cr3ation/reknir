@@ -7,9 +7,11 @@ import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import AttachmentManager from '@/components/AttachmentManager'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function VerificationDetail() {
   const { verificationId } = useParams<{ verificationId: string }>()
+  const { showToast } = useToast()
   const navigate = useNavigate()
   const { selectedCompany } = useCompany()
   const { selectedFiscalYear } = useFiscalYear()
@@ -30,7 +32,7 @@ export default function VerificationDetail() {
       setLoading(false)
     } catch (error) {
       console.error('Failed to load verification:', error)
-      alert('Kunde inte ladda verifikationen')
+      showToast('Kunde inte ladda verifikationen', 'error')
       navigate('/verifications')
     }
   }, [verificationId, navigate])
@@ -349,7 +351,7 @@ export default function VerificationDetail() {
               {!verification.locked && (
                 <Link
                   to="/verifications"
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   <FileText className="w-4 h-4" />
                   Redigera

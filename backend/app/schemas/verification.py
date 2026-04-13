@@ -101,5 +101,6 @@ class VerificationListItem(BaseModel):
     description: str
     total_amount: Decimal
     locked: bool
+    attachment_count: int
 
     model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})

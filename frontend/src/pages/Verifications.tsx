@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Edit, Trash2, Lock, CheckCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, CheckCircle } from 'lucide-react'
 import { verificationApi, accountApi } from '@/services/api'
 import type { VerificationListItem, Account, Verification, EntityAttachment } from '@/types'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -13,9 +13,11 @@ import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function Verifications() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const { selectedCompany } = useCompany()
   const [verifications, setVerifications] = useState<VerificationListItem[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -118,7 +120,7 @@ export default function Verifications() {
       await loadData()
     } catch (error) {
       console.error('Failed to delete verification:', error)
-      alert(getErrorMessage(error, 'Kunde inte radera verifikationen'))
+      showToast(getErrorMessage(error, 'Kunde inte radera verifikationen'), 'error')
     }
   }
 
@@ -132,18 +134,9 @@ export default function Verifications() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex items-start justify-between">
         <h1 className="text-3xl font-bold">Verifikationer</h1>
-        <div className="flex items-center gap-4">
-          <FiscalYearSelector />
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Ny verifikation
-          </button>
-        </div>
+        <FiscalYearSelector />
       </div>
 
       {/* Statistics */}
@@ -162,6 +155,16 @@ export default function Verifications() {
         </div>
       </div>
 
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="btn btn-primary inline-flex items-center"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Ny verifikation
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="card mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -172,7 +175,7 @@ export default function Verifications() {
               placeholder="Ver.nr, datum, beskrivning eller belopp..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
           <div>
@@ -180,7 +183,7 @@ export default function Verifications() {
             <select
               value={seriesFilter}
               onChange={(e) => setSeriesFilter(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="all">Alla serier ({verifications.length})</option>
               {uniqueSeries.map((series) => {
@@ -210,12 +213,11 @@ export default function Verifications() {
             <thead>
               <tr>
                 <SortableHeader label="Ver.nr" sortKey="verification_number" sortConfig={sortConfig} onSort={requestSort} />
-                <SortableHeader label="Serie" sortKey="series" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Datum" sortKey="transaction_date" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Beskrivning" sortKey="description" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label="Belopp" sortKey="total_amount" sortConfig={sortConfig} onSort={requestSort} align="right" />
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                  Status
+                  Underlag
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                   Åtgärder
@@ -230,9 +232,8 @@ export default function Verifications() {
                   onClick={() => navigate(`/verifications/${verification.id}`)}
                 >
                   <td className="px-4 py-3 text-sm font-medium">
-                    {verification.verification_number}
+                    {verification.series}{verification.verification_number}
                   </td>
-                  <td className="px-4 py-3 text-sm">{verification.series}</td>
                   <td className="px-4 py-3 text-sm">{verification.transaction_date}</td>
                   <td className="px-4 py-3 text-sm max-w-md truncate">
                     {verification.description}
@@ -244,12 +245,8 @@ export default function Verifications() {
                     })}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {verification.locked ? (
-                      <span className="inline-flex items-center text-gray-600" title="Låst">
-                        <Lock className="w-4 h-4" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center text-green-600" title="Olåst">
+                    {verification.attachment_count > 0 && (
+                      <span className="inline-flex items-center text-green-600" title={`${verification.attachment_count} underlag`}>
                         <CheckCircle className="w-4 h-4" />
                       </span>
                     )}
@@ -324,8 +321,10 @@ export default function Verifications() {
               setFormAttachments([])
               setPendingAttachmentIds([])
               setShowCreateModal(false)
+              const wasEditing = !!editingVerification
               setEditingVerification(null)
               loadData()
+              showToast(wasEditing ? 'Verifikation uppdaterad' : 'Verifikation skapad', 'success')
             }}
             onCancel={() => {
               resetPreview()

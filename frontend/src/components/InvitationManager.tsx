@@ -3,6 +3,7 @@ import { UserPlus, Copy, Trash2, Check, Clock } from 'lucide-react'
 import api from '../services/api'
 import { useCompany } from '../contexts/CompanyContext'
 import { getErrorMessage } from '../utils/errors'
+import { useToast } from '@/contexts/ToastContext'
 
 interface Invitation {
   id: number
@@ -17,6 +18,7 @@ interface Invitation {
 
 export default function InvitationManager() {
   const { selectedCompany } = useCompany()
+  const { showToast } = useToast()
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [loading, setLoading] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -59,7 +61,7 @@ export default function InvitationManager() {
       setShowCreateModal(false)
       setNewInvitation({ role: 'user', days_valid: 7 })
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to create invitation'))
+      showToast(getErrorMessage(error, 'Failed to create invitation'), 'error')
     }
   }
 
@@ -70,7 +72,7 @@ export default function InvitationManager() {
       await api.delete(`/invitations/${invitationId}`)
       setInvitations(invitations.filter(inv => inv.id !== invitationId))
     } catch (error) {
-      alert(getErrorMessage(error, 'Failed to delete invitation'))
+      showToast(getErrorMessage(error, 'Failed to delete invitation'), 'error')
     }
   }
 
@@ -113,7 +115,7 @@ export default function InvitationManager() {
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
         >
           <UserPlus className="w-5 h-5" />
           Skapa inbjudan
@@ -262,7 +264,7 @@ export default function InvitationManager() {
               <div className="flex gap-3 mt-6">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
                 >
                   Skapa inbjudan
                 </button>
