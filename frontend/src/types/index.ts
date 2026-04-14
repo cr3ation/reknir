@@ -716,3 +716,79 @@ export interface BackupScheduleUpdate {
   max_backups?: number
   preferred_time?: string
 }
+
+// AI Assistant
+
+export interface AISettings {
+  ai_enabled: boolean
+  ollama_url: string
+  ollama_model: string
+  system_prompt: string | null
+  updated_at: string
+}
+
+export interface AISettingsUpdate {
+  ai_enabled?: boolean
+  ollama_url?: string
+  ollama_model?: string
+  system_prompt?: string | null
+}
+
+export interface OllamaModel {
+  name: string
+  size: number | null
+  parameter_size: string | null
+  quantization_level: string | null
+  modified_at: string | null
+}
+
+export interface OllamaHealth {
+  reachable: boolean
+  model_available: boolean | null
+  model_name: string | null
+  error: string | null
+}
+
+export interface ChatSession {
+  id: number
+  title: string
+  message_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessage {
+  id: number
+  session_id: number
+  role: 'user' | 'assistant' | 'tool_call' | 'tool_result'
+  content: string | null
+  tool_name: string | null
+  tool_args: string | null
+  tool_status: 'pending' | 'approved' | 'denied' | 'executed' | 'error' | null
+  attachment_ids: string | null
+  created_at: string
+}
+
+export interface ChatSessionDetail {
+  id: number
+  title: string
+  created_at: string
+  updated_at: string
+  messages: ChatMessage[]
+}
+
+export interface ToolProposal {
+  message_id: number
+  tool_name: string
+  display_name: string
+  tool_args: Record<string, unknown>
+  round: number
+}
+
+export interface AIUpload {
+  id: number
+  original_filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}
