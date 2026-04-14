@@ -1,7 +1,5 @@
 """AI tool definitions in OpenAI function-calling format and their handler functions."""
 
-import json
-
 from app.services.ai_api_client import AIAPIClient
 
 # --- Tool classification ---
@@ -114,18 +112,8 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "list_accounts",
-            "description": "Lista konton i kontoplanen. Kan filtreras på kontotyp.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "account_type": {
-                        "type": "string",
-                        "description": "Filtrera på kontotyp: asset, equity_liability, revenue, cost_goods, cost_local, cost_other, cost_personnel, cost_misc",
-                        "enum": ["asset", "equity_liability", "revenue", "cost_goods", "cost_local", "cost_other", "cost_personnel", "cost_misc"],
-                    },
-                },
-                "required": [],
-            },
+            "description": "Lista alla konton i kontoplanen. Returnerar samtliga konton med kontonummer, namn, typ och saldo.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
     {
@@ -447,7 +435,7 @@ TOOL_DEFINITIONS = [
                                 "vat_rate": {"type": "number", "description": "Momssats: 0, 6, 12 eller 25"},
                                 "account_id": {"type": "integer", "description": "Kostnadskontots ID"},
                             },
-                            "required": ["description", "unit_price", "vat_rate", "account_id"],
+                            "required": ["description", "unit_price", "vat_rate"],
                         },
                     },
                 },
@@ -558,11 +546,11 @@ TOOL_DEFINITIONS = [
                 "type": "object",
                 "properties": {
                     "description": {"type": "string", "description": "Beskrivning av utlägget"},
-                    "amount": {"type": "number", "description": "Belopp"},
+                    "amount": {"type": "number", "description": "Belopp exkl. moms"},
                     "expense_date": {"type": "string", "description": "Datum (YYYY-MM-DD)"},
                     "employee_name": {"type": "string", "description": "Anställds namn"},
-                    "account_id": {"type": "integer", "description": "Kostnadskontots ID"},
-                    "vat_rate": {"type": "number", "description": "Momssats: 0, 6, 12 eller 25"},
+                    "expense_account_id": {"type": "integer", "description": "Kostnadskontots ID"},
+                    "vat_amount": {"type": "number", "description": "Momsbelopp i kronor (0 om ej momsregistrerad)"},
                 },
                 "required": ["description", "amount", "expense_date"],
             },
@@ -671,6 +659,9 @@ async def _dispatch_tool(
         return await api_client.create_account(data)
     elif tool_name == "create_supplier_invoice":
         lines = args.pop("lines", [])
+        for line in lines:
+            if "description" not in line:
+                line["description"] = args.get("supplier_invoice_number", "")
         data = {**args, "company_id": company_id, "supplier_invoice_lines": lines}
         return await api_client.create_supplier_invoice(data)
     elif tool_name == "register_supplier_invoice":
@@ -680,6 +671,9 @@ async def _dispatch_tool(
         return await api_client.mark_supplier_invoice_paid(invoice_id, args)
     elif tool_name == "create_invoice":
         lines = args.pop("lines", [])
+        for line in lines:
+            if "description" not in line:
+                line["description"] = args.get("our_reference", args.get("reference", ""))
         data = {**args, "company_id": company_id, "invoice_lines": lines}
         return await api_client.create_invoice(data)
     elif tool_name == "send_invoice":
@@ -688,15 +682,7 @@ async def _dispatch_tool(
         invoice_id = args.pop("invoice_id")
         return await api_client.mark_invoice_paid(invoice_id, args)
     elif tool_name == "create_expense":
-        mapped = {
-            "company_id": company_id,
-            "description": args.get("description", ""),
-            "amount": args.get("amount", 0),
-            "expense_date": args.get("expense_date", ""),
-            "employee_name": args.get("employee_name", ""),
-            "vat_amount": args.get("vat_amount", args.get("vat_rate", 0)),
-            "expense_account_id": args.get("expense_account_id", args.get("account_id")),
-        }
-        return await api_client.create_expense(mapped)
+        data = {**args, "company_id": company_id}
+        return await api_client.create_expense(data)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
