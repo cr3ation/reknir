@@ -82,7 +82,7 @@ export default function ChatMessage({
     const content = isStreaming && streamingContent ? streamingContent : message.content || ''
     return (
       <div className="flex justify-start mb-3">
-        <div className="max-w-[85%] bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-bl-md text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:my-2">
+        <div className="max-w-[85%] bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-bl-md text-sm leading-relaxed ai-markdown">
           <ReactMarkdown>{content}</ReactMarkdown>
           {isStreaming && (
             <span className="inline-block w-1.5 h-4 bg-primary-600 animate-pulse ml-0.5 align-text-bottom" />

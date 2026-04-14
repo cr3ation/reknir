@@ -47,12 +47,14 @@ export default function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
     }
   }, [isOpen, selectedCompany, loadSessions])
 
-  // Load latest session when sessions are loaded and no current session
+  // Load latest session only on initial panel open (not after new chat)
+  const hasInitialized = useRef(false)
   useEffect(() => {
-    if (sessions.length > 0 && !currentSessionId && !messages.length) {
+    if (isOpen && !hasInitialized.current && sessions.length > 0 && !currentSessionId) {
       loadSession(sessions[0].id)
+      hasInitialized.current = true
     }
-  }, [sessions, currentSessionId, messages.length, loadSession])
+  }, [isOpen, sessions, currentSessionId, loadSession])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -124,6 +126,7 @@ export default function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const handleNewChat = () => {
     startNewChat()
     setShowSessionDropdown(false)
+    if (selectedCompany) loadSessions(selectedCompany.id)
   }
 
   const handleSelectSession = (sessionId: number) => {

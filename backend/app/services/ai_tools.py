@@ -658,10 +658,20 @@ async def _dispatch_tool(
         data = {**args, "company_id": company_id}
         return await api_client.create_customer(data)
     elif tool_name == "create_account":
+        # Derive account_type from account_number if not provided
+        if "account_type" not in args and "account_number" in args:
+            num = int(args["account_number"])
+            type_map = {
+                1: "asset", 2: "equity_liability", 3: "revenue",
+                4: "cost_goods", 5: "cost_local", 6: "cost_other",
+                7: "cost_personnel", 8: "cost_misc",
+            }
+            args["account_type"] = type_map.get(num // 1000, "cost_other")
         data = {**args, "company_id": company_id, "fiscal_year_id": fiscal_year_id}
         return await api_client.create_account(data)
     elif tool_name == "create_supplier_invoice":
-        data = {**args, "company_id": company_id, "fiscal_year_id": fiscal_year_id}
+        lines = args.pop("lines", [])
+        data = {**args, "company_id": company_id, "supplier_invoice_lines": lines}
         return await api_client.create_supplier_invoice(data)
     elif tool_name == "register_supplier_invoice":
         return await api_client.register_supplier_invoice(args["supplier_invoice_id"])
@@ -669,7 +679,8 @@ async def _dispatch_tool(
         invoice_id = args.pop("supplier_invoice_id")
         return await api_client.mark_supplier_invoice_paid(invoice_id, args)
     elif tool_name == "create_invoice":
-        data = {**args, "company_id": company_id, "fiscal_year_id": fiscal_year_id}
+        lines = args.pop("lines", [])
+        data = {**args, "company_id": company_id, "invoice_lines": lines}
         return await api_client.create_invoice(data)
     elif tool_name == "send_invoice":
         return await api_client.send_invoice(args["invoice_id"])
@@ -677,7 +688,15 @@ async def _dispatch_tool(
         invoice_id = args.pop("invoice_id")
         return await api_client.mark_invoice_paid(invoice_id, args)
     elif tool_name == "create_expense":
-        data = {**args, "company_id": company_id, "fiscal_year_id": fiscal_year_id}
-        return await api_client.create_expense(data)
+        mapped = {
+            "company_id": company_id,
+            "description": args.get("description", ""),
+            "amount": args.get("amount", 0),
+            "expense_date": args.get("expense_date", ""),
+            "employee_name": args.get("employee_name", ""),
+            "vat_amount": args.get("vat_amount", args.get("vat_rate", 0)),
+            "expense_account_id": args.get("expense_account_id", args.get("account_id")),
+        }
+        return await api_client.create_expense(mapped)
     else:
         return {"error": f"Unknown tool: {tool_name}"}

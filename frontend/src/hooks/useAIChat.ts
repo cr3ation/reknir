@@ -205,6 +205,18 @@ export function useAIChat() {
               break
             }
             case 'tool_proposal': {
+              const proposalMsg: ChatMessage = {
+                id: data.message_id,
+                session_id: 0,
+                role: 'tool_call',
+                content: data.display_name || data.tool_name,
+                tool_name: data.tool_name,
+                tool_args: JSON.stringify(data.tool_args),
+                tool_status: 'pending',
+                attachment_ids: null,
+                created_at: new Date().toISOString(),
+              }
+              setMessages((prev) => [...prev, proposalMsg])
               setPendingProposal({
                 message_id: data.message_id,
                 tool_name: data.tool_name,

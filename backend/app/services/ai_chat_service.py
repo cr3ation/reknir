@@ -112,6 +112,16 @@ async def stream_chat_response(
         db.commit()
         db.refresh(session)
 
+    # Block new messages if there's a pending tool approval
+    pending = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session.id,
+        ChatMessage.role == "tool_call",
+        ChatMessage.tool_status == "pending",
+    ).first()
+    if pending:
+        yield _sse_event("error", {"message": "Det finns en väntande åtgärd som måste godkännas eller avvisas först."})
+        return
+
     # Save user message
     user_msg = ChatMessage(
         session_id=session.id,
