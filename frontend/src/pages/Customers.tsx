@@ -7,10 +7,12 @@ import { useCompany } from '@/contexts/CompanyContext'
 import { useSortableTable } from '@/hooks/useSortableTable'
 import SortableHeader from '@/components/SortableHeader'
 import { useToast } from '@/contexts/ToastContext'
+import { useAIForm } from '@/contexts/AIFormContext'
 
 export default function Customers() {
   const { selectedCompany } = useCompany()
   const { showToast } = useToast()
+  const { pendingForm, clearForm } = useAIForm()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -19,6 +21,41 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers'>('customers')
+
+  useEffect(() => {
+    if (!pendingForm) return
+    if (pendingForm.type === 'customer') {
+      const d = pendingForm.data
+      setEditingCustomer({
+        id: 0, company_id: 0, active: true, country: 'Sverige', payment_terms_days: 30,
+        name: (d.name as string) || '',
+        org_number: (d.org_number as string) || '',
+        email: (d.email as string) || '',
+        phone: (d.phone as string) || '',
+        address: (d.address as string) || '',
+        postal_code: (d.postal_code as string) || '',
+        city: (d.city as string) || '',
+      })
+      setActiveTab('customers')
+      setShowCreateCustomerModal(true)
+      clearForm()
+    } else if (pendingForm.type === 'supplier') {
+      const d = pendingForm.data
+      setEditingSupplier({
+        id: 0, company_id: 0, active: true, country: 'Sverige', payment_terms_days: 30,
+        name: (d.name as string) || '',
+        org_number: (d.org_number as string) || '',
+        email: (d.email as string) || '',
+        phone: (d.phone as string) || '',
+        address: (d.address as string) || '',
+        postal_code: (d.postal_code as string) || '',
+        city: (d.city as string) || '',
+      })
+      setActiveTab('suppliers')
+      setShowCreateSupplierModal(true)
+      clearForm()
+    }
+  }, [pendingForm, clearForm])
 
   // Sorting for customers
   const { sortedData: sortedCustomers, sortConfig: customerSortConfig, requestSort: requestCustomerSort } = useSortableTable(

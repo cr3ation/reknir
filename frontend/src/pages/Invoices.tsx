@@ -10,6 +10,7 @@ import type { InvoiceListItem, SupplierInvoiceListItem, Customer, Supplier, Acco
 import { InvoiceStatus, PaymentStatus } from '@/types'
 import { getErrorMessage } from '@/utils/errors'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useAIForm } from '@/contexts/AIFormContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
 import { useAttachmentPreviewController } from '@/hooks/useAttachmentPreviewController'
@@ -57,6 +58,42 @@ export default function Invoices() {
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [payingInvoice, setPayingInvoice] = useState(false)
   const [payingSupplierInvoice, setPayingSupplierInvoice] = useState(false)
+
+  // AI form integration
+  const { pendingForm, clearForm } = useAIForm()
+  const [invoiceInitialData, setInvoiceInitialData] = useState<Record<string, unknown> | undefined>()
+  const [supplierInvoiceInitialData, setSupplierInvoiceInitialData] = useState<Record<string, unknown> | undefined>()
+
+  useEffect(() => {
+    if (!pendingForm) return
+    if (pendingForm.type === 'invoice') {
+      const d = pendingForm.data
+      setInvoiceInitialData({
+        customerId: d.customer_id,
+        invoiceDate: d.invoice_date,
+        dueDate: d.due_date,
+        reference: d.reference,
+        ourReference: d.our_reference,
+        message: d.message,
+        lines: d.lines,
+      })
+      setShowCreateInvoiceModal(true)
+      clearForm()
+    } else if (pendingForm.type === 'supplier_invoice') {
+      const d = pendingForm.data
+      setSupplierInvoiceInitialData({
+        supplierId: d.supplier_id,
+        supplierInvoiceNumber: d.supplier_invoice_number,
+        invoiceDate: d.invoice_date,
+        dueDate: d.due_date,
+        ocrNumber: d.ocr_number,
+        reference: d.reference,
+        lines: d.lines,
+      })
+      setShowCreateSupplierInvoiceModal(true)
+      clearForm()
+    }
+  }, [pendingForm, clearForm])
 
   // Filter states
   const [invoiceFilter, setInvoiceFilter] = useState<string>('all')
@@ -625,11 +662,16 @@ export default function Invoices() {
             companyId={selectedCompany.id}
             customers={customers}
             accounts={accounts}
+            initialData={invoiceInitialData}
             onSuccess={() => {
               setShowCreateInvoiceModal(false)
+              setInvoiceInitialData(undefined)
               loadInvoices()
             }}
-            onCancel={() => setShowCreateInvoiceModal(false)}
+            onCancel={() => {
+              setShowCreateInvoiceModal(false)
+              setInvoiceInitialData(undefined)
+            }}
           />
         </DraggableModal>
       )}
@@ -657,16 +699,19 @@ export default function Invoices() {
             companyId={selectedCompany.id}
             suppliers={suppliers}
             accounts={accounts}
+            initialData={supplierInvoiceInitialData}
             onSuccess={() => {
               resetSupplierInvoicePreview()
               setSupplierInvoiceAttachments([])
               setShowCreateSupplierInvoiceModal(false)
+              setSupplierInvoiceInitialData(undefined)
               loadInvoices()
             }}
             onCancel={() => {
               resetSupplierInvoicePreview()
               setSupplierInvoiceAttachments([])
               setShowCreateSupplierInvoiceModal(false)
+              setSupplierInvoiceInitialData(undefined)
             }}
             onAttachmentsChange={setSupplierInvoiceAttachments}
             onAttachmentClick={(_, index) => openSupplierInvoicePreview(index)}

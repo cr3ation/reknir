@@ -12,11 +12,19 @@ const EMPTY_ATTACHMENTS: EntityAttachment[] = []
 // Types & Interfaces
 // ============================================================================
 
+export interface VerificationInitialData {
+  description?: string
+  transaction_date?: string
+  series?: string
+  lines?: Partial<TransactionLine>[]
+}
+
 export interface VerificationFormProps {
   companyId: number
   fiscalYearId: number
   accounts: Account[]
   verification?: Verification | null  // null = create new
+  initialData?: VerificationInitialData
   onSuccess: () => void
   onCancel: () => void
   // Render props for footer buttons (allows parent to control button placement)
@@ -208,6 +216,7 @@ export default function VerificationForm({
   fiscalYearId,
   accounts,
   verification,
+  initialData,
   onSuccess,
   onCancel,
   renderFooter,
@@ -219,16 +228,24 @@ export default function VerificationForm({
   const isEditing = !!verification
 
   const [formData, setFormData] = useState({
-    series: verification?.series || 'A',
-    transaction_date: verification?.transaction_date || new Date().toISOString().split('T')[0],
-    description: verification?.description || '',
+    series: verification?.series || initialData?.series || 'A',
+    transaction_date: verification?.transaction_date || initialData?.transaction_date || new Date().toISOString().split('T')[0],
+    description: verification?.description || initialData?.description || '',
   })
 
   const [lines, setLines] = useState<TransactionLine[]>(
-    verification?.transaction_lines || [
-      { account_id: 0, debit: 0, credit: 0, description: '' },
-      { account_id: 0, debit: 0, credit: 0, description: '' },
-    ]
+    verification?.transaction_lines
+      || (initialData?.lines?.length
+        ? initialData.lines.map(l => ({
+            account_id: l.account_id || 0,
+            debit: l.debit || 0,
+            credit: l.credit || 0,
+            description: l.description || '',
+          }))
+        : [
+            { account_id: 0, debit: 0, credit: 0, description: '' },
+            { account_id: 0, debit: 0, credit: 0, description: '' },
+          ])
   )
 
   const [error, setError] = useState<string | null>(null)

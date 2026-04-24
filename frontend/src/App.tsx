@@ -28,6 +28,7 @@ import { ToastProvider } from './contexts/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import ChatFAB from './components/ai/ChatFAB'
 import ChatPanel from './components/ai/ChatPanel'
+import { AIFormProvider } from './contexts/AIFormContext'
 import { aiApi } from './services/api'
 
 function App() {
@@ -38,12 +39,14 @@ function App() {
           <ToastProvider>
           <CompanyProvider>
             <FiscalYearProvider>
+              <AIFormProvider>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/invite/:token" element={<InviteAccept />} />
                 <Route path="/setup" element={<Setup />} />
                 <Route path="/*" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
               </Routes>
+              </AIFormProvider>
             </FiscalYearProvider>
           </CompanyProvider>
           </ToastProvider>

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { X, Plus, Send, Paperclip, Loader2, Trash2, ChevronDown } from 'lucide-react'
 import { useCompany } from '@/contexts/CompanyContext'
+import { useAIForm } from '@/contexts/AIFormContext'
+import type { AIFormType } from '@/contexts/AIFormContext'
 import { useAIChat } from '@/hooks/useAIChat'
 import { aiApi } from '@/services/api'
 import ChatMessageComponent from './ChatMessage'
@@ -11,8 +14,22 @@ interface ChatPanelProps {
   onClose: () => void
 }
 
+// Map tool names to form types and routes
+const TOOL_FORM_MAP: Record<string, { type: AIFormType; route: string }> = {
+  create_invoice: { type: 'invoice', route: '/invoices' },
+  create_verification: { type: 'verification', route: '/verifications' },
+  create_supplier_invoice: { type: 'supplier_invoice', route: '/invoices' },
+  create_expense: { type: 'expense', route: '/expenses' },
+  create_customer: { type: 'customer', route: '/customers' },
+  create_supplier: { type: 'supplier', route: '/customers' },
+  create_account: { type: 'account', route: '/accounts' },
+}
+
 export default function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const { selectedCompany } = useCompany()
+  const { openForm } = useAIForm()
+  const navigate = useNavigate()
+  const location = useLocation()
   const {
     messages,
     sessions,
@@ -27,6 +44,7 @@ export default function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
     loadSession,
     deleteSession,
     startNewChat,
+    clearProposal,
     setError,
   } = useAIChat()
 
@@ -39,6 +57,19 @@ export default function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
+
+  // When a tool_proposal arrives for a write tool, open the real form instead
+  useEffect(() => {
+    if (!pendingProposal) return
+    const mapping = TOOL_FORM_MAP[pendingProposal.tool_name]
+    if (!mapping) return
+
+    openForm(mapping.type, pendingProposal.tool_args, pendingProposal.message_id)
+    clearProposal()
+    if (location.pathname !== mapping.route) {
+      navigate(mapping.route)
+    }
+  }, [pendingProposal, openForm, clearProposal, navigate, location.pathname])
 
   // Load sessions when panel opens
   useEffect(() => {

@@ -2,6 +2,12 @@ import { useState, useCallback, useRef } from 'react'
 import { aiApi } from '@/services/api'
 import type { ChatMessage, ChatSession, ToolProposal } from '@/types'
 
+// Tools that open real forms — no approval card needed
+const FORM_TOOLS = new Set([
+  'create_invoice', 'create_verification', 'create_supplier_invoice',
+  'create_expense', 'create_customer', 'create_supplier', 'create_account',
+])
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 interface SSEEvent {
@@ -211,8 +217,8 @@ export function useAIChat() {
                 role: 'tool_call',
                 content: data.display_name || data.tool_name,
                 tool_name: data.tool_name,
-                tool_args: JSON.stringify(data.tool_args),
-                tool_status: 'pending',
+                tool_args: FORM_TOOLS.has(data.tool_name) ? null : JSON.stringify(data.tool_args),
+                tool_status: FORM_TOOLS.has(data.tool_name) ? 'executed' : 'pending',
                 attachment_ids: null,
                 created_at: new Date().toISOString(),
               }
@@ -399,6 +405,10 @@ export function useAIChat() {
     }
   }, [])
 
+  const clearProposal = useCallback(() => {
+    setPendingProposal(null)
+  }, [])
+
   return {
     messages,
     sessions,
@@ -414,6 +424,7 @@ export function useAIChat() {
     deleteSession,
     startNewChat,
     stopStreaming,
+    clearProposal,
     setError,
   }
 }

@@ -93,8 +93,12 @@ export default function ChatMessage({
   }
 
   if (message.role === 'tool_call') {
-    // Pending proposal
-    if (pendingProposal && pendingProposal.message_id === message.id && onApprove) {
+    // Show approval card only for non-form tools (form tools open the real UI instead)
+    const FORM_TOOLS = new Set([
+      'create_invoice', 'create_verification', 'create_supplier_invoice',
+      'create_expense', 'create_customer', 'create_supplier', 'create_account',
+    ])
+    if (pendingProposal && pendingProposal.message_id === message.id && onApprove && !FORM_TOOLS.has(message.tool_name || '')) {
       return (
         <div className="mb-3">
           <ToolProposalCard proposal={pendingProposal} onApprove={onApprove} />
