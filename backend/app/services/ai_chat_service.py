@@ -60,14 +60,29 @@ def _build_ollama_messages(session: ChatSession, system_prompt: str) -> list[dic
     return messages
 
 
-def _load_image_as_base64(upload: AIUpload) -> str | None:
-    """Load an uploaded image file and return base64-encoded content."""
+def _load_as_base64_images(upload: AIUpload) -> list[str]:
+    """Load an uploaded file and return base64-encoded images. PDFs are converted to images in memory."""
     file_path = AI_UPLOADS_DIR / upload.storage_filename
     if not file_path.exists():
-        return None
-    if not upload.mime_type.startswith("image/"):
-        return None
-    return base64.b64encode(file_path.read_bytes()).decode("utf-8")
+        return []
+
+    if upload.mime_type.startswith("image/"):
+        return [base64.b64encode(file_path.read_bytes()).decode("utf-8")]
+
+    if upload.mime_type == "application/pdf":
+        try:
+            import fitz  # pymupdf
+
+            images = []
+            with fitz.open(str(file_path)) as doc:
+                for page in doc:
+                    pix = page.get_pixmap(dpi=200)
+                    images.append(base64.b64encode(pix.tobytes("jpeg")).decode("utf-8"))
+            return images
+        except Exception:
+            return []
+
+    return []
 
 
 def _add_images_to_last_user_message(messages: list[dict], images: list[str]) -> None:
@@ -132,15 +147,13 @@ async def stream_chat_response(
     db.add(user_msg)
     db.commit()
 
-    # Load images from attachments
+    # Load images from attachments (PDFs are converted to images in memory)
     images = []
     if attachment_ids:
         for upload_id in attachment_ids:
             upload = db.query(AIUpload).filter(AIUpload.id == upload_id).first()
             if upload:
-                img_b64 = _load_image_as_base64(upload)
-                if img_b64:
-                    images.append(img_b64)
+                images.extend(_load_as_base64_images(upload))
 
     # Determine fiscal year (use latest for the company)
     from app.models.fiscal_year import FiscalYear
