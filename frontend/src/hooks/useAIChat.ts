@@ -102,9 +102,9 @@ export function useAIChat() {
       const resp = await aiApi.getSession(sessionId)
       setMessages(resp.data.messages)
       setCurrentSessionId(sessionId)
-      // Check for pending proposals
+      // Check for pending proposals (only non-form tools)
       const pending = resp.data.messages.find(
-        (m) => m.role === 'tool_call' && m.tool_status === 'pending'
+        (m) => m.role === 'tool_call' && m.tool_status === 'pending' && !FORM_TOOLS.has(m.tool_name || '')
       )
       if (pending) {
         setPendingProposal({
