@@ -370,6 +370,14 @@ def import_sie4(db: Session, company_id: int, file_content: str, fiscal_year_id:
             db.flush()  # Get the ID
             stats["fiscal_year_created"] = True
 
+    # Refuse to import into a closed fiscal year. A fiscal year created just above is never
+    # closed, so this only rejects imports aimed at an already closed year.
+    if fiscal_year.is_closed:
+        raise ValueError(
+            f"Räkenskapsåret {fiscal_year.label} är stängt och kan inte ändras. "
+            f"Bokför en korrigering i det aktuella räkenskapsåret istället."
+        )
+
     stats["fiscal_year_id"] = fiscal_year.id
     fiscal_year_id = fiscal_year.id  # Update variable for use in rest of function
 

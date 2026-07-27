@@ -5,7 +5,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
+from app.dependencies import (
+    ensure_fiscal_year_open,
+    get_current_active_user,
+    get_user_company_ids,
+    verify_company_access,
+)
 from app.models.account import Account, AccountType
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
@@ -29,6 +34,9 @@ def create_account(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"You don't have access to company {account.company_id}",
         )
+
+    # The chart of accounts is part of the closed year's records
+    ensure_fiscal_year_open(db, account.fiscal_year_id)
 
     # Check if account number already exists for this fiscal year
     existing = (
@@ -164,6 +172,9 @@ def update_account(
             detail="You don't have access to this account",
         )
 
+    # The chart of accounts is part of the closed year's records
+    ensure_fiscal_year_open(db, account.fiscal_year_id)
+
     # Update fields
     update_data = account_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -204,6 +215,9 @@ def delete_account(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this account",
         )
+
+    # The chart of accounts is part of the closed year's records
+    ensure_fiscal_year_open(db, account.fiscal_year_id)
 
     # Check if account has any transaction lines (MOST RESTRICTIVE - check first)
     transaction_count = db.query(TransactionLine).filter(TransactionLine.account_id == account_id).count()

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_active_user, verify_company_access
+from app.dependencies import ensure_fiscal_year_open, get_current_active_user, verify_company_access
 from app.models.account import Account
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
 from app.models.fiscal_year import FiscalYear
@@ -46,6 +46,9 @@ async def create_verification(
     """Create a new verification (verifikation)"""
     # Verify user has access to this company
     await verify_company_access(verification.company_id, current_user, db)
+
+    # Refuse to post into a closed fiscal year
+    ensure_fiscal_year_open(db, verification.fiscal_year_id)
 
     # Get next verification number for this series
     next_number = get_next_verification_number(db, verification.company_id, verification.series)
@@ -200,6 +203,9 @@ async def update_verification(
     if verification.locked:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify locked verification")
 
+    # Refuse to modify anything belonging to a closed fiscal year
+    ensure_fiscal_year_open(db, verification.fiscal_year_id)
+
     # Update fields
     update_data = verification_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -245,6 +251,9 @@ async def delete_verification(
 
     if verification.locked:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete locked verification")
+
+    # Refuse to delete anything belonging to a closed fiscal year
+    ensure_fiscal_year_open(db, verification.fiscal_year_id)
 
     # Reverse account balance changes
     for line in verification.transaction_lines:

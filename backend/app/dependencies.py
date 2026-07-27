@@ -1,12 +1,15 @@
 """
-Dependency functions for authentication and authorization
+Dependency functions for authentication, authorization and request guards
 """
+
+from datetime import date
 
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.fiscal_year import FiscalYear
 from app.models.user import CompanyUser, User
 from app.services.auth_service import decode_access_token
 
@@ -117,6 +120,78 @@ async def verify_company_access(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=f"You don't have access to company {company_id}"
         )
+
+
+CLOSED_FISCAL_YEAR_DETAIL = "Fiscal year {label} is closed. Post a correcting entry in the current fiscal year instead."
+
+
+def ensure_fiscal_year_open(db: Session, fiscal_year_id: int) -> FiscalYear:
+    """
+    Reject a write that would land in a closed fiscal year.
+
+    Swedish bookkeeping law (Bokföringslagen) requires a closed period to stay unchanged,
+    so every ledger-affecting path must refuse once the year-end closing has locked it.
+
+    Args:
+        db: Database session
+        fiscal_year_id: ID of the fiscal year the write targets
+
+    Returns:
+        The fiscal year, so callers can reuse it without a second query
+
+    Raises:
+        HTTPException 404: If the fiscal year does not exist
+        HTTPException 403: If the fiscal year is closed
+    """
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+    if not fiscal_year:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Fiscal year {fiscal_year_id} not found")
+
+    if fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=CLOSED_FISCAL_YEAR_DETAIL.format(label=fiscal_year.label),
+        )
+
+    return fiscal_year
+
+
+def ensure_fiscal_year_open_for_date(db: Session, company_id: int, transaction_date: date) -> FiscalYear | None:
+    """
+    Reject a write whose transaction date falls inside a closed fiscal year.
+
+    Used by the paths that derive their fiscal year from a date rather than an explicit id
+    (invoices, supplier invoices and expenses). A missing fiscal year is not an error here —
+    the posting services raise their own ValueError for that case.
+
+    Args:
+        db: Database session
+        company_id: Company the write belongs to
+        transaction_date: Date the resulting verification will carry
+
+    Returns:
+        The matching fiscal year, or None when the date falls outside every fiscal year
+
+    Raises:
+        HTTPException 403: If the matching fiscal year is closed
+    """
+    fiscal_year = (
+        db.query(FiscalYear)
+        .filter(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= transaction_date,
+            FiscalYear.end_date >= transaction_date,
+        )
+        .first()
+    )
+
+    if fiscal_year and fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=CLOSED_FISCAL_YEAR_DETAIL.format(label=fiscal_year.label),
+        )
+
+    return fiscal_year
 
 
 def get_user_company_ids(user: User, db: Session) -> list[int]:

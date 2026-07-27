@@ -6,7 +6,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, verify_company_access
+from app.dependencies import ensure_fiscal_year_open_for_date, get_current_active_user, verify_company_access
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Supplier
@@ -256,6 +256,9 @@ async def register_supplier_invoice(
     if invoice.status != InvoiceStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not in draft status")
 
+    # Refuse to post into a closed fiscal year
+    ensure_fiscal_year_open_for_date(db, invoice.company_id, invoice.invoice_date)
+
     # Get company accounting basis
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
 
@@ -305,6 +308,12 @@ async def mark_supplier_invoice_paid(
 
     if invoice.status == InvoiceStatus.CANCELLED:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot pay cancelled invoice")
+
+    # Refuse to post the payment into a closed fiscal year. A draft invoice also gets its
+    # invoice verification here, so guard the invoice date as well.
+    ensure_fiscal_year_open_for_date(db, invoice.company_id, payment.paid_date)
+    if invoice.status == InvoiceStatus.DRAFT:
+        ensure_fiscal_year_open_for_date(db, invoice.company_id, invoice.invoice_date)
 
     # Get company accounting basis
     company = db.query(Company).filter(Company.id == invoice.company_id).first()

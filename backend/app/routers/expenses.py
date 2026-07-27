@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, verify_company_access
+from app.dependencies import ensure_fiscal_year_open_for_date, get_current_active_user, verify_company_access
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
 from app.models.expense import Expense, ExpenseStatus
 from app.models.fiscal_year import FiscalYear
@@ -203,6 +203,9 @@ async def mark_expense_paid(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Expense must be booked before marking as paid"
         )
 
+    # Refuse to post the payment into a closed fiscal year
+    ensure_fiscal_year_open_for_date(db, expense.company_id, paid_date)
+
     # Create payment verification
     try:
         create_expense_payment_verification(db, expense, paid_date, bank_account_id)
@@ -275,6 +278,9 @@ async def book_expense(
 
     if expense.verification_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Expense is already booked")
+
+    # Refuse to post into a closed fiscal year
+    ensure_fiscal_year_open_for_date(db, expense.company_id, expense.expense_date)
 
     if not expense.expense_account_id:
         raise HTTPException(

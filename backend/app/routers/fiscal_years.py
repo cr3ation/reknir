@@ -152,6 +152,13 @@ def delete_fiscal_year(
     if fiscal_year.company_id not in company_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this fiscal year")
 
+    # A closed year is a permanent record and must not be removed
+    if fiscal_year.is_closed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Fiscal year {fiscal_year.label} is closed and cannot be deleted",
+        )
+
     # Detach verifications (set fiscal_year_id to NULL)
     db.query(Verification).filter(Verification.fiscal_year_id == fiscal_year_id).update({"fiscal_year_id": None})
 

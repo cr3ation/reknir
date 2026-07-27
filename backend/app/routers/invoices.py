@@ -9,7 +9,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, verify_company_access
+from app.dependencies import ensure_fiscal_year_open_for_date, get_current_active_user, verify_company_access
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, AttachmentStatus, EntityType
 from app.models.company import AccountingBasis, Company
 from app.models.customer import Customer
@@ -273,6 +273,9 @@ async def send_invoice(
     if invoice.status != InvoiceStatus.DRAFT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not in draft status")
 
+    # Refuse to post into a closed fiscal year
+    ensure_fiscal_year_open_for_date(db, invoice.company_id, invoice.invoice_date)
+
     # Get customer and company (needed for PDF)
     customer = db.query(Customer).filter(Customer.id == invoice.customer_id).first()
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
@@ -373,6 +376,9 @@ async def mark_invoice_paid(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Fakturan måste vara utfärdad (skickad) innan betalning kan registreras",
         )
+
+    # Refuse to post the payment into a closed fiscal year
+    ensure_fiscal_year_open_for_date(db, invoice.company_id, payment.paid_date)
 
     # Get company accounting basis
     company = db.query(Company).filter(Company.id == invoice.company_id).first()
