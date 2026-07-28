@@ -28,6 +28,28 @@ class DefaultAccountType(str):
     # Default expense account
     EXPENSE_DEFAULT = "expense_default"  # Övriga externa tjänster (6570)
 
+    # Liquid assets
+    BANK = "bank"  # Företagskonto/bankgiro (1930)
+    CASH = "cash"  # Kassa (1910)
+
+    # Year-end closing: inventory (varulager)
+    INVENTORY_STOCK = "inventory_stock"  # Lager av handelsvaror (1460)
+    INVENTORY_CHANGE = "inventory_change"  # Förändring av lager (4990)
+
+    # Year-end closing: accruals (periodiseringar)
+    PREPAID_EXPENSE = "prepaid_expense"  # Förutbetald kostnad, interim asset (1790)
+    ACCRUED_REVENUE = "accrued_revenue"  # Upplupen intäkt, interim asset (1790)
+    ACCRUED_EXPENSE = "accrued_expense"  # Upplupen kostnad, interim liability (2990)
+    PREPAID_REVENUE = "prepaid_revenue"  # Förutbetald intäkt, interim liability (2990)
+
+    # Year-end closing: tax (only posted for a limited company)
+    TAX_EXPENSE = "tax_expense"  # Skatt på årets resultat (8910)
+    TAX_LIABILITY = "tax_liability"  # Skatteskulder (2510)
+
+    # Year-end closing: the result itself
+    YEAR_RESULT_EXPENSE = "year_result_expense"  # Årets resultat, income statement side (8999)
+    YEAR_RESULT_EQUITY = "year_result_equity"  # Årets resultat, balance sheet side (2099 AB / 2019 EF)
+
 
 class DefaultAccount(Base):
     """

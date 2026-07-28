@@ -3,6 +3,12 @@
   "description": "Swedish BAS kontoplan 2024 - Core accounts",
   "accounts": [
     {
+      "account_number": 1460,
+      "name": "Lager av handelsvaror",
+      "account_type": "asset",
+      "description": "Inventory of goods for resale, valued at year end"
+    },
+    {
       "account_number": 1510,
       "name": "Kundfordringar",
       "account_type": "asset",
@@ -51,6 +57,12 @@
       "description": "Tillskott av eget kapital från ägare"
     },
     {
+      "account_number": 2019,
+      "name": "Årets resultat",
+      "account_type": "equity_liability",
+      "description": "Year result posted to owner's equity (sole trader)"
+    },
+    {
       "account_number": 2050,
       "name": "Aktiekapital",
       "account_type": "equity_liability",
@@ -79,6 +91,12 @@
       "name": "Leverantörsskulder",
       "account_type": "equity_liability",
       "description": "Accounts payable to suppliers"
+    },
+    {
+      "account_number": 2510,
+      "name": "Skatteskulder",
+      "account_type": "equity_liability",
+      "description": "Corporate income tax payable"
     },
     {
       "account_number": 2611,
@@ -129,6 +147,12 @@
       "description": "Accrued social security contributions"
     },
     {
+      "account_number": 2990,
+      "name": "Övriga upplupna kostnader och förutbetalda intäkter",
+      "account_type": "equity_liability",
+      "description": "Interim liabilities used for year-end accruals"
+    },
+    {
       "account_number": 3001,
       "name": "Försäljning varor och tjänster inom Sverige, 25% moms",
       "account_type": "revenue",
@@ -169,6 +193,12 @@
       "name": "Inköp varor och material",
       "account_type": "cost_goods",
       "description": "Purchase of goods and materials"
+    },
+    {
+      "account_number": 4990,
+      "name": "Förändring av lager",
+      "account_type": "cost_goods",
+      "description": "Change in inventory value between opening and closing balance"
     },
     {
       "account_number": 5010,
@@ -277,6 +307,18 @@
       "name": "Räntekostnader, checkkredit",
       "account_type": "cost_misc",
       "description": "Interest expenses, overdraft"
+    },
+    {
+      "account_number": 8910,
+      "name": "Skatt på årets resultat",
+      "account_type": "cost_misc",
+      "description": "Corporate income tax on the year result"
+    },
+    {
+      "account_number": 8999,
+      "name": "Årets resultat",
+      "account_type": "cost_misc",
+      "description": "Year result, income statement side"
     }
   ]
 }

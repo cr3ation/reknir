@@ -63,6 +63,22 @@ def set_default_account(db: Session, company_id: int, account_type: str, account
         return new_mapping
 
 
+def _year_result_equity_candidates(db: Session, company_id: int) -> list[int]:
+    """
+    Candidate accounts for the balance sheet side of the year result (Årets resultat).
+
+    A sole trader closes the result against the owner's equity (2019), everyone else
+    against 2099. The order matters because the first account that exists wins, so a
+    chart containing both must still map to the one matching the company form.
+    """
+    from app.models.company import Company, CompanyForm
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if company and company.company_form == CompanyForm.SOLE_TRADER:
+        return [2019, 2099]
+    return [2099, 2019]
+
+
 def initialize_default_accounts_from_existing(db: Session, company_id: int, fiscal_year_id: int) -> None:
     """
     Initialize default account mappings based on existing accounts.
@@ -89,6 +105,24 @@ def initialize_default_accounts_from_existing(db: Session, company_id: int, fisc
         DefaultAccountType.ACCOUNTS_PAYABLE: [2440, 2441],
         # Default expense
         DefaultAccountType.EXPENSE_DEFAULT: [6570, 6540],
+        # Liquid assets
+        DefaultAccountType.BANK: [1930, 1920],
+        DefaultAccountType.CASH: [1910],
+        # Year-end closing: inventory
+        DefaultAccountType.INVENTORY_STOCK: [1460, 1410, 1440],
+        DefaultAccountType.INVENTORY_CHANGE: [4990, 4960],
+        # Year-end closing: accruals. BAS groups both directions on the same interim
+        # accounts, so the asset pair and the liability pair share a number each.
+        DefaultAccountType.PREPAID_EXPENSE: [1790, 1710],
+        DefaultAccountType.ACCRUED_REVENUE: [1790, 1760],
+        DefaultAccountType.ACCRUED_EXPENSE: [2990, 2910],
+        DefaultAccountType.PREPAID_REVENUE: [2990, 2970],
+        # Year-end closing: tax
+        DefaultAccountType.TAX_EXPENSE: [8910],
+        DefaultAccountType.TAX_LIABILITY: [2510, 2512],
+        # Year-end closing: the result itself
+        DefaultAccountType.YEAR_RESULT_EXPENSE: [8999],
+        DefaultAccountType.YEAR_RESULT_EQUITY: _year_result_equity_candidates(db, company_id),
     }
 
     for account_type, possible_numbers in account_mapping.items():
