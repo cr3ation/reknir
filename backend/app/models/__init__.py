@@ -11,6 +11,7 @@ from app.models.invoice import Invoice, InvoiceLine, SupplierInvoice, SupplierIn
 from app.models.posting_template import PostingTemplate, PostingTemplateLine
 from app.models.user import CompanyUser, User
 from app.models.verification import TransactionLine, Verification
+from app.models.year_end_closing import YearEndAdjustment, YearEndClosing, YearEndClosingEvent
 
 __all__ = [
     "Account",
@@ -36,4 +37,7 @@ __all__ = [
     "User",
     "CompanyUser",
     "Invitation",
+    "YearEndClosing",
+    "YearEndAdjustment",
+    "YearEndClosingEvent",
 ]
