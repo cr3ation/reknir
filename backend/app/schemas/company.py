@@ -2,7 +2,7 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.company import AccountingBasis, PaymentType, VATReportingPeriod
+from app.models.company import AccountingBasis, CompanyForm, PaymentType, VATReportingPeriod
 
 
 class CompanyBase(BaseModel):
@@ -18,6 +18,7 @@ class CompanyBase(BaseModel):
     fiscal_year_start: date
     fiscal_year_end: date
     accounting_basis: AccountingBasis = AccountingBasis.ACCRUAL
+    company_form: CompanyForm | None = None
     vat_reporting_period: VATReportingPeriod = VATReportingPeriod.QUARTERLY
     is_vat_registered: bool = True
     logo_filename: str | None = None
@@ -48,6 +49,7 @@ class CompanyUpdate(BaseModel):
     fiscal_year_start: date | None = None
     fiscal_year_end: date | None = None
     accounting_basis: AccountingBasis | None = None
+    company_form: CompanyForm | None = None
     vat_reporting_period: VATReportingPeriod | None = None
     is_vat_registered: bool | None = None
     logo_filename: str | None = None

@@ -16,6 +16,14 @@ export enum AccountingBasis {
   CASH = 'cash',
 }
 
+export enum CompanyForm {
+  LIMITED_COMPANY = 'limited_company',
+  SOLE_TRADER = 'sole_trader',
+  TRADING_PARTNERSHIP = 'trading_partnership',
+  LIMITED_PARTNERSHIP = 'limited_partnership',
+  ECONOMIC_ASSOCIATION = 'economic_association',
+}
+
 export enum VATReportingPeriod {
   MONTHLY = 'monthly',
   QUARTERLY = 'quarterly',
@@ -41,6 +49,7 @@ export interface Company {
   fiscal_year_start: string
   fiscal_year_end: string
   accounting_basis: AccountingBasis
+  company_form?: CompanyForm | null
   vat_reporting_period: VATReportingPeriod
   is_vat_registered: boolean
   logo_filename?: string

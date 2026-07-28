@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { companyApi, sie4Api, accountApi, fiscalYearApi, postingTemplateApi, backupApi, attachmentApi, aiApi } from '@/services/api'
 import type { Account, FiscalYear, PostingTemplate, PostingTemplateLine, BackupInfo, BackupScheduleResponse, Attachment, AISettings, OllamaModel, OllamaHealth } from '@/types'
-import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from '@/types'
+import { VATReportingPeriod, AccountingBasis, CompanyForm, PaymentType, AttachmentRole } from '@/types'
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip, Clock, Bot } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
 import SIE4ImportModal from '@/components/SIE4ImportModal'
@@ -84,6 +84,7 @@ export default function SettingsPage() {
     fiscal_year_end: new Date().getFullYear() + '-12-31',
     vat_number: '',
     accounting_basis: AccountingBasis.ACCRUAL,
+    company_form: null as CompanyForm | null,
     vat_reporting_period: VATReportingPeriod.QUARTERLY,
     is_vat_registered: true,
   })
@@ -416,6 +417,7 @@ export default function SettingsPage() {
       fiscal_year_end: selectedCompany.fiscal_year_end,
       vat_number: selectedCompany.vat_number || '',
       accounting_basis: selectedCompany.accounting_basis,
+      company_form: selectedCompany.company_form ?? null,
       vat_reporting_period: selectedCompany.vat_reporting_period,
       is_vat_registered: selectedCompany.is_vat_registered ?? true,
     })
@@ -436,6 +438,7 @@ export default function SettingsPage() {
       fiscal_year_end: new Date().getFullYear() + '-12-31',
       vat_number: '',
       accounting_basis: AccountingBasis.ACCRUAL,
+      company_form: null as CompanyForm | null,
       vat_reporting_period: VATReportingPeriod.QUARTERLY,
       is_vat_registered: true,
     })
@@ -498,6 +501,7 @@ export default function SettingsPage() {
         fiscal_year_end: new Date().getFullYear() + '-12-31',
         vat_number: '',
         accounting_basis: AccountingBasis.ACCRUAL,
+        company_form: null as CompanyForm | null,
         vat_reporting_period: VATReportingPeriod.QUARTERLY,
         is_vat_registered: true,
       })
@@ -1331,6 +1335,31 @@ export default function SettingsPage() {
                     <option value="accrual">Bokföringsmässiga grunder</option>
                     <option value="cash">Kontantmetoden</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Företagsform
+                  </label>
+                  <select
+                    value={companyForm.company_form ?? ''}
+                    onChange={(e) =>
+                      setCompanyForm({
+                        ...companyForm,
+                        company_form: e.target.value ? (e.target.value as CompanyForm) : null,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Ej angiven</option>
+                    <option value="limited_company">Aktiebolag</option>
+                    <option value="sole_trader">Enskild firma</option>
+                    <option value="trading_partnership">Handelsbolag</option>
+                    <option value="limited_partnership">Kommanditbolag</option>
+                    <option value="economic_association">Ekonomisk förening</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Styr hur årets resultat och skatt bokförs vid bokslut
+                  </p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="flex items-center gap-2 cursor-pointer">

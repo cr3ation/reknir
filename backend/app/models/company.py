@@ -30,6 +30,22 @@ class PaymentType(str, enum.Enum):
     BANK_ACCOUNT = "bank_account"
 
 
+class CompanyForm(str, enum.Enum):
+    """
+    Swedish company form (företagsform)
+
+    Determines how the year-end result is posted and taxed. A limited company pays
+    corporate income tax and closes the result against 2099, while a sole trader pays
+    no company-level tax at all and closes the result against the owner's equity.
+    """
+
+    LIMITED_COMPANY = "limited_company"  # Aktiebolag (AB)
+    SOLE_TRADER = "sole_trader"  # Enskild firma
+    TRADING_PARTNERSHIP = "trading_partnership"  # Handelsbolag (HB)
+    LIMITED_PARTNERSHIP = "limited_partnership"  # Kommanditbolag (KB)
+    ECONOMIC_ASSOCIATION = "economic_association"  # Ekonomisk förening
+
+
 class Company(Base):
     """Company/organization information"""
 
@@ -55,6 +71,13 @@ class Company(Base):
         SQLEnum(AccountingBasis, values_callable=lambda x: [e.value for e in x]),
         default=AccountingBasis.ACCRUAL,
         nullable=False,
+    )
+
+    # Company form (företagsform). Nullable because existing companies predate this column;
+    # the year-end closing asks for it rather than assuming a form.
+    company_form = Column(
+        SQLEnum(CompanyForm, values_callable=lambda x: [e.value for e in x]),
+        nullable=True,
     )
 
     # VAT settings
