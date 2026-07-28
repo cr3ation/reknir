@@ -534,7 +534,9 @@ def run_checks(db: Session, closing: YearEndClosing, fiscal_year: FiscalYear, co
                 code="balance_sheet_unbalanced",
                 severity="red",
                 message="Balansräkningen går inte ihop.",
-                detail=f"Tillgångarna skiljer sig {total_net} kr från skulder och eget kapital. Kontakta support.",
+                # reknir is self-hosted, so there is no support desk to point at. The
+                # usual cause is an opening balance that was entered by hand.
+                detail=f"Tillgångarna skiljer sig {total_net} kr från skulder och eget kapital. Det beror oftast på ett ingående saldo som lagts in för hand. Kontrollera de ingående balanserna under Kontoplan.",
             )
         )
 
@@ -626,7 +628,9 @@ def run_checks(db: Session, closing: YearEndClosing, fiscal_year: FiscalYear, co
                 code="no_adjustments",
                 severity="yellow",
                 message="Du har inte gjort några bokslutsjusteringar.",
-                detail="Det är helt i sin ordning om du varken har varulager eller fakturor som hör till fel år. Annars, gå tillbaka ett steg.",
+                # The check list is shown on every step, so this must not assume the
+                # user has already passed the adjustments step.
+                detail="Det är helt i sin ordning om du varken har varulager eller fakturor som hör till fel år. Har du det fyller du i det under steg 2, Justeringar.",
             )
         )
 
