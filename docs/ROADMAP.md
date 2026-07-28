@@ -224,14 +224,14 @@
 
 ### 4.3 Årsbokslut
 - [ ] **Periodavslut**
-  - Låsa perioder
-  - Avstämningsrutiner
-  - Period-checklistor
+  - [x] Låsa räkenskapsår (hela året; månadsvis periodlåsning kvarstår)
+  - [x] Avstämningsrutiner (trafikljuskontroller i bokslutsguiden)
+  - [x] Period-checklistor (fyrstegsguide)
 
-- [ ] **Årsbokslut**
-  - Avskrivningar
-  - Periodiseringar
-  - Bokslutsdispositioner
+- [x] **Årsbokslut** (implementerat, se docs/CLAUDE.md avsnitt 14)
+  - [ ] Avskrivningar — kräver anläggningsregister, ej byggt
+  - [x] Periodiseringar med automatisk återföring i nästa år
+  - [ ] Bokslutsdispositioner (periodiseringsfond)
 
 - [ ] **Skattedeklarationer**
   - Förenklad eller fullständig deklaration

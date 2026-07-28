@@ -431,6 +431,61 @@ Skrivverktyg öppnar befintliga formulär (InvoiceForm, VerificationForm, etc.) 
 **Routes:**
 - `/settings` — Inställningar (fliken "AI-assistent", admin)
 
+### 14. Bokslut
+Guidad fyrastegsprocess som stänger ett räkenskapsår. Riktad till användare med låga
+bokföringskunskaper: guiden ställer frågor på vanlig svenska och sköter konteringen.
+
+**Kärnprincip:** bokslutet lagrar användarens *svar*, inte utkastverifikat. Konteringsplanen
+är en ren funktion av (svar, huvudbok) och räknas om vid varje läsning. Ingenting skrivs till
+huvudboken förrän bokslutet slutförs. Därför kan användaren hoppa fram och tillbaka och ändra
+sina svar utan att något behöver stämmas av, och inga verifikationsnummer bränns på utkast.
+
+**Stegen:**
+1. **Förberedelser** — användaren bekräftar att allt är bokfört och anger sitt faktiska
+   banksaldo per sista dagen på året (reknir har ingen bankkoppling)
+2. **Justeringar** — varulager och periodiseringar via frågor; användaren anger belopp och
+   vilket konto det gällde
+3. **Skatt och resultat** — beräknat resultat och skatt i klartext
+4. **Granska och slutför** — full konteringsförhandsvisning, sedan låsning
+
+**Trafikljuskontroller:** rött blockerar (obalanserade verifikat, balansräkning som inte går
+ihop, banksaldo som avviker, negativ kassa, obokade fakturor i året, saknad företagsform),
+gult kan kvitteras (moms kvar på momskontona, inga justeringar gjorda, nästa räkenskapsår
+saknas).
+
+**Konteringar** (alla konton hämtas via `default_accounts`, aldrig hårdkodade):
+```
+Varulager           D 1460 / K 4990   (förändring mot lagerkontots saldo, inte värdet)
+Upplupen kostnad    D kostnadskonto / K 2990
+Förutbetald kostnad D 1790 / K kostnadskonto
+Upplupen intäkt     D 1790 / K intäktskonto
+Förutbetald intäkt  D intäktskonto / K 2990
+Skatt (endast AB)   D 8910 / K 2510   (20,6 % på positivt resultat)
+Årets resultat      D 8999 / K 2099   (enskild firma: 2019, ingen skatt bokförs)
+```
+Periodiseringar återförs automatiskt med spegelvänd kontering daterad dag 1 i nästa
+räkenskapsår. Alla bokslutsverifikat hamnar i **serie B**.
+
+**Vid slutförande:** verifikaten bokförs, `Verification.locked` sätts på årets samtliga
+verifikationer, och `FiscalYear.is_closed` sätts. Därefter avvisar alla skrivvägar året med
+403 — verifikationer, fakturor, utlägg, konton och SIE4-import.
+
+**Återöppning:** endast admin, kräver motivering, och raderar ingenting. Bokslutsverifikaten
+återförs med spegelvända verifikat så att både det ursprungliga och återtagandet syns, enligt
+BFL:s beständighetskrav. Loggas i `year_end_closing_events`.
+
+**Ej implementerat:** avskrivningar (kräver anläggningsregister), bokslutsdispositioner,
+årsredovisningsdokument, inlämning till Bolagsverket/Skatteverket.
+
+**API Endpoints:**
+- `GET /api/fiscal-years/{id}/closing` — Hela bokslutsdokumentet
+- `PATCH /api/fiscal-years/{id}/closing` — Enda mutationen för alla fyra steg
+- `POST /api/fiscal-years/{id}/closing/complete` — Slutför och lås året
+- `POST /api/fiscal-years/{id}/closing/reopen` — Återöppna (admin, kräver motivering)
+
+**Routes:**
+- `/year-end-closing` — Bokslutsguiden
+
 ## Standardkonfigurationer
 
 ### Bankkonto
@@ -685,7 +740,7 @@ Se [AUTH_SETUP.md](AUTH_SETUP.md) för detaljerad dokumentation.
 - [ ] PDF-export av rapporter
 - [ ] E-postutskick av fakturor
 - [ ] Automatisk momsredovisning
-- [ ] Bokslut och årsbokslut
+- [x] Bokslut (implementerat, se avsnitt 14 — avskrivningar kvarstår)
 - [ ] Integration av konteringsmallar med faktura/utlägg-workflows
 - [ ] Automatisk matchning av banktransaktioner
 
