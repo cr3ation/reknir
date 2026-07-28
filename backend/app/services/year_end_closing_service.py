@@ -15,10 +15,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.account import Account, AccountType
-from app.models.company import Company, CompanyForm
+from app.models.company import AccountingBasis, Company, CompanyForm
 from app.models.default_account import DefaultAccountType
 from app.models.fiscal_year import FiscalYear
-from app.models.invoice import Invoice, InvoiceStatus, SupplierInvoice
+from app.models.invoice import Invoice, InvoiceStatus, PaymentStatus, SupplierInvoice
 from app.models.verification import TransactionLine, Verification
 from app.models.year_end_closing import (
     AdjustmentType,
@@ -108,6 +108,12 @@ TAX_LIABILITY_SPEC = AccountSpec(DefaultAccountType.TAX_LIABILITY, 2510, "Skatte
 YEAR_RESULT_EXPENSE_SPEC = AccountSpec(
     DefaultAccountType.YEAR_RESULT_EXPENSE, 8999, "Årets resultat", AccountType.COST_MISC
 )
+ACCOUNTS_RECEIVABLE_SPEC = AccountSpec(
+    DefaultAccountType.ACCOUNTS_RECEIVABLE, 1510, "Kundfordringar", AccountType.ASSET
+)
+ACCOUNTS_PAYABLE_SPEC = AccountSpec(
+    DefaultAccountType.ACCOUNTS_PAYABLE, 2440, "Leverantörsskulder", AccountType.EQUITY_LIABILITY
+)
 
 # Which accounts each adjustment kind posts against. The balance side is fixed by the
 # kind; the result side is a sensible default the user may override per adjustment.
@@ -139,6 +145,14 @@ class ProposedPosting:
     description: str
     transaction_date: date
     lines: list[PostingLine]
+    # Accruals must be taken back on the first day of the next year, or the real invoice
+    # would count twice. Invoice postings must NOT: the payment settles the receivable
+    # instead, which keeps the VAT reported in exactly one period.
+    reverses_next_year: bool = False
+    # Set for the postings that book an unpaid invoice, so the closing can point the
+    # invoice at the verification it was booked by.
+    source_invoice_id: int | None = None
+    source_supplier_invoice_id: int | None = None
 
 
 @dataclass
@@ -213,9 +227,15 @@ def resolve_account(
     does not exist, the account is None and the flag is True — that is what lets the
     preview say "this account will be created" before the user commits.
     """
-    mapped = default_account_service.get_default_account(db, company_id, fiscal_year_id, spec.default_type)
-    if mapped:
-        return mapped, False
+    # An empty default_type means "just this account number" — used when mirroring an
+    # account into the next year. Writing a mapping for it would put a junk row keyed on
+    # the empty string into default_accounts.
+    remember_mapping = bool(spec.default_type)
+
+    if remember_mapping:
+        mapped = default_account_service.get_default_account(db, company_id, fiscal_year_id, spec.default_type)
+        if mapped:
+            return mapped, False
 
     existing = (
         db.query(Account)
@@ -227,7 +247,7 @@ def resolve_account(
         .first()
     )
     if existing:
-        if create:
+        if create and remember_mapping:
             default_account_service.set_default_account(db, company_id, spec.default_type, existing.id)
         return existing, False
 
@@ -247,7 +267,8 @@ def resolve_account(
     )
     db.add(account)
     db.flush()
-    default_account_service.set_default_account(db, company_id, spec.default_type, account.id)
+    if remember_mapping:
+        default_account_service.set_default_account(db, company_id, spec.default_type, account.id)
     return account, True
 
 
@@ -371,6 +392,221 @@ ADJUSTMENT_DESCRIPTIONS = {
 }
 
 
+def _account_in_year(db: Session, account: Account | None, fiscal_year_id: int) -> Account | None:
+    """
+    Find the same account number inside a given fiscal year.
+
+    Invoice lines point at an account in whichever year the invoice was created, and
+    accounts are per fiscal year, so the reference has to be translated.
+    """
+    if account is None:
+        return None
+    if account.fiscal_year_id == fiscal_year_id:
+        return account
+    return (
+        db.query(Account)
+        .filter(
+            Account.company_id == account.company_id,
+            Account.fiscal_year_id == fiscal_year_id,
+            Account.account_number == account.account_number,
+        )
+        .first()
+    )
+
+
+# BAS output VAT accounts by rate, used when the company has no default mapping.
+VAT_OUTGOING_BY_RATE = {
+    Decimal("25"): (2611, "Utgående moms, försäljning 25%"),
+    Decimal("12"): (2621, "Utgående moms, försäljning 12%"),
+    Decimal("6"): (2631, "Utgående moms, försäljning 6%"),
+}
+VAT_INCOMING_SPEC = AccountSpec(DefaultAccountType.VAT_INCOMING_25, 2640, "Ingående moms", AccountType.EQUITY_LIABILITY)
+
+
+def _vat_outgoing_account(
+    db: Session, company: Company, fiscal_year: FiscalYear, rate: Decimal, create: bool
+) -> tuple[Account | None, bool]:
+    """
+    Output VAT account for a rate, falling back to the standard BAS number.
+
+    Same reasoning as the revenue account: a company that never configured its default
+    accounts must still be able to close its year.
+    """
+    mapped = default_account_service.get_vat_outgoing_account_for_rate(db, company.id, fiscal_year.id, rate)
+    if mapped:
+        return mapped, False
+
+    number, name = VAT_OUTGOING_BY_RATE.get(rate.quantize(Decimal("1")), (2610, "Utgående moms"))
+    spec = AccountSpec(DefaultAccountType.VAT_OUTGOING_25, number, name, AccountType.EQUITY_LIABILITY)
+    return resolve_account(db, company.id, fiscal_year.id, spec, create)
+
+
+def _revenue_account_for_line(
+    db: Session, company: Company, fiscal_year: FiscalYear, invoice_line, create: bool
+) -> tuple[Account | None, bool]:
+    """
+    Which revenue account an unpaid invoice line should be credited to.
+
+    The line's own account first, then the company's default for that VAT rate, and
+    only then a generic revenue account. The last step matters: a company that never
+    configured its default accounts must still be able to close its year, and a visible
+    posting on a generic account beats a dead end.
+    """
+    if invoice_line.account_id:
+        account = db.query(Account).filter(Account.id == invoice_line.account_id).first()
+        resolved = _account_in_year(db, account, fiscal_year.id)
+        if resolved:
+            return resolved, False
+
+    mapped = default_account_service.get_revenue_account_for_vat_rate(
+        db, company.id, fiscal_year.id, invoice_line.vat_rate
+    )
+    if mapped:
+        return mapped, False
+
+    return resolve_account(db, company.id, fiscal_year.id, DEFAULT_REVENUE_SPEC, create)
+
+
+def _cost_account_for_line(
+    db: Session, company: Company, fiscal_year: FiscalYear, supplier_line, create: bool
+) -> tuple[Account | None, bool]:
+    """Same idea as _revenue_account_for_line, for the supplier invoice side."""
+    if supplier_line.account_id:
+        account = db.query(Account).filter(Account.id == supplier_line.account_id).first()
+        resolved = _account_in_year(db, account, fiscal_year.id)
+        if resolved:
+            return resolved, False
+
+    return resolve_account(db, company.id, fiscal_year.id, DEFAULT_COST_SPEC, create)
+
+
+def outstanding_invoice_postings(
+    db: Session, fiscal_year: FiscalYear, company: Company, create: bool
+) -> list[ProposedPosting]:
+    """
+    Book every invoice that is still unpaid at the end of the year.
+
+    Only relevant under the cash method. Bokföringslagen 5 kap. 2 § lets a small company
+    wait until payment to record a business event, but the same sentence continues:
+    "Vid räkenskapsårets utgång skall dock samtliga då obetalda fordringar och skulder
+    bokföras." Without this the December sale would land in next year's result and both
+    years would be wrong.
+
+    Each posting is reversed on the first day of the next year, because reknir's cash
+    method books the full revenue again when the payment actually arrives.
+    """
+    if company.accounting_basis != AccountingBasis.CASH:
+        return []
+
+    postings: list[ProposedPosting] = []
+
+    receivable_account, receivable_created = resolve_account(
+        db, company.id, fiscal_year.id, ACCOUNTS_RECEIVABLE_SPEC, create
+    )
+    payable_account, payable_created = resolve_account(db, company.id, fiscal_year.id, ACCOUNTS_PAYABLE_SPEC, create)
+
+    # Customer invoices: debit the receivable, credit revenue and output VAT.
+    invoices = (
+        db.query(Invoice)
+        .filter(
+            Invoice.company_id == company.id,
+            Invoice.invoice_date >= fiscal_year.start_date,
+            Invoice.invoice_date <= fiscal_year.end_date,
+            Invoice.status == InvoiceStatus.ISSUED,
+            Invoice.payment_status != PaymentStatus.PAID,
+        )
+        .order_by(Invoice.invoice_number)
+        .all()
+    )
+
+    for invoice in invoices:
+        outstanding = Decimal(invoice.total_amount) - Decimal(invoice.paid_amount or 0)
+        if outstanding <= 0:
+            continue
+        ratio = outstanding / Decimal(invoice.total_amount)
+
+        lines = [_line(receivable_account, ACCOUNTS_RECEIVABLE_SPEC, outstanding, Decimal("0"), receivable_created)]
+        vat_by_rate: dict[Decimal, Decimal] = {}
+
+        for invoice_line in invoice.invoice_lines:
+            net = (Decimal(invoice_line.net_amount) * ratio).quantize(Decimal("0.01"))
+            if net == 0:
+                continue
+            account, created = _revenue_account_for_line(db, company, fiscal_year, invoice_line, create)
+            lines.append(_line(account, DEFAULT_REVENUE_SPEC, Decimal("0"), net, created))
+
+            rate = Decimal(str(invoice_line.vat_rate))
+            if rate > 0:
+                vat_by_rate[rate] = vat_by_rate.get(rate, Decimal("0")) + (
+                    Decimal(invoice_line.vat_amount) * ratio
+                ).quantize(Decimal("0.01"))
+
+        for rate, vat_amount in vat_by_rate.items():
+            vat_account, vat_created = _vat_outgoing_account(db, company, fiscal_year, rate, create)
+            number, name = VAT_OUTGOING_BY_RATE.get(rate.quantize(Decimal("1")), (2610, "Utgående moms"))
+            spec = AccountSpec(DefaultAccountType.VAT_OUTGOING_25, number, name, AccountType.EQUITY_LIABILITY)
+            lines.append(_line(vat_account, spec, Decimal("0"), vat_amount, vat_created))
+
+        postings.append(
+            ProposedPosting(
+                kind="outstanding_receivable",
+                description=f"Bokslut: obetald kundfaktura {invoice.invoice_number}",
+                transaction_date=fiscal_year.end_date,
+                lines=lines,
+                source_invoice_id=invoice.id,
+            )
+        )
+
+    # Supplier invoices: debit the cost and input VAT, credit the payable.
+    supplier_invoices = (
+        db.query(SupplierInvoice)
+        .filter(
+            SupplierInvoice.company_id == company.id,
+            SupplierInvoice.invoice_date >= fiscal_year.start_date,
+            SupplierInvoice.invoice_date <= fiscal_year.end_date,
+            SupplierInvoice.status == InvoiceStatus.ISSUED,
+            SupplierInvoice.payment_status != PaymentStatus.PAID,
+        )
+        .order_by(SupplierInvoice.id)
+        .all()
+    )
+
+    for supplier_invoice in supplier_invoices:
+        outstanding = Decimal(supplier_invoice.total_amount) - Decimal(supplier_invoice.paid_amount or 0)
+        if outstanding <= 0:
+            continue
+        ratio = outstanding / Decimal(supplier_invoice.total_amount)
+
+        lines = []
+        total_vat = Decimal("0")
+
+        for supplier_line in supplier_invoice.supplier_invoice_lines:
+            net = (Decimal(supplier_line.net_amount) * ratio).quantize(Decimal("0.01"))
+            if net == 0:
+                continue
+            account, created = _cost_account_for_line(db, company, fiscal_year, supplier_line, create)
+            lines.append(_line(account, DEFAULT_COST_SPEC, net, Decimal("0"), created))
+            total_vat += (Decimal(supplier_line.vat_amount) * ratio).quantize(Decimal("0.01"))
+
+        if total_vat > 0:
+            vat_account, vat_created = resolve_account(db, company.id, fiscal_year.id, VAT_INCOMING_SPEC, create)
+            lines.append(_line(vat_account, VAT_INCOMING_SPEC, total_vat, Decimal("0"), vat_created))
+
+        lines.append(_line(payable_account, ACCOUNTS_PAYABLE_SPEC, Decimal("0"), outstanding, payable_created))
+
+        postings.append(
+            ProposedPosting(
+                kind="outstanding_payable",
+                description=(f"Bokslut: obetald leverantörsfaktura {supplier_invoice.supplier_invoice_number}"),
+                transaction_date=fiscal_year.end_date,
+                lines=lines,
+                source_supplier_invoice_id=supplier_invoice.id,
+            )
+        )
+
+    return postings
+
+
 def build_posting_plan(
     db: Session, closing: YearEndClosing, fiscal_year: FiscalYear, company: Company, create: bool = False
 ) -> tuple[list[ProposedPosting], Decimal, Decimal, Decimal]:
@@ -385,12 +621,18 @@ def build_posting_plan(
 
     result_before_tax = compute_result_before_adjustments(db, fiscal_year)
 
+    # Cash method only: unpaid invoices are not in the ledger yet and must be brought in.
+    postings.extend(outstanding_invoice_postings(db, fiscal_year, company, create))
+
     for adjustment in closing.adjustments:
         posting = _adjustment_posting(db, closing, fiscal_year, adjustment, create)
         if not posting:
             continue
+        posting.reverses_next_year = adjustment.adjustment_type in ACCRUAL_TYPES
         postings.append(posting)
-        # Adjustments move the result by whatever hits their result account.
+
+    # Anything landing on a result account (3000 and up) moves the result.
+    for posting in postings:
         for line in posting.lines:
             if line.account_number >= 3000:
                 result_before_tax += line.credit - line.debit
@@ -622,6 +864,36 @@ def run_checks(db: Session, closing: YearEndClosing, fiscal_year: FiscalYear, co
             )
         )
 
+    # Cash method: unpaid invoices are still outside the ledger. BFL 5 kap. 2 § requires
+    # them to be booked at year end, and the closing does it automatically, so this is
+    # information rather than a problem to fix.
+    outstanding = outstanding_invoice_postings(db, fiscal_year, company, create=False)
+    if outstanding:
+        receivables = sum(1 for p in outstanding if p.kind == "outstanding_receivable")
+        payables = len(outstanding) - receivables
+        parts = []
+        if receivables:
+            parts.append(
+                f"{receivables} obetald{'a' if receivables > 1 else ''} kundfaktur{'or' if receivables > 1 else 'a'}"
+            )
+        if payables:
+            parts.append(
+                f"{payables} obetald{'a' if payables > 1 else ''} leverantörsfaktur{'or' if payables > 1 else 'a'}"
+            )
+        checks.append(
+            Check(
+                code="outstanding_invoices_booked",
+                severity="green",
+                message=f"Vi bokför {' och '.join(parts)} i årets bokföring.",
+                detail=(
+                    "Du använder kontantmetoden och bokför normalt först vid betalning. Vid årsskiftet "
+                    "måste ändå alla obetalda fordringar och skulder tas med i året — det står i "
+                    "bokföringslagen. Momsen redovisas samtidigt, i årets sista momsperiod. När fakturan "
+                    "sedan betalas nästa år bokförs bara pengarna in mot fordran, utan moms en gång till."
+                ),
+            )
+        )
+
     if not closing.adjustments:
         checks.append(
             Check(
@@ -768,18 +1040,31 @@ def complete_closing(
                 raise ValueError(f"Account {line.account_number} could not be resolved for the closing")
             lines.append((account, line.debit, line.credit))
 
-        created.append(
-            _create_verification(
-                db,
-                company.id,
-                fiscal_year.id,
-                posting.transaction_date,
-                posting.description,
-                lines,
-            )
+        verification = _create_verification(
+            db,
+            company.id,
+            fiscal_year.id,
+            posting.transaction_date,
+            posting.description,
+            lines,
         )
+        created.append(verification)
 
-    created.extend(_post_accrual_reversals(db, closing, fiscal_year, company))
+        # Point the invoice at the verification that booked it. This is what makes the
+        # payment in the next year settle the receivable instead of booking the revenue
+        # a second time — the same rule the accrual method already relies on.
+        if posting.source_invoice_id:
+            invoice = db.query(Invoice).filter(Invoice.id == posting.source_invoice_id).first()
+            if invoice:
+                invoice.invoice_verification_id = verification.id
+        if posting.source_supplier_invoice_id:
+            supplier_invoice = (
+                db.query(SupplierInvoice).filter(SupplierInvoice.id == posting.source_supplier_invoice_id).first()
+            )
+            if supplier_invoice:
+                supplier_invoice.invoice_verification_id = verification.id
+
+    created.extend(_post_reversals(db, postings, fiscal_year, company))
 
     # Lock every verification in the year, including the ones just written. This is the
     # first time Verification.locked is actually set anywhere in reknir.
@@ -803,18 +1088,22 @@ def complete_closing(
     return created
 
 
-def _post_accrual_reversals(
-    db: Session, closing: YearEndClosing, fiscal_year: FiscalYear, company: Company
+def _post_reversals(
+    db: Session, postings: list[ProposedPosting], fiscal_year: FiscalYear, company: Company
 ) -> list[Verification]:
     """
-    Reverse the accruals on the first day of the next year.
+    Reverse, on the first day of the next year, every posting that needs it.
 
-    An accrual moves a cost or an income into the year it belongs to; leaving it in
-    place would double count it when the real invoice arrives. Skipped when the next
-    fiscal year does not exist yet, which run_checks warns about beforehand.
+    Two kinds need it. An accrual moves a cost or an income into the year it belongs
+    to, and leaving it in place would double count it when the real invoice arrives.
+    An unpaid invoice booked under the cash method would likewise be counted twice,
+    because reknir books the full revenue again when the payment lands.
+
+    Skipped when the next fiscal year does not exist or is itself closed; run_checks
+    warns about the missing year beforehand.
     """
-    accruals = [a for a in closing.adjustments if a.adjustment_type in ACCRUAL_TYPES]
-    if not accruals:
+    to_reverse = [p for p in postings if p.reverses_next_year]
+    if not to_reverse:
         return []
 
     next_year = _next_fiscal_year(db, fiscal_year)
@@ -822,11 +1111,7 @@ def _post_accrual_reversals(
         return []
 
     created: list[Verification] = []
-    for adjustment in accruals:
-        posting = _adjustment_posting(db, closing, fiscal_year, adjustment, create=True)
-        if not posting:
-            continue
-
+    for posting in to_reverse:
         lines = []
         for line in posting.lines:
             account, _ = resolve_account(

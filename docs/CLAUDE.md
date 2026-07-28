@@ -466,6 +466,37 @@ Skatt (endast AB)   D 8910 / K 2510   (20,6 % på positivt resultat)
 Periodiseringar återförs automatiskt med spegelvänd kontering daterad dag 1 i nästa
 räkenskapsår. Alla bokslutsverifikat hamnar i **serie B**.
 
+**Kontantmetoden — obetalda fakturor vid årsskiftet**
+
+BFL 5 kap. 2 § tillåter att man väntar med bokföringen till betalning, men samma mening
+fortsätter: *"Vid räkenskapsårets utgång skall dock samtliga då obetalda fordringar och
+skulder bokföras."* Bokslutet gör det automatiskt för företag på kontantmetoden — fakturor
+med status `ISSUED` som inte är fullt betalda och är daterade i året:
+
+```
+Obetald kundfaktura        D 1510 / K 3xxx + K 26xx    (per 31/12)
+Obetald leverantörsfaktura D 6xxx + D 2640 / K 2440    (per 31/12)
+```
+
+**Ett verifikat per faktura**, inte ett samlingsverifikat. Skälet är att reknir har en
+kundreskontra: bokslutet sätter `invoice_verification_id` på fakturan, och det är den
+kopplingen som gör att betalningen nästa år hamnar rätt. Per faktura ger dessutom
+specifikationen gratis — verifikationstexten namnger fakturanumret.
+
+**Dessa poster återförs INTE** i nästa år, till skillnad från periodiseringarna. Istället
+avgör `create_invoice_payment_verification` sin kontering på om fakturan redan är bokförd:
+
+| Läge | Kontering vid betalning |
+|---|---|
+| `invoice_verification_id` satt (faktureringsmetoden, eller bokslutet) | D 1930 / K 1510 |
+| Inte satt (kontantmetoden, betald samma period) | D 1930 / K 3xxx + K 26xx |
+
+Regeln är alltså "är fakturan redan bokförd?", inte "vilken bokföringsmetod?". Att istället
+återföra bokslutsposten den 1 januari och låta betalningen bokföra om intäkten ger rätt
+totalbelopp men **fel moms per period** — plus i december, minus i januari, plus igen vid
+betalning. Momsdeklarationer lämnas per period, så en månadsredovisare hade lämnat två
+felaktiga.
+
 **Vid slutförande:** verifikaten bokförs, `Verification.locked` sätts på årets samtliga
 verifikationer, och `FiscalYear.is_closed` sätts. Därefter avvisar alla skrivvägar året med
 403 — verifikationer, fakturor, utlägg, konton och SIE4-import.

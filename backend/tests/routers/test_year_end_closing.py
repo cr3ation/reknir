@@ -1,5 +1,6 @@
 """Tests for the year-end closing (bokslut) resource."""
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -377,6 +378,211 @@ class TestComplete:
             debit = sum(Decimal(line["debit"]) for line in detail["transaction_lines"])
             credit = sum(Decimal(line["credit"]) for line in detail["transaction_lines"])
             assert debit == credit, f"{detail['series']}{detail['verification_number']} does not balance"
+
+
+class TestCashMethodOutstandingInvoices:
+    """
+    Bokföringslagen 5 kap. 2 §: the cash method lets you wait until payment, but
+    "vid räkenskapsårets utgång skall dock samtliga då obetalda fordringar och skulder
+    bokföras". Without this an invoice sent in December and paid in January would land
+    entirely in the wrong year.
+    """
+
+    @staticmethod
+    def _issue_unpaid_invoice(
+        client, auth_headers, db_session, company_id, fiscal_year_id, customer_id, revenue_account_id
+    ):
+        from app.models.invoice import Invoice, InvoiceLine, InvoiceStatus, PaymentStatus
+
+        invoice = Invoice(
+            company_id=company_id,
+            customer_id=customer_id,
+            invoice_number=20210001,
+            invoice_date=date(2021, 12, 20),
+            due_date=date(2022, 1, 19),
+            status=InvoiceStatus.ISSUED,
+            payment_status=PaymentStatus.UNPAID,
+            net_amount=Decimal("8000.00"),
+            vat_amount=Decimal("2000.00"),
+            total_amount=Decimal("10000.00"),
+            paid_amount=Decimal("0.00"),
+        )
+        db_session.add(invoice)
+        db_session.flush()
+        db_session.add(
+            InvoiceLine(
+                invoice_id=invoice.id,
+                description="Decemberuppdrag",
+                quantity=Decimal("1"),
+                unit="st",
+                unit_price=Decimal("8000.00"),
+                vat_rate=Decimal("25.00"),
+                account_id=revenue_account_id,
+                net_amount=Decimal("8000.00"),
+                vat_amount=Decimal("2000.00"),
+                total_amount=Decimal("10000.00"),
+            )
+        )
+        db_session.commit()
+        return invoice
+
+    @pytest.fixture
+    def cash_setup(self, client, auth_headers, closing_setup, test_company, test_customer, db_session):
+        """Switch the company to the cash method and leave one invoice unpaid."""
+        from app.models.company import AccountingBasis
+
+        test_company.accounting_basis = AccountingBasis.CASH
+        db_session.commit()
+
+        self._issue_unpaid_invoice(
+            client,
+            auth_headers,
+            db_session,
+            test_company.id,
+            closing_setup["fiscal_year_id"],
+            test_customer.id,
+            closing_setup["revenue_account_id"],
+        )
+        return closing_setup
+
+    def test_unpaid_invoice_is_brought_into_the_year(self, client, auth_headers, cash_setup):
+        """The receivable is debited and the revenue and VAT credited, at 31 December."""
+        body = client.get(f"/api/fiscal-years/{cash_setup['fiscal_year_id']}/closing", headers=auth_headers).json()
+
+        posting = next(p for p in body["postings"] if p["kind"] == "outstanding_receivable")
+        debits = {line["account_number"]: Decimal(line["debit"]) for line in posting["lines"]}
+        credits = {line["account_number"]: Decimal(line["credit"]) for line in posting["lines"]}
+
+        assert debits[1510] == Decimal("10000.00")
+        assert credits[3001] == Decimal("8000.00")
+        assert credits[2611] == Decimal("2000.00")
+        assert posting["transaction_date"] == "2021-12-31"
+
+    def test_it_raises_the_result(self, client, auth_headers, cash_setup):
+        """The December sale belongs to this year, so the result goes up by the net."""
+        body = client.get(f"/api/fiscal-years/{cash_setup['fiscal_year_id']}/closing", headers=auth_headers).json()
+        assert Decimal(body["result_before_tax"]) == Decimal("108000.00")
+
+    def test_the_user_is_told_it_happened(self, client, auth_headers, cash_setup):
+        body = client.get(f"/api/fiscal-years/{cash_setup['fiscal_year_id']}/closing", headers=auth_headers).json()
+        check = next(c for c in body["checks"] if c["code"] == "outstanding_invoices_booked")
+        assert check["severity"] == "green"
+        assert "kundfaktura" in check["message"]
+
+    def test_accrual_companies_are_untouched(self, client, auth_headers, closing_setup, test_customer, db_session):
+        """An accrual company already booked the invoice when it was sent."""
+        self._issue_unpaid_invoice(
+            client,
+            None,
+            db_session,
+            closing_setup["company_id"],
+            closing_setup["fiscal_year_id"],
+            test_customer.id,
+            closing_setup["revenue_account_id"],
+        )
+        body = client.get(f"/api/fiscal-years/{closing_setup['fiscal_year_id']}/closing", headers=auth_headers).json()
+        assert not [p for p in body["postings"] if p["kind"] == "outstanding_receivable"]
+
+    def test_not_reversed_in_the_next_year(self, client, auth_headers, cash_setup, test_company, db_session):
+        """
+        The invoice posting must NOT be reversed on 1 January.
+
+        Reversing it and letting the ordinary cash-method payment re-book the revenue
+        gives the right total but reports the VAT in three periods: plus in December,
+        minus in January, plus again on payment. VAT returns are filed per period, so a
+        monthly filer would submit two wrong ones. The receivable is settled by the
+        payment instead, which keeps the VAT in exactly one period.
+        """
+        fy_id = cash_setup["fiscal_year_id"]
+        next_fy_id = create_fiscal_year(client, auth_headers, test_company.id, 2022)
+
+        TestComplete._make_completable(client, auth_headers, fy_id)
+        response = client.post(f"/api/fiscal-years/{fy_id}/closing/complete", headers=auth_headers)
+        assert response.status_code == 200, response.text
+
+        next_year = client.get(
+            f"/api/verifications/?company_id={test_company.id}&fiscal_year_id={next_fy_id}",
+            headers=auth_headers,
+        ).json()
+        invoice_reversals = [
+            v for v in next_year if "Återföring" in v["description"] and "kundfaktura" in v["description"]
+        ]
+        assert not invoice_reversals, "an invoice posting must not be reversed"
+
+    def test_invoice_is_linked_to_the_year_end_verification(
+        self, client, auth_headers, cash_setup, test_company, db_session
+    ):
+        """The link is what tells the payment path the invoice is already booked."""
+        from app.models.invoice import Invoice
+
+        fy_id = cash_setup["fiscal_year_id"]
+        TestComplete._make_completable(client, auth_headers, fy_id)
+        client.post(f"/api/fiscal-years/{fy_id}/closing/complete", headers=auth_headers)
+
+        invoice = db_session.query(Invoice).filter(Invoice.invoice_number == 20210001).first()
+        db_session.refresh(invoice)
+        assert invoice.invoice_verification_id is not None
+
+    def test_payment_next_year_only_settles_the_receivable(
+        self, client, auth_headers, cash_setup, test_company, db_session
+    ):
+        """
+        D 1930 / K 1510, with no revenue and no VAT — those were reported at year end.
+        """
+        from app.models.invoice import Invoice
+
+        fy_id = cash_setup["fiscal_year_id"]
+        next_fy_id = create_fiscal_year(client, auth_headers, test_company.id, 2022)
+        create_account(client, auth_headers, test_company.id, next_fy_id, 1930, "Företagskonto", "asset")
+        create_account(client, auth_headers, test_company.id, next_fy_id, 1510, "Kundfordringar", "asset")
+        bank_next = client.get(
+            f"/api/accounts/?company_id={test_company.id}&fiscal_year_id={next_fy_id}",
+            headers=auth_headers,
+        ).json()
+        bank_id = next(a["id"] for a in bank_next if a["account_number"] == 1930)
+
+        TestComplete._make_completable(client, auth_headers, fy_id)
+        client.post(f"/api/fiscal-years/{fy_id}/closing/complete", headers=auth_headers)
+
+        invoice = db_session.query(Invoice).filter(Invoice.invoice_number == 20210001).first()
+        response = client.post(
+            f"/api/invoices/{invoice.id}/mark-paid",
+            json={"paid_date": "2022-01-15", "bank_account_id": bank_id},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+
+        next_year = client.get(
+            f"/api/verifications/?company_id={test_company.id}&fiscal_year_id={next_fy_id}",
+            headers=auth_headers,
+        ).json()
+        payment = next(v for v in next_year if "Betalning" in v["description"])
+        detail = client.get(f"/api/verifications/{payment['id']}", headers=auth_headers).json()
+        accounts = {line["account_number"] for line in detail["transaction_lines"]}
+
+        assert accounts == {1930, 1510}, f"expected only bank and receivable, got {accounts}"
+        lines = {line["account_number"]: line for line in detail["transaction_lines"]}
+        assert Decimal(lines[1930]["debit"]) == Decimal("10000.00")
+        assert Decimal(lines[1510]["credit"]) == Decimal("10000.00")
+
+    def test_accruals_are_still_reversed(self, client, auth_headers, cash_setup, test_company):
+        """Reversal is right for accruals — only the invoice postings changed."""
+        fy_id = cash_setup["fiscal_year_id"]
+        next_fy_id = create_fiscal_year(client, auth_headers, test_company.id, 2022)
+
+        client.patch(
+            f"/api/fiscal-years/{fy_id}/closing",
+            json={"adjustments": [{"adjustment_type": "accrued_expense", "amount": "5000.00"}]},
+            headers=auth_headers,
+        )
+        TestComplete._make_completable(client, auth_headers, fy_id)
+        client.post(f"/api/fiscal-years/{fy_id}/closing/complete", headers=auth_headers)
+
+        next_year = client.get(
+            f"/api/verifications/?company_id={test_company.id}&fiscal_year_id={next_fy_id}",
+            headers=auth_headers,
+        ).json()
+        assert [v for v in next_year if "Återföring" in v["description"]]
 
 
 class TestReportsAfterClosing:

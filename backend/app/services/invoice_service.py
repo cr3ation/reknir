@@ -153,14 +153,23 @@ def create_invoice_payment_verification(
     """
     Create automatic verification when invoice is paid.
 
-    Accrual method (ACCRUAL):
+    The entry depends on whether the invoice has already been booked, not on the
+    accounting method as such. Under the accrual method it was booked when it was sent.
+    Under the cash method it normally has not been — except when it was still unpaid at
+    a year end, where Bokföringslagen 5 kap. 2 § requires the closing to book it.
+
+    Already booked (invoice_verification_id is set):
         Debit:  1930 Bank account
         Credit: 1510 Customer receivables
 
-    Cash method (CASH):
+    Not yet booked (cash method, paid in the same period it was issued):
         Debit:  1930 Bank account
         Credit: 3xxx Revenue accounts (proportional per line)
         Credit: 26xx VAT outgoing accounts (proportional by VAT rate)
+
+    Booking the revenue again for an invoice the closing already took up would report
+    its VAT twice, so the check on invoice_verification_id is what keeps the VAT in
+    exactly one period.
     """
 
     # Get fiscal year for payment date
@@ -209,7 +218,7 @@ def create_invoice_payment_verification(
     db.add(debit_line)
     bank_account.current_balance += paid_amount
 
-    if accounting_basis == AccountingBasis.CASH:
+    if accounting_basis == AccountingBasis.CASH and not invoice.invoice_verification_id:
         # Cash method: Credit revenue and VAT accounts (proportionally for partial payments)
         payment_ratio = paid_amount / invoice.total_amount
         vat_by_rate: dict[float, Decimal] = {}
@@ -400,11 +409,15 @@ def create_supplier_invoice_payment_verification(
     """
     Create automatic verification when supplier invoice is paid.
 
-    Accrual method (ACCRUAL):
+    As with customer invoices, the entry depends on whether the invoice has already been
+    booked rather than on the accounting method. The year-end closing books supplier
+    invoices that are still unpaid, as Bokföringslagen 5 kap. 2 § requires.
+
+    Already booked (invoice_verification_id is set):
         Debit:  2440 Accounts payable
         Credit: 1930 Bank account
 
-    Cash method (CASH):
+    Not yet booked (cash method, paid in the same period it was registered):
         Debit:  6xxx Expense accounts (proportional per line)
         Debit:  2640 Input VAT (proportional)
         Credit: 1930 Bank account
@@ -429,7 +442,7 @@ def create_supplier_invoice_payment_verification(
     db.add(verification)
     db.flush()
 
-    if accounting_basis == AccountingBasis.CASH:
+    if accounting_basis == AccountingBasis.CASH and not supplier_invoice.invoice_verification_id:
         # Cash method: Debit expense and VAT accounts (proportionally for partial payments)
         payment_ratio = paid_amount / supplier_invoice.total_amount
         total_proportional_vat = Decimal("0")
