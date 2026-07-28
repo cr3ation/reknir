@@ -41,6 +41,8 @@ import type {
   ChatSession,
   ChatSessionDetail,
   AIUpload,
+  YearEndClosing,
+  YearEndClosingUpdate,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -125,6 +127,18 @@ export const fiscalYearApi = {
     }>(`/fiscal-years/${fiscalYearId}/copy-chart-of-accounts`, null, {
       params: sourceFiscalYearId ? { source_fiscal_year_id: sourceFiscalYearId } : undefined,
     }),
+}
+
+// Year-end closing (bokslut). One document per fiscal year: every call returns the
+// whole recomputed state, so the wizard never has to stitch responses together.
+export const yearEndClosingApi = {
+  get: (fiscalYearId: number) => api.get<YearEndClosing>(`/fiscal-years/${fiscalYearId}/closing`),
+  update: (fiscalYearId: number, data: YearEndClosingUpdate) =>
+    api.patch<YearEndClosing>(`/fiscal-years/${fiscalYearId}/closing`, data),
+  complete: (fiscalYearId: number) =>
+    api.post<YearEndClosing>(`/fiscal-years/${fiscalYearId}/closing/complete`),
+  reopen: (fiscalYearId: number, reason: string) =>
+    api.post<YearEndClosing>(`/fiscal-years/${fiscalYearId}/closing/reopen`, { reason }),
 }
 
 // Accounts

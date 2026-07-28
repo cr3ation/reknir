@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User, UserCog, Mail } from 'lucide-react'
+import { Home, FileText, PieChart, Settings, Receipt, BookOpen, Users, Wallet, LogOut, User, UserCog, Mail, Landmark } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Verifications from './pages/Verifications'
 import VerificationDetail from './pages/VerificationDetail'
@@ -11,6 +11,7 @@ import Customers from './pages/Customers'
 import Accounts from './pages/Accounts'
 import AccountLedger from './pages/AccountLedger'
 import Reports from './pages/Reports'
+import YearEndClosing from './pages/YearEndClosing'
 import Expenses from './pages/Expenses'
 import ExpenseDetail from './pages/ExpenseDetail'
 import SettingsPage from './pages/Settings'
@@ -79,6 +80,7 @@ function AppContent() {
     { path: '/customers', icon: Users, label: 'Kunder' },
     { path: '/accounts', icon: BookOpen, label: 'Kontoplan' },
     { path: '/reports', icon: PieChart, label: 'Rapporter' },
+    { path: '/year-end-closing', icon: Landmark, label: 'Bokslut' },
     { path: '/settings', icon: Settings, label: 'Inställningar' },
   ]
 
@@ -208,6 +210,7 @@ function AppContent() {
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/accounts/:accountId/ledger" element={<AccountLedger />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/year-end-closing" element={<YearEndClosing />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/invitations" element={<InvitationsPage />} />

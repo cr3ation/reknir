@@ -807,3 +807,96 @@ export interface AIUpload {
   size_bytes: number
   created_at: string
 }
+
+// Year-end closing (bokslut)
+
+export type ClosingStatus = 'in_progress' | 'completed'
+
+export type ClosingStep = 'preparation' | 'adjustments' | 'tax' | 'review'
+
+export type AdjustmentType =
+  | 'stock'
+  | 'depreciation'
+  | 'accrued_expense'
+  | 'prepaid_expense'
+  | 'accrued_revenue'
+  | 'prepaid_revenue'
+
+export type CheckSeverity = 'red' | 'yellow' | 'green'
+
+export interface ClosingCheck {
+  code: string
+  severity: CheckSeverity
+  message: string
+  detail?: string | null
+}
+
+export interface ClosingStepState {
+  step: ClosingStep
+  is_unlocked: boolean
+  is_current: boolean
+}
+
+export interface ClosingAdjustment {
+  id: number
+  adjustment_type: AdjustmentType
+  amount: string
+  balance_account_id?: number | null
+  result_account_id?: number | null
+  description?: string | null
+}
+
+export interface ClosingAdjustmentInput {
+  adjustment_type: AdjustmentType
+  amount: string
+  balance_account_id?: number | null
+  result_account_id?: number | null
+  description?: string | null
+}
+
+export interface ProposedPostingLine {
+  account_number: number
+  account_name: string
+  debit: string
+  credit: string
+  account_will_be_created: boolean
+}
+
+export interface ProposedPosting {
+  kind: string
+  description: string
+  transaction_date: string
+  lines: ProposedPostingLine[]
+}
+
+export interface YearEndClosing {
+  id: number
+  company_id: number
+  fiscal_year_id: number
+  fiscal_year_label: string
+  status: ClosingStatus
+  current_step: ClosingStep
+  steps: ClosingStepState[]
+  preparation_confirmed: boolean
+  bank_statement_balance?: string | null
+  booked_bank_balance?: string | null
+  acknowledged_warnings: string[]
+  adjustments: ClosingAdjustment[]
+  checks: ClosingCheck[]
+  result_before_tax: string
+  tax: string
+  result_after_tax: string
+  tax_amount_override?: string | null
+  postings: ProposedPosting[]
+  can_complete: boolean
+  completed_at?: string | null
+}
+
+export interface YearEndClosingUpdate {
+  current_step?: ClosingStep
+  preparation_confirmed?: boolean
+  bank_statement_balance?: string | null
+  acknowledged_warnings?: string[]
+  tax_amount_override?: string | null
+  adjustments?: ClosingAdjustmentInput[]
+}
