@@ -4,13 +4,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
+from app.dependencies import get_current_active_user, get_user_company_ids, require_admin, verify_company_access
 from app.models.account import Account
 from app.models.company import Company
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.models.verification import Verification
+from app.models.year_end_closing import ClosingStatus, YearEndAdjustment
 from app.schemas.fiscal_year import FiscalYearCreate, FiscalYearResponse, FiscalYearUpdate
+from app.schemas.year_end_closing import (
+    AdjustmentResponse,
+    CheckResponse,
+    PostingLineResponse,
+    ProposedPostingResponse,
+    ReopenRequest,
+    StepResponse,
+    YearEndClosingResponse,
+    YearEndClosingUpdate,
+)
+from app.services import year_end_closing_service
 
 router = APIRouter()
 
@@ -312,3 +324,212 @@ def copy_chart_of_accounts(
         "target_fiscal_year_label": target_fiscal_year.label,
         "accounts_copied": len(created_accounts),
     }
+
+
+# =============================================================================
+# Year-end closing (bokslut)
+# =============================================================================
+
+
+def _load_fiscal_year_for_closing(fiscal_year_id: int, current_user: User, db: Session) -> FiscalYear:
+    """Shared lookup and access check for every closing endpoint."""
+    fiscal_year = db.query(FiscalYear).filter(FiscalYear.id == fiscal_year_id).first()
+    if not fiscal_year:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Fiscal year {fiscal_year_id} not found")
+
+    company_ids = get_user_company_ids(current_user, db)
+    if fiscal_year.company_id not in company_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this fiscal year")
+
+    return fiscal_year
+
+
+def _closing_document(db: Session, fiscal_year: FiscalYear) -> YearEndClosingResponse:
+    """
+    Build the response every closing endpoint returns.
+
+    The postings and figures are recomputed here rather than stored, so a changed
+    answer is reflected immediately and nothing can drift out of sync with the ledger.
+    """
+    company = db.query(Company).filter(Company.id == fiscal_year.company_id).first()
+    closing = year_end_closing_service.get_or_create_closing(db, fiscal_year)
+
+    checks = year_end_closing_service.run_checks(db, closing, fiscal_year, company)
+    postings, result_before_tax, tax, result_after_tax = year_end_closing_service.build_posting_plan(
+        db, closing, fiscal_year, company, create=False
+    )
+
+    unlocked = year_end_closing_service.unlocked_steps(closing, company)
+    acknowledged = list(closing.acknowledged_warnings or [])
+
+    can_complete = (
+        closing.status == ClosingStatus.IN_PROGRESS
+        and not year_end_closing_service.blocking_checks(checks)
+        and not year_end_closing_service.unacknowledged_warnings(checks, acknowledged)
+    )
+
+    bank_account = (
+        db.query(Account)
+        .filter(
+            Account.fiscal_year_id == fiscal_year.id,
+            Account.account_number == year_end_closing_service.BANK_SPEC.number,
+        )
+        .first()
+    )
+    booked_bank_balance = year_end_closing_service.account_net(db, bank_account) if bank_account else None
+
+    return YearEndClosingResponse(
+        id=closing.id,
+        company_id=closing.company_id,
+        fiscal_year_id=closing.fiscal_year_id,
+        fiscal_year_label=fiscal_year.label,
+        status=closing.status,
+        current_step=closing.current_step,
+        steps=[
+            StepResponse(step=step, is_unlocked=is_unlocked, is_current=step == closing.current_step)
+            for step, is_unlocked in unlocked.items()
+        ],
+        preparation_confirmed=closing.preparation_confirmed,
+        bank_statement_balance=closing.bank_statement_balance,
+        booked_bank_balance=booked_bank_balance,
+        acknowledged_warnings=acknowledged,
+        adjustments=[AdjustmentResponse.model_validate(a) for a in closing.adjustments],
+        checks=[CheckResponse(**vars(c)) for c in checks],
+        result_before_tax=result_before_tax,
+        tax=tax,
+        result_after_tax=result_after_tax,
+        tax_amount_override=closing.tax_amount_override,
+        postings=[
+            ProposedPostingResponse(
+                kind=p.kind,
+                description=p.description,
+                transaction_date=p.transaction_date,
+                lines=[PostingLineResponse(**vars(line)) for line in p.lines],
+            )
+            for p in postings
+        ],
+        can_complete=can_complete,
+        completed_at=closing.completed_at,
+    )
+
+
+@router.get("/{fiscal_year_id}/closing", response_model=YearEndClosingResponse)
+def get_year_end_closing(
+    fiscal_year_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
+):
+    """
+    Read the whole year-end closing: status, steps, answers, checks, figures and the
+    postings that will be made. Creates an empty closing on first access.
+    """
+    fiscal_year = _load_fiscal_year_for_closing(fiscal_year_id, current_user, db)
+    return _closing_document(db, fiscal_year)
+
+
+@router.patch("/{fiscal_year_id}/closing", response_model=YearEndClosingResponse)
+def update_year_end_closing(
+    fiscal_year_id: int,
+    update: YearEndClosingUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    The single mutation for everything the user does across all four steps.
+
+    Sending adjustments replaces the whole list, so repeating a request leaves the same
+    state instead of accumulating duplicates.
+    """
+    fiscal_year = _load_fiscal_year_for_closing(fiscal_year_id, current_user, db)
+    closing = year_end_closing_service.get_or_create_closing(db, fiscal_year)
+
+    if closing.status == ClosingStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"The closing for fiscal year {fiscal_year.label} is completed. Reopen it before changing anything.",
+        )
+
+    data = update.model_dump(exclude_unset=True)
+    adjustments = data.pop("adjustments", None)
+
+    for field, value in data.items():
+        setattr(closing, field, value)
+
+    if adjustments is not None:
+        closing.adjustments.clear()
+        db.flush()
+        for item in adjustments:
+            closing.adjustments.append(YearEndAdjustment(**item))
+
+    db.commit()
+    db.refresh(closing)
+
+    return _closing_document(db, fiscal_year)
+
+
+@router.post("/{fiscal_year_id}/closing/complete", response_model=YearEndClosingResponse)
+def complete_year_end_closing(
+    fiscal_year_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
+):
+    """
+    Finish the closing: post the year-end verifications in series B, reverse the
+    accruals in the next year, lock every verification and close the fiscal year.
+    """
+    fiscal_year = _load_fiscal_year_for_closing(fiscal_year_id, current_user, db)
+    company = db.query(Company).filter(Company.id == fiscal_year.company_id).first()
+    closing = year_end_closing_service.get_or_create_closing(db, fiscal_year)
+
+    if closing.status == ClosingStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The closing for fiscal year {fiscal_year.label} is already completed",
+        )
+
+    checks = year_end_closing_service.run_checks(db, closing, fiscal_year, company)
+    blocking = year_end_closing_service.blocking_checks(checks)
+    if blocking:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The closing cannot be completed yet: {blocking[0].message}",
+        )
+
+    unacknowledged = year_end_closing_service.unacknowledged_warnings(checks, list(closing.acknowledged_warnings or []))
+    if unacknowledged:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Acknowledge the remaining warnings first: {unacknowledged[0].message}",
+        )
+
+    try:
+        year_end_closing_service.complete_closing(db, closing, fiscal_year, company, current_user.id)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    return _closing_document(db, fiscal_year)
+
+
+@router.post("/{fiscal_year_id}/closing/reopen", response_model=YearEndClosingResponse)
+def reopen_year_end_closing(
+    fiscal_year_id: int,
+    request: ReopenRequest,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Reopen a completed closing. Admin only, reason required, and fully logged.
+
+    Nothing is deleted: the year-end verifications are reversed by mirrored postings,
+    so the books keep showing both what was booked and that it was taken back.
+    """
+    fiscal_year = _load_fiscal_year_for_closing(fiscal_year_id, current_user, db)
+    company = db.query(Company).filter(Company.id == fiscal_year.company_id).first()
+    closing = year_end_closing_service.get_or_create_closing(db, fiscal_year)
+
+    if closing.status != ClosingStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The closing for fiscal year {fiscal_year.label} is not completed, so there is nothing to reopen",
+        )
+
+    year_end_closing_service.reopen_closing(db, closing, fiscal_year, company, current_user.id, request.reason)
+
+    return _closing_document(db, fiscal_year)
