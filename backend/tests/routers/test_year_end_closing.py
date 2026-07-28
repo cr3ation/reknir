@@ -379,6 +379,46 @@ class TestComplete:
             assert debit == credit, f"{detail['series']}{detail['verification_number']} does not balance"
 
 
+class TestReportsAfterClosing:
+    def test_income_statement_still_shows_the_result(self, client, auth_headers, closing_setup):
+        """
+        8999 Årets resultat is the bottom line, not a cost.
+
+        Counting it among the expenses would cancel the result out and report a closed
+        year as breaking even, which is what happened before it was excluded.
+        """
+        fy_id = closing_setup["fiscal_year_id"]
+        TestComplete._make_completable(client, auth_headers, fy_id)
+        client.post(f"/api/fiscal-years/{fy_id}/closing/complete", headers=auth_headers)
+
+        income = client.get(
+            f"/api/reports/income-statement?company_id={closing_setup['company_id']}&fiscal_year_id={fy_id}",
+            headers=auth_headers,
+        ).json()
+
+        assert 8999 not in {a["account_number"] for a in income["expenses"]["accounts"]}
+        assert Decimal(str(income["profit_loss"])) == Decimal("79400.00")
+
+    def test_income_statement_agrees_with_the_balance_sheet(self, client, auth_headers, closing_setup):
+        """The result in the income statement must equal what was posted to equity."""
+        fy_id = closing_setup["fiscal_year_id"]
+        TestComplete._make_completable(client, auth_headers, fy_id)
+        client.post(f"/api/fiscal-years/{fy_id}/closing/complete", headers=auth_headers)
+
+        income = client.get(
+            f"/api/reports/income-statement?company_id={closing_setup['company_id']}&fiscal_year_id={fy_id}",
+            headers=auth_headers,
+        ).json()
+        balance = client.get(
+            f"/api/reports/balance-sheet?company_id={closing_setup['company_id']}&fiscal_year_id={fy_id}",
+            headers=auth_headers,
+        ).json()
+
+        equity_result = next(a["balance"] for a in balance["equity"]["accounts"] if a["account_number"] == 2099)
+        assert Decimal(str(equity_result)) == Decimal(str(income["profit_loss"]))
+        assert balance["balanced"] is True
+
+
 class TestReopen:
     def test_reopen_requires_admin(self, client, auth_headers, closing_setup):
         fy_id = closing_setup["fiscal_year_id"]

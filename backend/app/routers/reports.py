@@ -21,6 +21,11 @@ from app.services.report_pdf_service import (
 
 router = APIRouter()
 
+# BAS 8999 Årets resultat is where the year-end closing moves the result. It is the
+# bottom line of the income statement, not a cost, so counting it among the expenses
+# would cancel the result out and report a closed year as breaking even.
+YEAR_RESULT_ACCOUNT_NUMBER = 8999
+
 
 def get_fiscal_year_dates(db: Session, company_id: int, fiscal_year_id: int) -> tuple[date, date]:
     """
@@ -395,6 +400,7 @@ async def get_income_statement(
         .filter(
             Account.company_id == company_id,
             Account.active.is_(True),
+            Account.account_number != YEAR_RESULT_ACCOUNT_NUMBER,
             Account.account_type.in_(
                 [
                     AccountType.REVENUE,
