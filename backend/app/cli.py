@@ -5,12 +5,14 @@ Run with: python -m app.cli <command>
 
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.database import SessionLocal
 from app.models import Account, Company
 from app.models.account import AccountType
 from app.models.posting_template import PostingTemplate, PostingTemplateLine
+from app.services.storage import UPLOADS_DIR
 
 
 def get_seeds_path():
@@ -276,9 +278,13 @@ def main():
         print("  seed-templates [company_id] - Import Swedish posting templates for a company")
         print("  seed-all [company_id]       - Import both BAS and templates (complete setup)")
         print("                                Default company_id: 1")
-        print("  backup                      - Create a full system backup")
+        print("  backup [--sql] [--no-ai]    - Create a full system backup (JSON + files archive)")
+        print("                                --sql: legacy pg_dump archive instead")
         print("  list-backups                - List available backups")
-        print("  restore <path>              - Restore from a backup archive")
+        print("  verify-backup <path>        - Check a backup archive without restoring it")
+        print("  restore <path>              - Restore the whole system from a backup archive")
+        print("  export-company <id> [path]  - Export one company as a portable archive")
+        print("  import-company <path>       - Import a company archive as a new company")
         print("\nExamples:")
         print("  python -m app.cli seed-bas")
         print("  python -m app.cli seed-templates")
@@ -287,7 +293,10 @@ def main():
         print("  python -m app.cli seed-templates 2")
         print("  python -m app.cli backup")
         print("  python -m app.cli list-backups")
-        print("  python -m app.cli restore /backups/reknir_backup_xxx.tar.gz")
+        print("  python -m app.cli verify-backup /backups/reknir_backup_xxx.zip")
+        print("  python -m app.cli restore /backups/reknir_backup_xxx.zip")
+        print("  python -m app.cli export-company 1 /backups/exempel-ab.zip")
+        print("  python -m app.cli import-company /backups/exempel-ab.zip")
         sys.exit(1)
 
     command = sys.argv[1]
@@ -322,13 +331,98 @@ def main():
     elif command == "backup":
         from app.services import backup_service
 
+        flags = set(sys.argv[2:])
         print("Creating backup...")
         try:
-            archive_path = backup_service.create_backup()
+            if "--sql" in flags:
+                archive_path = backup_service.create_sql_backup()
+            else:
+                archive_path = backup_service.create_backup(include_ai="--no-ai" not in flags)
+            info = backup_service.describe_backup(archive_path)
             print(f"Backup created: {archive_path}")
+            if info.get("counts"):
+                print(f"Contents: {info['counts']}")
+            for warning in info.get("warnings", []):
+                print(f"WARNING: {warning}")
         except Exception as e:
             print(f"Backup failed: {e}")
             sys.exit(1)
+
+    elif command == "verify-backup":
+        if len(sys.argv) < 3:
+            print("Usage: python -m app.cli verify-backup <path-to-backup.zip>")
+            sys.exit(1)
+        from app.services import archive_import_service
+
+        archive_path = Path(sys.argv[2])
+        try:
+            archive = archive_import_service.verify_archive(archive_path)
+        except archive_import_service.ArchiveError as e:
+            print(f"INVALID: {e}")
+            sys.exit(1)
+        m = archive.manifest
+        print(f"OK: {archive_path.name}")
+        print(f"  format {m.format} v{m.format_version}, scope {m.scope}, created {m.created_at.isoformat()}")
+        print(
+            f"  app {m.app_version}, schema {m.schema_version}, credentials={m.includes_credentials}, ai={m.includes_ai}"
+        )
+        for c in m.companies:
+            print(f"  company: {c.name} ({c.org_number})")
+        print(f"  counts: {m.counts}")
+        for warning in m.warnings:
+            print(f"  WARNING (at export): {warning}")
+
+    elif command == "export-company":
+        if len(sys.argv) < 3:
+            print("Usage: python -m app.cli export-company <company_id> [output-path]")
+            sys.exit(1)
+        from app.database import SessionLocal
+        from app.services import archive_export_service, backup_service
+
+        company_id = int(sys.argv[2])
+        if len(sys.argv) > 3:
+            out_path = Path(sys.argv[3])
+        else:
+            stamp = datetime.now(UTC).strftime("%Y-%m-%d_%H.%M.%S")
+            out_path = backup_service.BACKUP_DIR / f"reknir_company_{company_id}_{stamp}.zip"
+        db = SessionLocal()
+        try:
+            manifest = archive_export_service.export_archive(db, out_path, scope="company", company_ids=[company_id])
+        finally:
+            db.close()
+        print(f"Company archive written: {out_path}")
+        print(f"Contents: {manifest.counts}")
+        for warning in manifest.warnings:
+            print(f"WARNING: {warning}")
+
+    elif command == "import-company":
+        if len(sys.argv) < 3:
+            print("Usage: python -m app.cli import-company <path-to-archive.zip>")
+            sys.exit(1)
+        from app.database import SessionLocal
+        from app.services import archive_import_service
+
+        archive_path = Path(sys.argv[2])
+        try:
+            archive = archive_import_service.verify_archive(archive_path)
+        except archive_import_service.ArchiveError as e:
+            print(f"INVALID: {e}")
+            sys.exit(1)
+        db = SessionLocal()
+        try:
+            report = archive_import_service.load_archive(db, archive, uploads_target=UPLOADS_DIR, import_users=False)
+            db.commit()
+            archive_import_service.cross_check_sie(db, archive, report)
+        except archive_import_service.ArchiveError as e:
+            db.rollback()
+            print(f"Import failed: {e}")
+            sys.exit(1)
+        finally:
+            db.close()
+        print(f"Imported company id(s): {report.company_ids}")
+        print(f"Created: {report.created}")
+        for warning in report.warnings:
+            print(f"WARNING: {warning}")
 
     elif command == "list-backups":
         from app.services import backup_service
@@ -356,6 +450,16 @@ def main():
             print(f"Error: File not found: {archive_path}")
             sys.exit(1)
 
+        from app.services import backup_service
+
+        try:
+            info = backup_service.describe_backup(archive_path)
+            print(f"Backup: {info['format']} format, created {info['created_at']}, app {info['app_version']}")
+            if info.get("companies"):
+                print(f"Companies: {', '.join(info['companies'])}")
+        except Exception as e:
+            print(f"Cannot read backup: {e}")
+            sys.exit(1)
         print("WARNING: This will replace ALL current data with the backup.")
         print(f"Archive: {archive_path}")
         response = input("Are you sure? (yes/no): ")
@@ -374,6 +478,8 @@ def main():
                 print("Restore completed successfully!")
                 print(f"Backup: {result.backup_filename}")
                 print(f"Stages: {', '.join(result.stages_completed)}")
+                for warning in result.warnings:
+                    print(f"WARNING: {warning}")
             else:
                 print(f"Restore failed: {result.message}")
                 sys.exit(1)

@@ -3,7 +3,6 @@
 import base64
 import json
 from collections.abc import AsyncGenerator
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -20,9 +19,9 @@ from app.services.ai_tools import (
     is_write_tool,
 )
 from app.services.ollama_service import chat_generate, chat_stream
+from app.services.storage import AI_UPLOADS_DIR
 
 MAX_TOOL_ROUNDS = 5
-AI_UPLOADS_DIR = Path("/app/uploads/ai_uploads")
 
 IMAGE_EXTRACTION_PROMPT = """\
 Analysera bifogade bilder noggrant och extrahera ALL synlig information. \

@@ -17,6 +17,7 @@ from app.models.user import CompanyUser, User
 from app.models.verification import Verification
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
 from app.services import default_account_service
+from app.services.storage import LOGOS_DIR
 
 router = APIRouter()
 
@@ -537,7 +538,7 @@ async def upload_company_logo(
         )
 
     # Create uploads directory if it doesn't exist
-    upload_dir = "/app/uploads/logos"
+    upload_dir = str(LOGOS_DIR)
     os.makedirs(upload_dir, exist_ok=True)
 
     # Generate unique filename
@@ -591,7 +592,7 @@ async def get_company_logo(
             detail="No logo found for this company",
         )
 
-    file_path = f"/app/uploads/logos/{company.logo_filename}"
+    file_path = str(LOGOS_DIR / company.logo_filename)
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -638,7 +639,7 @@ async def delete_company_logo(
         )
 
     # Remove file from disk
-    file_path = f"/app/uploads/logos/{company.logo_filename}"
+    file_path = str(LOGOS_DIR / company.logo_filename)
     if os.path.exists(file_path):
         os.remove(file_path)
 

@@ -16,6 +16,7 @@ from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, SupplierInvoice
 from app.models.verification import TransactionLine, Verification
 from app.services.pdf_service import format_sek
+from app.services.storage import LOGOS_DIR
 
 # BAS 2024 account groupings for balance sheet
 ASSET_GROUPS = [
@@ -73,7 +74,7 @@ def _load_company_logo(company: Company) -> str | None:
     """Load company logo as base64 data URI."""
     if not company.logo_filename:
         return None
-    logo_path = f"/app/uploads/logos/{company.logo_filename}"
+    logo_path = str(LOGOS_DIR / company.logo_filename)
     if not os.path.exists(logo_path):
         return None
     import base64

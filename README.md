@@ -14,7 +14,8 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 - SIE4 import/export for integration with other accounting software
 - AI bookkeeping assistant powered by Ollama (local LLM)
 - Multi-user authentication with role-based access
-- Backup and restore with calendar-based GUI and CLI support
+- Backup and restore as a portable JSON + files archive (all data, all documents, SIE4 per year), with GUI, scheduler and CLI
+- Per-company export/import archives for moving a company between installations
 - PostgreSQL with automatic backups
 
 ## Tech Stack

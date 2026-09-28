@@ -113,8 +113,8 @@ export default function RestoreModal({ isOpen, onClose, backups }: RestoreModalP
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      if (!file.name.endsWith('.tar.gz')) {
-        setError('Filen måste vara en .tar.gz-fil')
+      if (!file.name.endsWith('.zip') && !file.name.endsWith('.tar.gz')) {
+        setError('Filen måste vara en .zip- eller .tar.gz-fil')
         return
       }
       setUploadedFile(file)
@@ -258,7 +258,7 @@ export default function RestoreModal({ isOpen, onClose, backups }: RestoreModalP
                   <Upload className="w-8 h-8 text-blue-600 mb-3" />
                   <h4 className="font-medium text-gray-900 mb-1">Ladda upp fil</h4>
                   <p className="text-sm text-gray-600">
-                    Ladda upp en backup-fil (.tar.gz)
+                    Ladda upp en backup-fil (.zip eller äldre .tar.gz)
                   </p>
                 </button>
               </div>
@@ -467,7 +467,7 @@ export default function RestoreModal({ isOpen, onClose, backups }: RestoreModalP
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".tar.gz"
+                  accept=".zip,.tar.gz"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -484,7 +484,7 @@ export default function RestoreModal({ isOpen, onClose, backups }: RestoreModalP
                   <div>
                     <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                     <p className="text-gray-600">Klicka för att välja en fil</p>
-                    <p className="text-sm text-gray-500 mt-1">Endast .tar.gz-filer</p>
+                    <p className="text-sm text-gray-500 mt-1">.zip (JSON + filer) eller äldre .tar.gz</p>
                   </div>
                 )}
               </div>

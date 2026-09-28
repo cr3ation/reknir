@@ -1,16 +1,19 @@
 """Restore service for full system restore from backup archives.
 
-Restore flow (all-or-nothing):
-1. Extract archive to temp directory
-2. Read and validate manifest
-3. Check version compatibility
-4. Create temporary database
-5. Restore pg_dump to temp database
-6. Restore files to temp directory
-7. Run Alembic migrations if needed
-8. Run bookkeeping validations
-9. Atomic swap (database rename + file directory swap)
-10. Log the restore event
+Two archive kinds are supported:
+
+- ``reknir_backup_*.zip``: the portable JSON + files archive (current format).
+  Rows are loaded through the ORM into a fresh, fully migrated temporary
+  database; files are unpacked into a temporary uploads tree.
+- ``reknir_backup_*.tar.gz``: legacy pg_dump + attachments.
+
+Both follow the same all-or-nothing flow:
+
+1. Extract / verify the archive
+2. Build the new state in a temporary database and a temporary files directory
+3. Run bookkeeping validations against it
+4. Atomic swap (database rename + upload sub-directory swap)
+5. Log the restore event
 
 If any step fails, production remains untouched.
 """
@@ -31,7 +34,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.schema_version import CURRENT_SCHEMA_VERSION
-from app.services.attachment_service import ATTACHMENTS_DIR
+from app.services import archive_import_service
+from app.services.storage import ATTACHMENTS_DIR, STORAGE_SUBDIRS, UPLOADS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,7 @@ class RestoreResult:
         self.backup_filename: str = ""
         self.message: str = ""
         self.stages_completed: list[str] = []
+        self.warnings: list[str] = []
         self.started_at: datetime = datetime.now(UTC)
         self.completed_at: datetime | None = None
 
@@ -70,7 +75,7 @@ def _parse_database_url(url: str) -> dict:
 
 def _build_database_url(db_info: dict, dbname: str) -> str:
     """Build a PostgreSQL connection URL from components."""
-    return f"postgresql://{db_info['user']}:{db_info['password']}" f"@{db_info['host']}:{db_info['port']}/{dbname}"
+    return f"postgresql://{db_info['user']}:{db_info['password']}@{db_info['host']}:{db_info['port']}/{dbname}"
 
 
 def _run_pg_command(cmd: list[str], password: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -79,26 +84,220 @@ def _run_pg_command(cmd: list[str], password: str, timeout: int = 120) -> subpro
     return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout)
 
 
+# ---------------------------------------------------------------------------
+# public entry point
+# ---------------------------------------------------------------------------
+
+
 def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult:
-    """Full restore flow: extract, validate, restore to temp, validate data, atomic swap.
+    """Full restore from a backup archive of either format.
 
     Args:
-        archive_path: Path to the .tar.gz backup archive.
+        archive_path: Path to the backup archive (.zip or .tar.gz).
         performed_by: Email/identifier of the admin performing restore.
 
-    Returns:
-        RestoreResult with success status and details.
-
     Raises:
-        RestoreError: If any stage of the restore fails.
+        RestoreError: If any stage of the restore fails. Production is untouched.
     """
+    if archive_path.suffix == ".zip":
+        return _restore_json_archive(archive_path, performed_by)
+    return _restore_sql_archive(archive_path, performed_by)
+
+
+# ---------------------------------------------------------------------------
+# shared machinery
+# ---------------------------------------------------------------------------
+
+
+class _Names:
+    def __init__(self):
+        self.db_info = _parse_database_url(settings.database_url)
+        self.prod = self.db_info["dbname"]
+        self.temp = f"{self.prod}_restore_temp"
+        self.old = f"{self.prod}_pre_restore"
+        self.maintenance_url = _build_database_url(self.db_info, "postgres")
+        self.temp_url = _build_database_url(self.db_info, self.temp)
+
+
+def _create_temp_database(names: _Names) -> None:
+    engine = create_engine(names.maintenance_url, isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        conn.execute(text(f"DROP DATABASE IF EXISTS {names.temp}"))
+        conn.execute(text(f"CREATE DATABASE {names.temp}"))
+    engine.dispose()
+
+
+def _drop_temp_database(names: _Names) -> None:
+    try:
+        engine = create_engine(names.maintenance_url, isolation_level="AUTOCOMMIT")
+        with engine.connect() as conn:
+            conn.execute(text(f"DROP DATABASE IF EXISTS {names.temp}"))
+        engine.dispose()
+    except Exception:
+        pass
+
+
+def _new_uploads_tree() -> Path:
+    temp = Path(tempfile.mkdtemp(prefix="reknir_files_restore_"))
+    for sub in STORAGE_SUBDIRS:
+        (temp / sub).mkdir()
+    return temp
+
+
+def _swap(names: _Names, temp_files_dir: Path, subdirs: tuple[str, ...]) -> None:
+    """Atomic-ish swap: rename databases, then move upload sub-directories into place.
+
+    Only the sub-directories in ``subdirs`` are replaced; the previous contents are
+    kept next to them as ``<name>_pre_restore`` until the next restore.
+    """
+    engine = create_engine(names.maintenance_url, isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                f"WHERE datname = '{names.prod}' AND pid <> pg_backend_pid()"
+            )
+        )
+        conn.execute(text(f"DROP DATABASE IF EXISTS {names.old}"))
+        conn.execute(text(f"ALTER DATABASE {names.prod} RENAME TO {names.old}"))
+        conn.execute(text(f"ALTER DATABASE {names.temp} RENAME TO {names.prod}"))
+    engine.dispose()
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    for sub in subdirs:
+        live = UPLOADS_DIR / sub
+        previous = UPLOADS_DIR / f"{sub}_pre_restore"
+        incoming = temp_files_dir / sub
+        if previous.exists():
+            shutil.rmtree(previous)
+        if live.exists():
+            shutil.move(str(live), str(previous))
+        shutil.move(str(incoming), str(live))
+
+    # Every pooled connection was just terminated as part of the swap;
+    # drop the pool so later requests get fresh connections immediately.
+    from app.database import engine as app_engine
+
+    app_engine.dispose()
+
+
+def _finish(result: RestoreResult, manifest: dict, performed_by: str) -> RestoreResult:
+    _log_restore_event(
+        backup_filename=result.backup_filename,
+        performed_by=performed_by,
+        success=True,
+        message="Restore completed successfully",
+        manifest=manifest,
+    )
+    result.success = True
+    result.message = "Restore completed successfully"
+    result.completed_at = datetime.now(UTC)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# JSON + files archive
+# ---------------------------------------------------------------------------
+
+
+def _restore_json_archive(archive_path: Path, performed_by: str) -> RestoreResult:
     result = RestoreResult()
-    db_info = _parse_database_url(settings.database_url)
-    prod_dbname = db_info["dbname"]
-    temp_dbname = f"{prod_dbname}_restore_temp"
-    old_dbname = f"{prod_dbname}_pre_restore"
-    temp_files_dir = None
+    result.backup_filename = archive_path.name
+    names = _Names()
+    temp_files_dir: Path | None = None
+    swapped = False
+
+    try:
+        # ---- Stage 1: Verify archive (integrity, format, schema, internal references) ----
+        try:
+            archive = archive_import_service.verify_archive(archive_path)
+        except archive_import_service.ArchiveError as e:
+            raise RestoreError(str(e), "verify") from e
+        result.stages_completed.append("verify")
+
+        # ---- Stage 2: Scope + version checks ----
+        manifest = archive.manifest
+        if manifest.scope != "instance":
+            raise RestoreError(
+                "This is a single-company archive. Use 'import company' instead of a full restore.",
+                "version_check",
+            )
+        if not manifest.includes_credentials:
+            result.warnings.append("Archive has no user credentials; every user must reset their password.")
+        result.stages_completed.append("version_check")
+
+        # ---- Stage 3: Fresh temporary database at the current schema ----
+        _create_temp_database(names)
+        result.stages_completed.append("create_temp_db")
+        _run_alembic_upgrade(names.temp_url)
+        result.stages_completed.append("migrations")
+
+        # ---- Stage 4: Load rows and files ----
+        temp_files_dir = _new_uploads_tree()
+        engine = create_engine(names.temp_url)
+        session = sessionmaker(bind=engine)()
+        try:
+            # A migrated database already carries the seed rows for ai_settings and
+            # backup_schedule; the archive's values are applied on top of them.
+            report = archive_import_service.load_archive(
+                session, archive, uploads_target=temp_files_dir, import_users=True
+            )
+            session.commit()
+            archive_import_service.cross_check_sie(session, archive, report)
+            result.warnings.extend(report.warnings)
+        except archive_import_service.ArchiveError as e:
+            session.rollback()
+            raise RestoreError(str(e), "load") from e
+        finally:
+            session.close()
+            engine.dispose()
+        result.stages_completed.append("load")
+
+        # ---- Stage 5: Bookkeeping validations against the temporary database ----
+        validation_errors = _run_validations(names.temp_url, temp_files_dir / "attachments")
+        if validation_errors:
+            raise RestoreError(f"Validation failed: {'; '.join(validation_errors)}", "validation")
+        result.stages_completed.append("validation")
+
+        # ---- Stage 6: Atomic swap ----
+        _swap(names, temp_files_dir, STORAGE_SUBDIRS)
+        swapped = True
+        temp_files_dir = None
+        result.stages_completed.append("swap")
+
+        return _finish(
+            result,
+            {
+                "app_version": manifest.app_version,
+                "schema_version": manifest.schema_version,
+                "created_at": manifest.created_at.isoformat(),
+            },
+            performed_by,
+        )
+
+    except RestoreError:
+        raise
+    except Exception as e:
+        raise RestoreError(str(e), "unknown") from e
+    finally:
+        if temp_files_dir and temp_files_dir.exists():
+            shutil.rmtree(temp_files_dir, ignore_errors=True)
+        if not swapped:
+            _drop_temp_database(names)
+
+
+# ---------------------------------------------------------------------------
+# legacy pg_dump archive
+# ---------------------------------------------------------------------------
+
+
+def _restore_sql_archive(archive_path: Path, performed_by: str) -> RestoreResult:
+    result = RestoreResult()
+    names = _Names()
+    db_info = names.db_info
+    temp_files_dir: Path | None = None
     temp_extract_dir = None
+    swapped = False
 
     try:
         # ---- Stage 1: Extract archive ----
@@ -144,14 +343,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
         result.stages_completed.append("version_check")
 
         # ---- Stage 4: Create temporary database ----
-        maintenance_url = _build_database_url(db_info, "postgres")
-        maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
-
-        with maint_engine.connect() as conn:
-            conn.execute(text(f"DROP DATABASE IF EXISTS {temp_dbname}"))
-            conn.execute(text(f"CREATE DATABASE {temp_dbname}"))
-
-        maint_engine.dispose()
+        _create_temp_database(names)
         result.stages_completed.append("create_temp_db")
 
         # ---- Stage 5: Restore pg_dump to temp database ----
@@ -169,7 +361,7 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
                 "-U",
                 db_info["user"],
                 "-d",
-                temp_dbname,
+                names.temp,
                 "--no-owner",
                 "--no-acl",
                 str(dump_path),
@@ -193,13 +385,13 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
         result.stages_completed.append("restore_db")
 
-        # ---- Stage 6: Restore files to temp directory ----
+        # ---- Stage 6: Restore files to temp directory (legacy archives only hold attachments) ----
         files_source = backup_dir / "files"
-        temp_files_dir = tempfile.mkdtemp(prefix="reknir_files_restore_")
+        temp_files_dir = _new_uploads_tree()
 
         if files_source.exists():
             for item in files_source.iterdir():
-                dest = Path(temp_files_dir) / item.name
+                dest = temp_files_dir / "attachments" / item.name
                 if item.is_file():
                     shutil.copy2(item, dest)
                 elif item.is_dir():
@@ -211,14 +403,12 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
         # Always run alembic upgrade to ensure the restored database has all
         # current migrations applied. Alembic reads alembic_version from the
         # restored DB and only runs what's missing — a no-op if already at head.
-        temp_db_url = _build_database_url(db_info, temp_dbname)
-        _run_alembic_upgrade(temp_db_url)
+        _run_alembic_upgrade(names.temp_url)
 
         result.stages_completed.append("migrations")
 
         # ---- Stage 8: Run bookkeeping validations ----
-        temp_db_url = _build_database_url(db_info, temp_dbname)
-        validation_errors = _run_validations(temp_db_url, Path(temp_files_dir))
+        validation_errors = _run_validations(names.temp_url, temp_files_dir / "attachments")
 
         if validation_errors:
             raise RestoreError(
@@ -228,59 +418,13 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
 
         result.stages_completed.append("validation")
 
-        # ---- Stage 9: Atomic swap ----
-        # 9a: Terminate all connections to production DB
-        maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
-
-        with maint_engine.connect() as conn:
-            conn.execute(
-                text(
-                    f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                    f"WHERE datname = '{prod_dbname}' AND pid <> pg_backend_pid()"
-                )
-            )
-
-            # 9b: Rename production -> old, temp -> production
-            conn.execute(text(f"DROP DATABASE IF EXISTS {old_dbname}"))
-            conn.execute(text(f"ALTER DATABASE {prod_dbname} RENAME TO {old_dbname}"))
-            conn.execute(text(f"ALTER DATABASE {temp_dbname} RENAME TO {prod_dbname}"))
-
-        maint_engine.dispose()
-
-        # 9c: Swap file directories
-        old_attachments = ATTACHMENTS_DIR.parent / "attachments_pre_restore"
-
-        if old_attachments.exists():
-            shutil.rmtree(old_attachments)
-
-        if ATTACHMENTS_DIR.exists():
-            shutil.move(str(ATTACHMENTS_DIR), str(old_attachments))
-
-        shutil.move(temp_files_dir, str(ATTACHMENTS_DIR))
-        temp_files_dir = None  # Prevent cleanup since it's now in place
-
+        # ---- Stage 9: Atomic swap (attachments only: legacy archives carry nothing else) ----
+        _swap(names, temp_files_dir, ("attachments",))
+        swapped = True
         result.stages_completed.append("swap")
 
-        # Every pooled connection was just terminated as part of the swap;
-        # drop the pool so later requests get fresh connections immediately.
-        from app.database import engine as app_engine
-
-        app_engine.dispose()
-
         # ---- Stage 10: Log restore event ----
-        _log_restore_event(
-            backup_filename=result.backup_filename,
-            performed_by=performed_by,
-            success=True,
-            message="Restore completed successfully",
-            manifest=manifest,
-        )
-
-        result.success = True
-        result.message = "Restore completed successfully"
-        result.completed_at = datetime.now(UTC)
-
-        return result
+        return _finish(result, manifest, performed_by)
 
     except RestoreError:
         raise
@@ -290,18 +434,10 @@ def restore_from_archive(archive_path: Path, performed_by: str) -> RestoreResult
         # Cleanup temp resources on failure
         if temp_extract_dir and Path(temp_extract_dir).exists():
             shutil.rmtree(temp_extract_dir, ignore_errors=True)
-        if temp_files_dir and Path(temp_files_dir).exists():
+        if temp_files_dir and temp_files_dir.exists():
             shutil.rmtree(temp_files_dir, ignore_errors=True)
-
-        # Drop temp DB if it still exists (means swap didn't happen)
-        try:
-            maintenance_url = _build_database_url(db_info, "postgres")
-            cleanup_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
-            with cleanup_engine.connect() as conn:
-                conn.execute(text(f"DROP DATABASE IF EXISTS {temp_dbname}"))
-            cleanup_engine.dispose()
-        except Exception:
-            pass
+        if not swapped:
+            _drop_temp_database(names)
 
 
 def _run_alembic_upgrade(database_url: str) -> None:
@@ -320,6 +456,10 @@ def _run_alembic_upgrade(database_url: str) -> None:
 
 def _run_validations(database_url: str, files_dir: Path) -> list[str]:
     """Run bookkeeping validations against the restored database.
+
+    Args:
+        database_url: The (temporary) database to check.
+        files_dir: The attachments directory the database's rows must match.
 
     Returns:
         List of error messages. Empty list means all validations passed.
@@ -370,7 +510,7 @@ def _run_validations(database_url: str, files_dir: Path) -> list[str]:
                 missing_files.append(att[1])
 
         if missing_files:
-            errors.append(f"{len(missing_files)} attachment file(s) missing from backup: " f"{missing_files[:5]}")
+            errors.append(f"{len(missing_files)} attachment file(s) missing from backup: {missing_files[:5]}")
 
         # Validation 4: Referential integrity - transaction_lines -> accounts
         orphan_lines = session.execute(
@@ -456,3 +596,7 @@ def _log_restore_event(
         log_engine.dispose()
     except Exception as e:
         logger.warning(f"Could not persist restore log to database: {e}")
+
+
+# Re-exported for callers that only need the attachments location.
+__all__ = ["RestoreError", "RestoreResult", "restore_from_archive", "ATTACHMENTS_DIR"]

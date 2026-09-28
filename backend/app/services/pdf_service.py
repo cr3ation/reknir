@@ -9,6 +9,7 @@ from weasyprint import HTML
 from app.models.company import Company
 from app.models.customer import Customer
 from app.models.invoice import Invoice
+from app.services.storage import LOGOS_DIR
 
 
 def format_sek(value: float | Decimal | int, decimals: int = 2) -> str:
@@ -74,7 +75,7 @@ def generate_invoice_pdf(invoice: Invoice, customer: Customer, company: Company)
         # Check for company logo
         logo_data = None
         if company.logo_filename:
-            logo_path = f"/app/uploads/logos/{company.logo_filename}"
+            logo_path = str(LOGOS_DIR / company.logo_filename)
             if os.path.exists(logo_path):
                 import base64
 

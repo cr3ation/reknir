@@ -697,6 +697,17 @@ export interface BackupInfo {
   schema_version: string
   filename: string
   size_bytes: number
+  format?: 'json' | 'sql'
+  scope?: string | null
+  companies?: string[]
+  counts?: Record<string, number>
+  warnings?: string[]
+}
+
+export interface CompanyImportResponse {
+  company_ids: number[]
+  created: Record<string, number>
+  warnings: string[]
 }
 
 export interface RestoreResponse {
@@ -704,6 +715,7 @@ export interface RestoreResponse {
   backup_filename: string
   message: string
   stages_completed: string[]
+  warnings?: string[]
 }
 
 export interface BackupScheduleResponse {

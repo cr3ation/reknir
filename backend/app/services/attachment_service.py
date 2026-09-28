@@ -4,9 +4,9 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 
-# Storage configuration
-ATTACHMENTS_DIR = Path("/app/uploads/attachments")
-ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+from app.services.storage import ATTACHMENTS_DIR
+
+# Storage configuration: see app.services.storage
 
 # Allowed MIME types
 ALLOWED_MIME_TYPES = {

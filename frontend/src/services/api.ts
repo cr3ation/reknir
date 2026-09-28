@@ -41,6 +41,7 @@ import type {
   ChatSession,
   ChatSessionDetail,
   AIUpload,
+  CompanyImportResponse,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -402,6 +403,17 @@ export const backupApi = {
     const formData = new FormData()
     formData.append('file', file)
     return api.post<RestoreResponse>('/backup/restore', formData, {
+      timeout: BACKUP_TIMEOUT,
+    })
+  },
+
+  exportCompany: (companyId: number) =>
+    api.get(`/backup/export-company/${companyId}`, { responseType: 'blob', timeout: BACKUP_TIMEOUT }),
+
+  importCompany: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<CompanyImportResponse>('/backup/import-company', formData, {
       timeout: BACKUP_TIMEOUT,
     })
   },

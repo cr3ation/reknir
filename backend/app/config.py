@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Backup
     backup_dir: str = "/backups"
 
+    # File storage (attachments, logos, AI uploads)
+    uploads_dir: str = "/app/uploads"
+
     # Authentication
     secret_key: str = "your-secret-key-change-in-production-use-openssl-rand-hex-32"
     algorithm: str = "HS256"

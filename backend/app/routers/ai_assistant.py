@@ -28,10 +28,10 @@ from app.schemas.ai_assistant import (
 )
 from app.schemas.attachment import AttachmentResponse
 from app.services import ai_chat_service, ollama_service
+from app.services.storage import AI_UPLOADS_DIR
 
 router = APIRouter()
 
-AI_UPLOADS_DIR = Path("/app/uploads/ai_uploads")
 ALLOWED_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/gif"}
 MAX_FILE_SIZE = 30 * 1024 * 1024  # 30 MB
 
