@@ -512,6 +512,9 @@ def export_archive(
                     is_admin=u.is_admin,
                     is_active=u.is_active,
                     hashed_password=u.hashed_password if include_credentials else None,
+                    is_service_account=bool(getattr(u, "is_service_account", False)),
+                    owner_email=user_emails.get(getattr(u, "owner_id", None)),
+                    api_key_hash=(getattr(u, "api_key_hash", None) if include_credentials else None),
                     created_at=u.created_at,
                     updated_at=u.updated_at,
                 )

@@ -434,21 +434,36 @@ def load_archive(
 
     # ---- users & instance settings ----
     if import_users and archive.manifest.scope == "instance":
-        for row in archive.users:
+        # Owners first, so a service account can be created with its owner_id set
+        # in the same INSERT (a later UPDATE would bump updated_at via onupdate).
+        for row in sorted(archive.users, key=lambda r: r.owner_email is not None):
             if row.email in users_by_email:
                 report.warnings.append(f"user {row.email} already exists, kept existing")
                 continue
+            owner_id = None
+            if row.owner_email:
+                owner = users_by_email.get(row.owner_email)
+                if owner is None:
+                    report.warnings.append(f"service account {row.email}: owner {row.owner_email} not found")
+                else:
+                    db.flush()
+                    owner_id = owner.id
             user = User(
                 email=row.email,
                 full_name=row.full_name,
                 is_admin=row.is_admin,
                 is_active=row.is_active,
                 hashed_password=row.hashed_password or _unusable_password(),
+                is_service_account=row.is_service_account,
+                owner_id=owner_id,
+                api_key_hash=row.api_key_hash,
                 created_at=_naive(row.created_at),
                 updated_at=_naive(row.updated_at),
             )
-            if row.hashed_password is None:
+            if row.hashed_password is None and not row.is_service_account:
                 report.warnings.append(f"user {row.email}: archive has no credentials, password must be reset")
+            if row.is_service_account and row.api_key_hash is None:
+                report.warnings.append(f"service account {row.email}: archive has no API key, rotate it after restore")
             db.add(user)
             users_by_email[row.email] = user
             report.bump("users")

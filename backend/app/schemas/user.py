@@ -33,6 +33,7 @@ class UserResponse(UserBase):
     id: int
     is_admin: bool
     is_active: bool
+    is_service_account: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -100,3 +101,45 @@ class CompanyAccessRequest(BaseModel):
     """Request to grant/modify company access"""
 
     role: str = Field(default="accountant", description="User role in this company")
+
+
+# ==================== Service Account Schemas ====================
+
+
+class ServiceAccountCreate(BaseModel):
+    """Schema for creating a service account"""
+
+    full_name: str = Field(..., min_length=1, max_length=200, description="Descriptive name, e.g. 'MCP Bot'")
+
+
+class ServiceAccountResponse(BaseModel):
+    """Schema for service account response"""
+
+    id: int
+    full_name: str
+    email: str
+    is_admin: bool
+    is_active: bool
+    is_service_account: bool
+    owner_id: int | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ServiceAccountCreated(ServiceAccountResponse):
+    """Returned only at creation time - includes the plaintext API key"""
+
+    api_key: str = Field(..., description="Store this securely - it cannot be retrieved again.")
+
+
+class ApiKeyExchangeRequest(BaseModel):
+    """Schema for exchanging an API key for a JWT"""
+
+    api_key: str = Field(..., min_length=32)
+
+
+class ApiKeyRotateResponse(BaseModel):
+    """Returned when rotating an API key"""
+
+    api_key: str = Field(..., description="The new API key. Store it securely.")

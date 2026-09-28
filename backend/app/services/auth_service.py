@@ -2,6 +2,8 @@
 Authentication service for password hashing and JWT token management
 """
 
+import secrets
+import uuid
 from datetime import datetime, timedelta
 
 from jose import JWTError, jwt
@@ -149,3 +151,69 @@ def create_user(db: Session, email: str, password: str, full_name: str, is_admin
     db.refresh(user)
 
     return user
+
+
+# ==================== Service Account Functions ====================
+
+
+def generate_api_key() -> str:
+    """Generate a prefixed API key using cryptographically secure random bytes"""
+    return f"rknr_{secrets.token_hex(32)}"
+
+
+def hash_api_key(api_key: str) -> str:
+    """Hash an API key using bcrypt"""
+    return pwd_context.hash(api_key)
+
+
+def create_service_account(db: Session, full_name: str, owner_id: int) -> tuple[User, str]:
+    """Create a service account with an API key.
+
+    Returns the User object and the plaintext API key (shown once).
+    """
+    api_key = generate_api_key()
+    short_id = uuid.uuid4().hex[:8]
+
+    user = User(
+        email=f"sa-{short_id}@service.reknir.local",
+        hashed_password=get_password_hash(secrets.token_hex(32)),
+        full_name=full_name,
+        is_admin=False,
+        is_active=True,
+        is_service_account=True,
+        owner_id=owner_id,
+        api_key_hash=hash_api_key(api_key),
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user, api_key
+
+
+def authenticate_by_api_key(db: Session, api_key: str) -> User | None:
+    """Authenticate a service account by API key.
+
+    Iterates active service accounts and verifies the key against each hash.
+    Fine for small number of service accounts.
+    """
+    service_accounts = (
+        db.query(User)
+        .filter(User.is_service_account.is_(True), User.is_active.is_(True), User.api_key_hash.isnot(None))
+        .all()
+    )
+
+    for sa in service_accounts:
+        if pwd_context.verify(api_key, sa.api_key_hash):
+            return sa
+
+    return None
+
+
+def rotate_api_key(db: Session, service_account: User) -> str:
+    """Generate a new API key for a service account. Returns the plaintext key."""
+    api_key = generate_api_key()
+    service_account.api_key_hash = hash_api_key(api_key)
+    db.commit()
+    return api_key

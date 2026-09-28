@@ -34,6 +34,9 @@ yarn-error.log*
 dist/
 .cache/
 
+# MCP config (contains API keys)
+.mcp.json
+
 # Environment variables
 .env
 .env.local
