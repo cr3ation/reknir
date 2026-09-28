@@ -240,7 +240,7 @@ async def list_users(admin: User = Depends(require_admin), db: Session = Depends
     Returns:
         List of all users
     """
-    users = db.query(User).filter(User.is_service_account == False).all()
+    users = db.query(User).filter(User.is_service_account.is_(False)).all()
     return users
 
 
@@ -407,7 +407,7 @@ async def create_service_account_endpoint(
 @router.get("/service-accounts", response_model=list[ServiceAccountResponse])
 async def list_service_accounts(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Admin: List all service accounts."""
-    return db.query(User).filter(User.is_service_account == True).all()
+    return db.query(User).filter(User.is_service_account.is_(True)).all()
 
 
 @router.delete("/service-accounts/{service_account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -415,7 +415,7 @@ async def deactivate_service_account(
     service_account_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)
 ):
     """Admin: Deactivate a service account."""
-    sa = db.query(User).filter(User.id == service_account_id, User.is_service_account == True).first()
+    sa = db.query(User).filter(User.id == service_account_id, User.is_service_account.is_(True)).first()
     if not sa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service account not found")
     sa.is_active = False
@@ -427,7 +427,7 @@ async def rotate_service_account_key(
     service_account_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)
 ):
     """Admin: Rotate the API key for a service account. Returns the new key once."""
-    sa = db.query(User).filter(User.id == service_account_id, User.is_service_account == True).first()
+    sa = db.query(User).filter(User.id == service_account_id, User.is_service_account.is_(True)).first()
     if not sa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service account not found")
     new_key = rotate_api_key(db, sa)

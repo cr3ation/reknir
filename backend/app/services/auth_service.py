@@ -200,7 +200,7 @@ def authenticate_by_api_key(db: Session, api_key: str) -> User | None:
     """
     service_accounts = (
         db.query(User)
-        .filter(User.is_service_account == True, User.is_active == True, User.api_key_hash.isnot(None))
+        .filter(User.is_service_account.is_(True), User.is_active.is_(True), User.api_key_hash.isnot(None))
         .all()
     )
 

@@ -310,6 +310,17 @@ def seeded(db_session, test_company_with_fiscal_year, test_customer, test_suppli
         )
     )
     db_session.add(BackupSchedule(id=1, enabled=True, interval_hours=24, max_backups=14))
+    db_session.add(
+        User(
+            email="mcp-bot@service.local",
+            full_name="MCP Bot",
+            is_admin=False,
+            hashed_password="!",
+            is_service_account=True,
+            owner_id=test_user.id,
+            api_key_hash="sha256:deadbeef",
+        )
+    )
     db_session.commit()
     return company, uploads
 
@@ -376,8 +387,10 @@ def test_export_verify_import_roundtrip(db_session, seeded, tmp_path):
     assert any(n.startswith(f"{base}/sie/") and n.endswith(".se") for n in names)
 
     archive = import_svc.verify_archive(first)
-    assert len(archive.users) == 1
+    assert len(archive.users) == 2
     assert archive.users[0].hashed_password
+    bot = next(u for u in archive.users if u.is_service_account)
+    assert bot.owner_email == "testuser@example.com" and bot.api_key_hash == "sha256:deadbeef"
     assert (
         archive.settings
         and archive.settings.ai_settings
@@ -397,7 +410,7 @@ def test_export_verify_import_roundtrip(db_session, seeded, tmp_path):
     assert report.warnings == []
     assert report.created["verifications"] == 2
     assert report.created["attachments"] == 2
-    assert report.created["users"] == 1
+    assert report.created["users"] == 2
     assert (uploads2 / "attachments" / "aaaa-receipt.pdf").read_bytes() == b"%PDF-1.4 fake receipt"
     assert (uploads2 / "logos" / "logo.png").exists()
     assert (uploads2 / "ai_uploads" / "cccc-scan.png").exists()
@@ -407,7 +420,12 @@ def test_export_verify_import_roundtrip(db_session, seeded, tmp_path):
 
     imported = target.query(Company).one()
     assert imported.org_number == company.org_number
-    assert target.query(User).one().hashed_password == archive.users[0].hashed_password
+    assert (
+        target.query(User).filter(User.email == "testuser@example.com").one().hashed_password
+        == archive.users[0].hashed_password
+    )
+    imported_bot = target.query(User).filter(User.is_service_account.is_(True)).one()
+    assert imported_bot.owner.email == "testuser@example.com" and imported_bot.api_key_hash == "sha256:deadbeef"
     assert target.query(BackupSchedule).one().max_backups == 14
     inv = target.query(Invoice).one()
     assert inv.invoice_verification.verification_number == 1

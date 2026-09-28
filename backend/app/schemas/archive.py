@@ -87,6 +87,9 @@ class UserRow(ArchiveModel):
     is_admin: bool
     is_active: bool
     hashed_password: str | None = None  # bcrypt; only with includes_credentials
+    is_service_account: bool = False
+    owner_email: str | None = None  # owning user of a service account
+    api_key_hash: str | None = None  # only with includes_credentials
     created_at: Timestamp
     updated_at: Timestamp
 
