@@ -1,5 +1,6 @@
 """Reknir MCP Server - Main server implementation"""
 import os
+import sys
 import asyncio
 from dotenv import load_dotenv
 from mcp.server import Server
@@ -11,9 +12,17 @@ from .tools.suppliers import get_supplier_tools, handle_supplier_tool
 from .tools.invoices import get_invoice_tools, handle_invoice_tool
 from .tools.accounts import get_account_tools, handle_account_tool
 from .tools.companies import get_company_tools, handle_company_tool
+from .tools.verifications import get_verification_tools, handle_verification_tool
+from .tools.reports import get_report_tools, handle_report_tool
 
 # Load environment variables
 load_dotenv()
+
+
+def log(msg: str):
+    """Log to stderr (stdout is used by MCP protocol)"""
+    print(msg, file=sys.stderr, flush=True)
+
 
 # Initialize server
 app = Server("reknir")
@@ -30,6 +39,8 @@ async def list_tools() -> list[Tool]:
     tools.extend(get_supplier_tools())
     tools.extend(get_invoice_tools())
     tools.extend(get_account_tools())
+    tools.extend(get_verification_tools())
+    tools.extend(get_report_tools())
     return tools
 
 
@@ -69,6 +80,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         ]:
             return await handle_account_tool(name, arguments, client)
 
+        elif name in [
+            "create_verification",
+            "list_verifications",
+            "get_verification",
+            "get_fiscal_year",
+        ]:
+            return await handle_verification_tool(name, arguments, client)
+
+        elif name in [
+            "get_account_balances",
+            "get_trial_balance",
+            "get_income_statement",
+            "get_balance_sheet",
+        ]:
+            return await handle_report_tool(name, arguments, client)
+
         else:
             return [
                 TextContent(
@@ -79,11 +106,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     except Exception as e:
         error_msg = f"Error calling tool '{name}': {str(e)}"
-        print(f"[ERROR] {error_msg}")
+        log(f"[ERROR] {error_msg}")
         return [
             TextContent(
                 type="text",
-                text=f"❌ {error_msg}",
+                text=error_msg,
             )
         ]
 
@@ -96,17 +123,17 @@ async def serve():
     api_url = os.getenv("REKNIR_API_URL", "http://localhost:8000")
     company_id = int(os.getenv("REKNIR_COMPANY_ID", "1"))
 
-    print(f"[INFO] Initializing Reknir MCP Server")
-    print(f"[INFO] API URL: {api_url}")
-    print(f"[INFO] Default Company ID: {company_id}")
+    log(f"[INFO] Initializing Reknir MCP Server")
+    log(f"[INFO] API URL: {api_url}")
+    log(f"[INFO] Default Company ID: {company_id}")
 
     client = ReknirClient(base_url=api_url, company_id=company_id)
 
     try:
         # Test connection
         company = await client.get_company()
-        print(f"[INFO] Connected to Reknir: {company['name']}")
-        print(f"[INFO] Server ready!")
+        log(f"[INFO] Connected to Reknir: {company['name']}")
+        log(f"[INFO] Server ready!")
 
         # Run the server
         async with stdio_server() as (read_stream, write_stream):
@@ -115,7 +142,7 @@ async def serve():
     finally:
         if client:
             await client.close()
-            print("[INFO] Reknir client closed")
+            log("[INFO] Reknir client closed")
 
 
 def main():
@@ -123,9 +150,9 @@ def main():
     try:
         asyncio.run(serve())
     except KeyboardInterrupt:
-        print("\n[INFO] Server stopped by user")
+        log("\n[INFO] Server stopped by user")
     except Exception as e:
-        print(f"[ERROR] Server error: {e}")
+        log(f"[ERROR] Server error: {e}")
         raise
 
 

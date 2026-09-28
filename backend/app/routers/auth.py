@@ -14,8 +14,28 @@ from app.dependencies import get_current_active_user, get_user_company_ids, requ
 from app.models.company import Company
 from app.models.user import CompanyUser, User
 from app.schemas.company import CompanyResponse
-from app.schemas.user import CompanyAccessRequest, CompanyUserResponse, Token, UserCreate, UserResponse, UserUpdate
-from app.services.auth_service import authenticate_user, create_access_token, create_user, get_password_hash
+from app.schemas.user import (
+    ApiKeyExchangeRequest,
+    ApiKeyRotateResponse,
+    CompanyAccessRequest,
+    CompanyUserResponse,
+    ServiceAccountCreate,
+    ServiceAccountCreated,
+    ServiceAccountResponse,
+    Token,
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+)
+from app.services.auth_service import (
+    authenticate_by_api_key,
+    authenticate_user,
+    create_access_token,
+    create_service_account,
+    create_user,
+    get_password_hash,
+    rotate_api_key,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
@@ -47,12 +67,43 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User account is inactive")
 
+    if user.is_service_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Service accounts cannot use password login. Use /api/auth/token/api-key instead.",
+        )
+
     # Create access token
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email, "is_admin": user.is_admin}, expires_delta=access_token_expires
     )
 
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/token/api-key", response_model=Token)
+def exchange_api_key(request: ApiKeyExchangeRequest, db: Session = Depends(get_db)):
+    """Exchange an API key for a JWT token. Used by service accounts."""
+    user = authenticate_by_api_key(db, request.api_key)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Service account is inactive")
+
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "email": user.email,
+            "is_admin": user.is_admin,
+            "is_service_account": True,
+        },
+        expires_delta=timedelta(hours=1),
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -189,7 +240,7 @@ async def list_users(admin: User = Depends(require_admin), db: Session = Depends
     Returns:
         List of all users
     """
-    users = db.query(User).all()
+    users = db.query(User).filter(User.is_service_account == False).all()
     return users
 
 
@@ -329,3 +380,55 @@ async def get_user_companies(user_id: int, admin: User = Depends(require_admin),
     company_ids = get_user_company_ids(user, db)
     companies = db.query(Company).filter(Company.id.in_(company_ids)).all()
     return companies
+
+
+# ==================== Service Account Endpoints ====================
+
+
+@router.post("/service-accounts", response_model=ServiceAccountCreated, status_code=status.HTTP_201_CREATED)
+async def create_service_account_endpoint(
+    data: ServiceAccountCreate, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """Admin: Create a service account. The API key is returned once — store it securely."""
+    user, api_key = create_service_account(db, full_name=data.full_name, owner_id=admin.id)
+    return ServiceAccountCreated(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        is_admin=user.is_admin,
+        is_active=user.is_active,
+        is_service_account=user.is_service_account,
+        owner_id=user.owner_id,
+        created_at=user.created_at,
+        api_key=api_key,
+    )
+
+
+@router.get("/service-accounts", response_model=list[ServiceAccountResponse])
+async def list_service_accounts(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Admin: List all service accounts."""
+    return db.query(User).filter(User.is_service_account == True).all()
+
+
+@router.delete("/service-accounts/{service_account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deactivate_service_account(
+    service_account_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """Admin: Deactivate a service account."""
+    sa = db.query(User).filter(User.id == service_account_id, User.is_service_account == True).first()
+    if not sa:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service account not found")
+    sa.is_active = False
+    db.commit()
+
+
+@router.post("/service-accounts/{service_account_id}/rotate-key", response_model=ApiKeyRotateResponse)
+async def rotate_service_account_key(
+    service_account_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """Admin: Rotate the API key for a service account. Returns the new key once."""
+    sa = db.query(User).filter(User.id == service_account_id, User.is_service_account == True).first()
+    if not sa:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service account not found")
+    new_key = rotate_api_key(db, sa)
+    return {"api_key": new_key}

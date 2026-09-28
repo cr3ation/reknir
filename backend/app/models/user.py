@@ -23,6 +23,11 @@ class User(Base):
     is_admin = Column(Boolean, default=False, nullable=False)  # Super admin - access to all companies
     is_active = Column(Boolean, default=True, nullable=False)  # Account active/suspended
 
+    # Service account fields
+    is_service_account = Column(Boolean, default=False, nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    api_key_hash = Column(String(255), nullable=True, unique=True)
+
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -31,9 +36,10 @@ class User(Base):
     company_access = relationship(
         "CompanyUser", back_populates="user", foreign_keys="CompanyUser.user_id", cascade="all, delete-orphan"
     )
+    owner = relationship("User", remote_side=[id], foreign_keys=[owner_id])
 
     def __repr__(self):
-        return f"<User {self.email} (admin={self.is_admin})>"
+        return f"<User {self.email} (admin={self.is_admin}, service_account={self.is_service_account})>"
 
 
 class CompanyUser(Base):

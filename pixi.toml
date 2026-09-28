@@ -30,6 +30,7 @@ docker-seed-all = { cmd = "docker exec reknir-backend mkdir -p /app/database/see
 
 [dependencies]
 python = ">=3.11"
+pypdf2 = ">=3.0.1,<4"
 
 [pypi-dependencies]
 sqlalchemy = ">=2.0.25"
