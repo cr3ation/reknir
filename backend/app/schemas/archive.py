@@ -170,6 +170,7 @@ class AccountRow(ArchiveModel):
     current_balance: Money
     active: bool
     is_bas_account: bool | None = None
+    sru_code: str | None = None
 
 
 class TransactionLineRow(ArchiveModel):

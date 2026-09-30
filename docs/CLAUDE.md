@@ -345,7 +345,7 @@ Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förut
 - Restore från server eller uppladdad fil (.zip, eller äldre .tar.gz med pg_dump)
 - Radering av backuper
 - Företagsarkiv: export/import av ett enskilt företag (utan användare/lösenord) som nytt företag
-- CLI: `backup [--sql] [--no-ai]`, `list-backups`, `verify-backup`, `restore`, `export-company`, `import-company`
+- CLI: `backup [--sql] [--no-ai]`, `list-backups`, `verify-backup`, `restore`, `export-company`, `import-company`, `bokio-import` (`docs/BOKIO_IMPORT.md`, `app/services/bokio_import_service.py`)
 - Metadata per backup: appversion, schemaversion, format, företag, antal poster, storlek, tidpunkt
 - Filer lagras under `settings.uploads_dir` (`/app/uploads`): `attachments/`, `logos/`, `ai_uploads/` (`app/services/storage.py`)
 

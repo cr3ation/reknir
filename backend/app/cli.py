@@ -285,6 +285,8 @@ def main():
         print("  restore <path>              - Restore the whole system from a backup archive")
         print("  export-company <id> [path]  - Export one company as a portable archive")
         print("  import-company <path>       - Import a company archive as a new company")
+        print("  bokio-import <dir> [out.zip] [--close-through YEAR] [--user EMAIL]")
+        print("                              - Turn a Bokio 'Exportera data' folder into a company archive")
         print("\nExamples:")
         print("  python -m app.cli seed-bas")
         print("  python -m app.cli seed-templates")
@@ -394,6 +396,42 @@ def main():
         print(f"Contents: {manifest.counts}")
         for warning in manifest.warnings:
             print(f"WARNING: {warning}")
+
+    elif command == "bokio-import":
+        args = [a for a in sys.argv[2:] if not a.startswith("--")]
+        if not args:
+            print(
+                "Usage: python -m app.cli bokio-import <export-dir> [output.zip] [--close-through YEAR] [--user EMAIL]"
+            )
+            sys.exit(1)
+        from app.services import archive_import_service, bokio_import_service
+
+        export_dir = Path(args[0])
+        out_path = Path(args[1]) if len(args) > 1 else export_dir / "reknir_company_from_bokio.zip"
+        close_through = None
+        user_email = None
+        for i, a in enumerate(sys.argv):
+            if a == "--close-through" and i + 1 < len(sys.argv):
+                close_through = int(sys.argv[i + 1])
+            if a == "--user" and i + 1 < len(sys.argv):
+                user_email = sys.argv[i + 1]
+        try:
+            report = bokio_import_service.build_archive(
+                export_dir, out_path, close_through=close_through, created_by_email=user_email
+            )
+            archive_import_service.verify_archive(out_path)
+        except (bokio_import_service.BokioImportError, archive_import_service.ArchiveError) as e:
+            print(f"Failed: {e}")
+            sys.exit(1)
+        print(f"Archive written and verified: {out_path}")
+        print(f"Company: {report.company} ({report.org_number}), fiscal years: {', '.join(report.fiscal_years)}")
+        print(f"Counts: {report.counts}")
+        print("Reconciliation against Bokio's closing balances:")
+        for line in report.checks:
+            print(f"  {line}")
+        for warning in report.warnings:
+            print(f"WARNING: {warning}")
+        print("Next: python -m app.cli import-company <archive.zip>")
 
     elif command == "import-company":
         if len(sys.argv) < 3:

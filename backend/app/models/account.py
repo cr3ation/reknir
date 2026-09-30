@@ -63,6 +63,8 @@ class Account(Base):
     current_balance = Column(Numeric(15, 2), default=0, nullable=False)  # Current balance
 
     # Status
+    sru_code = Column(String(10), nullable=True)  # Skatteverket SRU field code (from BAS / SIE #SRU)
+
     active = Column(Boolean, default=True, nullable=False)
     is_bas_account = Column(Boolean, default=True)  # True if from BAS kontoplan
 

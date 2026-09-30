@@ -16,6 +16,7 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 - Multi-user authentication with role-based access
 - Backup and restore as a portable JSON + files archive (all data, all documents, SIE4 per year), with GUI, scheduler and CLI
 - Per-company export/import archives for moving a company between installations
+- Bokio migration: `bokio-import` turns a Bokio data export into a company archive (see docs/BOKIO_IMPORT.md)
 - PostgreSQL with automatic backups
 
 ## Tech Stack
@@ -63,6 +64,8 @@ docker compose exec backend alembic upgrade head
 | [Authentication Setup](docs/AUTH_SETUP.md) | Configure user authentication |
 | [Cloudflare Setup](docs/CLOUDFLARE.md) | Cloudflare Tunnel configuration |
 | [Invoice Feature](docs/INVOICE_FEATURE.md) | Customer and supplier invoice system |
+| [Portable Archive](docs/PORTABLE_ARCHIVE.md) | Backup format and per-company export/import |
+| [Bokio Import](docs/BOKIO_IMPORT.md) | Migrating a company from Bokio |
 | [Roadmap](docs/ROADMAP.md) | Feature roadmap and future plans |
 | [Contributing](CONTRIBUTING.md) | CI pipeline, code style, and contribution guidelines |
 
