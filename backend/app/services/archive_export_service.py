@@ -232,6 +232,7 @@ class CompanyExporter:
                     "current_balance",
                     "active",
                     "is_bas_account",
+                    "sru_code",
                 ],  # fmt: skip
             )
             d["fiscal_year_label"] = a.fiscal_year.label

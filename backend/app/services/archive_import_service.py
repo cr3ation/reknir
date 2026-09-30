@@ -625,6 +625,7 @@ def _load_company(
             current_balance=a.current_balance,
             active=a.active,
             is_bas_account=a.is_bas_account if a.is_bas_account is not None else True,
+            sru_code=a.sru_code,
         )
         db.add(obj)
         db.flush()
