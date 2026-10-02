@@ -16,7 +16,7 @@ from app.models.fiscal_year import FiscalYear
 from app.models.user import CompanyUser, User
 from app.models.verification import Verification
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
-from app.services import default_account_service
+from app.services import company_service, default_account_service
 from app.services.storage import LOGOS_DIR
 
 router = APIRouter()
@@ -244,7 +244,7 @@ def delete_company(
             detail="You don't have access to this company",
         )
 
-    db.delete(company)
+    company_service.delete_company(db, company)
     db.commit()
     return None
 
