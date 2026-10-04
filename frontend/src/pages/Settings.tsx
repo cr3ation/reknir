@@ -5,6 +5,8 @@ import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip, Clock, Bot } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
 import SIE4ImportModal from '@/components/SIE4ImportModal'
+import PeriodLockPanel from '@/components/compliance/PeriodLockPanel'
+import AuditHistory from '@/components/compliance/AuditHistory'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -1878,6 +1880,14 @@ export default function SettingsPage() {
       {/* Import/Export Tab */}
       {activeTab === 'import' && (
         <div>
+          {/* Compliance: period lock + processing history */}
+          {selectedCompany && (
+            <div className="mb-6 space-y-6">
+              <PeriodLockPanel companyId={selectedCompany.id} />
+              <AuditHistory companyId={selectedCompany.id} limit={50} />
+            </div>
+          )}
+
           {/* Backup Section */}
           <div className="card mb-6">
             <div className="flex items-center gap-2 mb-4">

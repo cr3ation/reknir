@@ -1281,3 +1281,216 @@ def get_monthly_statistics(
         "monthly_data": monthly_data,
         "ytd_totals": {"revenue": ytd_revenue, "expenses": ytd_expenses, "profit": ytd_profit},
     }
+
+
+# =============================================================================
+# Aging (åldersanalys) and cash flow (kassaflödesanalys)
+# =============================================================================
+
+
+@router.get("/aging")
+async def get_aging_report(
+    company_id: int = Query(..., description="Company ID"),
+    kind: str = Query("customer", pattern="^(customer|supplier)$", description="customer (kundreskontra) or supplier"),
+    as_of: str | None = Query(None, description="Date (YYYY-MM-DD), default today"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Open invoices per counterpart, bucketed by days overdue as of a date."""
+    from app.models.customer import Customer, Supplier
+    from app.models.invoice import Invoice, InvoiceStatus, PaymentStatus, SupplierInvoice
+
+    await verify_company_access(company_id, current_user, db)
+    ref_date = datetime.strptime(as_of, "%Y-%m-%d").date() if as_of else date.today()
+    buckets = [
+        ("not_due", "Ej förfallet"),
+        ("d1_30", "1–30 dagar"),
+        ("d31_60", "31–60 dagar"),
+        ("d61_90", "61–90 dagar"),
+        ("d90_plus", "> 90 dagar"),
+    ]
+
+    if kind == "customer":
+        rows = (
+            db.query(Invoice, Customer.name)
+            .join(Customer, Customer.id == Invoice.customer_id)
+            .filter(
+                Invoice.company_id == company_id,
+                Invoice.status == InvoiceStatus.ISSUED,
+                Invoice.payment_status != PaymentStatus.PAID,
+                Invoice.invoice_date <= ref_date,
+            )
+            .all()
+        )
+        items = [(inv, name, f"{inv.invoice_series}{inv.invoice_number}") for inv, name in rows]
+    else:
+        rows = (
+            db.query(SupplierInvoice, Supplier.name)
+            .join(Supplier, Supplier.id == SupplierInvoice.supplier_id)
+            .filter(
+                SupplierInvoice.company_id == company_id,
+                SupplierInvoice.status != InvoiceStatus.CANCELLED,
+                SupplierInvoice.payment_status != PaymentStatus.PAID,
+                SupplierInvoice.invoice_date <= ref_date,
+            )
+            .all()
+        )
+        items = [(inv, name, inv.supplier_invoice_number) for inv, name in rows]
+
+    def bucket_of(days_overdue: int) -> str:
+        if days_overdue <= 0:
+            return "not_due"
+        if days_overdue <= 30:
+            return "d1_30"
+        if days_overdue <= 60:
+            return "d31_60"
+        if days_overdue <= 90:
+            return "d61_90"
+        return "d90_plus"
+
+    per_party: dict[str, dict] = {}
+    totals = {key: Decimal("0") for key, _ in buckets}
+    invoices_out = []
+    for inv, party, label in items:
+        open_amount = Decimal(inv.total_amount) - Decimal(inv.paid_amount or 0)
+        if open_amount <= 0:
+            continue
+        days = (ref_date - inv.due_date).days
+        key = bucket_of(days)
+        entry = per_party.setdefault(
+            party, {"name": party, "total": Decimal("0"), **{k: Decimal("0") for k, _ in buckets}}
+        )
+        entry[key] += open_amount
+        entry["total"] += open_amount
+        totals[key] += open_amount
+        invoices_out.append(
+            {
+                "id": inv.id,
+                "number": label,
+                "party": party,
+                "invoice_date": inv.invoice_date.isoformat(),
+                "due_date": inv.due_date.isoformat(),
+                "days_overdue": max(days, 0),
+                "open_amount": float(open_amount),
+                "bucket": key,
+            }
+        )
+
+    return {
+        "kind": kind,
+        "as_of": ref_date.isoformat(),
+        "buckets": [{"key": k, "label": lbl, "amount": float(totals[k])} for k, lbl in buckets],
+        "total": float(sum(totals.values())),
+        "parties": sorted(
+            [{**p, "total": float(p["total"]), **{k: float(p[k]) for k, _ in buckets}} for p in per_party.values()],
+            key=lambda p: -p["total"],
+        ),
+        "invoices": sorted(invoices_out, key=lambda i: (-i["days_overdue"], i["party"])),
+    }
+
+
+@router.get("/cash-flow")
+async def get_cash_flow(
+    company_id: int = Query(..., description="Company ID"),
+    fiscal_year_id: int = Query(..., description="Fiscal Year ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Monthly cash flow, direct method: movements on cash accounts (19xx) grouped by
+    what they were posted against. Opening balance is the sum of the cash accounts'
+    opening balances."""
+    await verify_company_access(company_id, current_user, db)
+    start_date, end_date = get_fiscal_year_dates(db, company_id, fiscal_year_id)
+
+    cash_accounts = (
+        db.query(Account)
+        .filter(
+            Account.company_id == company_id,
+            Account.fiscal_year_id == fiscal_year_id,
+            Account.account_number >= 1900,
+            Account.account_number <= 1999,
+        )
+        .all()
+    )
+    cash_ids = {a.id for a in cash_accounts}
+    opening = sum((Decimal(a.opening_balance) for a in cash_accounts), Decimal("0"))
+
+    categories = [
+        ("sales", "Försäljning och kundbetalningar", lambda n: 3000 <= n <= 3999 or n == 1510),
+        ("purchases", "Inköp och leverantörsbetalningar", lambda n: 4000 <= n <= 6999 or n == 2440),
+        ("personnel", "Personal och utlägg", lambda n: 7000 <= n <= 7999 or n in (2890, 2710, 2730)),
+        ("vat_tax", "Moms och skatter", lambda n: 2600 <= n <= 2699 or n in (1630, 2510, 2514)),
+        ("financing", "Finansiering och eget kapital", lambda n: 2000 <= n <= 2399 or 8000 <= n <= 8999),
+        ("investments", "Investeringar", lambda n: 1000 <= n <= 1399),
+        ("other", "Övrigt", lambda n: True),
+    ]
+
+    def categorize(counter_numbers: list[int]) -> str:
+        for key, _label, match in categories:
+            if any(match(n) for n in counter_numbers):
+                return key
+        return "other"
+
+    verifications = (
+        db.query(Verification)
+        .filter(
+            Verification.company_id == company_id,
+            Verification.fiscal_year_id == fiscal_year_id,
+            Verification.transaction_date >= start_date,
+            Verification.transaction_date <= end_date,
+        )
+        .all()
+    )
+    months: dict[str, dict] = {}
+    for v in verifications:
+        cash_delta = Decimal("0")
+        counter = []
+        for line in v.transaction_lines:
+            if line.account_id in cash_ids:
+                cash_delta += Decimal(line.debit) - Decimal(line.credit)
+            else:
+                counter.append(line.account.account_number)
+        if cash_delta == 0:
+            continue
+        key = v.transaction_date.strftime("%Y-%m")
+        month = months.setdefault(
+            key,
+            {
+                "month": key,
+                "inflow": Decimal("0"),
+                "outflow": Decimal("0"),
+                "by_category": {c[0]: Decimal("0") for c in categories},
+            },
+        )
+        if cash_delta > 0:
+            month["inflow"] += cash_delta
+        else:
+            month["outflow"] += -cash_delta
+        month["by_category"][categorize(counter)] += cash_delta
+
+    running = opening
+    out_months = []
+    for key in sorted(months):
+        m = months[key]
+        net = m["inflow"] - m["outflow"]
+        running += net
+        out_months.append(
+            {
+                "month": key,
+                "inflow": float(m["inflow"]),
+                "outflow": float(m["outflow"]),
+                "net": float(net),
+                "closing": float(running),
+                "by_category": {k: float(v) for k, v in m["by_category"].items()},
+            }
+        )
+    return {
+        "fiscal_year_id": fiscal_year_id,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "cash_accounts": [a.account_number for a in cash_accounts],
+        "opening": float(opening),
+        "closing": float(running),
+        "categories": [{"key": k, "label": lbl} for k, lbl, _ in categories],
+        "months": out_months,
+    }

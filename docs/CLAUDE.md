@@ -333,6 +333,14 @@ Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förut
 **Routes:**
 - `/settings` - Inställningar (fliken "Konteringsmallar")
 
+### 10b. Bokföringsregler (docs/COMPLIANCE.md)
+- Verifikationer ändras inte (PATCH 403 i produktion); rättelse via `POST /api/verifications/{id}/reverse` (`ledger_service.create_reversal`)
+- Numrering per serie **och räkenskapsår** (`ledger_service.next_verification_number`)
+- Periodlås: `period_locks`, `ledger_service.assert_period_open` i alla bokföringsvägar; `POST /api/companies/{id}/period-locks`
+- Luckor: `GET /api/verifications/gaps`, förklaringar i `verification_gap_explanations`, visas på dashboard
+- Audit log: `audit_log` via mapper events i `audit_service` (användare via contextvar från auth); `GET /api/audit-log/`
+- Rapporter: `GET /api/reports/aging`, `GET /api/reports/cash-flow`
+
 ### 11. Backup & Restore
 - Backup = portabelt arkiv (`reknir_backup_*.zip`): alla tabeller som JSON/JSONL, alla filer
   (bilagor, arkiverade faktura-PDF:er, kvitton, logotyper, AI-uppladdningar), SIE4 per räkenskapsår,
