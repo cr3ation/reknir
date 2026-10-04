@@ -22,6 +22,10 @@ from app.services.report_pdf_service import (
 router = APIRouter()
 
 
+# Accounts that only appear when VAT is settled against Skatteverket (see get_vat_report)
+SETTLEMENT_ACCOUNTS = [1630, 1650, 2650, 2660]
+
+
 def get_fiscal_year_dates(db: Session, company_id: int, fiscal_year_id: int) -> tuple[date, date]:
     """
     Get the date range for a fiscal year.
@@ -595,33 +599,40 @@ async def get_vat_report(
         # AND VAT receivable/payable accounts (2650, 2660)
         # These are typically used when settling VAT with Skatteverket
 
-        # Find verification IDs that contain settlement accounts
-        settlement_accounts = (
-            db.query(Account.id)
-            .filter(
-                Account.company_id == company_id,
-                Account.account_number.in_([2650, 2660]),  # Momsfordran, Momsskuld
-            )
+        # A settlement moves the period's VAT from the 26xx accounts to the tax account
+        # side: 1630 Skattekonto, 1650 Momsfordran, 2650 Redovisningskonto för moms,
+        # 2660 Särskilda punktskatter/momsskuld. Bokio books 1650/2640/3740, other
+        # programs 2650 or 1630 directly, so all of them count. Descriptions that say
+        # momsredovisning/momsdeklaration are treated the same way.
+        settlement_account_ids = [
+            acc.id
+            for acc in db.query(Account.id)
+            .filter(Account.company_id == company_id, Account.account_number.in_(SETTLEMENT_ACCOUNTS))
             .all()
-        )
-
-        if settlement_accounts:
-            settlement_account_ids = [acc.id for acc in settlement_accounts]
-
-            # Find verifications that have transactions to settlement accounts
-            settlement_verification_ids = (
-                db.query(TransactionLine.verification_id)
+        ]
+        settlement_ver_ids: set[int] = set()
+        if settlement_account_ids:
+            settlement_ver_ids.update(
+                v.verification_id
+                for v in db.query(TransactionLine.verification_id)
                 .filter(TransactionLine.account_id.in_(settlement_account_ids))
                 .distinct()
                 .all()
             )
-
-            settlement_ver_ids = [v.verification_id for v in settlement_verification_ids]
-
-            if settlement_ver_ids:
-                # Exclude these verifications from our query
-                query = query.filter(~Verification.id.in_(settlement_ver_ids))
-                logger.info(f"VAT Report - Excluding {len(settlement_ver_ids)} settlement verifications")
+        settlement_ver_ids.update(
+            v.id
+            for v in db.query(Verification.id)
+            .filter(
+                Verification.company_id == company_id,
+                Verification.description.ilike("%momsredovisning%")
+                | Verification.description.ilike("%momsdeklaration%")
+                | Verification.description.ilike("%momsavräkning%"),
+            )
+            .all()
+        )
+        if settlement_ver_ids:
+            query = query.filter(~Verification.id.in_(list(settlement_ver_ids)))
+            logger.info(f"VAT Report - Excluding {len(settlement_ver_ids)} settlement verifications")
 
     query = query.group_by(TransactionLine.account_id)
 
@@ -778,7 +789,7 @@ async def get_vat_report(
         if exclude_vat_settlements:
             settlement_accounts = (
                 db.query(Account.id)
-                .filter(Account.company_id == company_id, Account.account_number.in_([2650, 2660]))
+                .filter(Account.company_id == company_id, Account.account_number.in_(SETTLEMENT_ACCOUNTS))
                 .all()
             )
 
