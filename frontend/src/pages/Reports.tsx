@@ -5,8 +5,11 @@ import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import { useCompany } from '@/contexts/CompanyContext'
 import type { BalanceSheet, IncomeStatement, GeneralLedger, VATReport, VATPeriod } from '@/types'
 import FiscalYearSelector from '@/components/FiscalYearSelector'
+import AgingReport from '@/components/reports/AgingReport'
+import CashFlowReport from '@/components/reports/CashFlowReport'
+import PeriodLockPanel from '@/components/compliance/PeriodLockPanel'
 
-type ReportTab = 'balance' | 'income' | 'general-ledger' | 'vat'
+type ReportTab = 'balance' | 'income' | 'general-ledger' | 'vat' | 'aging' | 'cashflow'
 
 export default function Reports() {
   const { selectedCompany } = useCompany()
@@ -249,8 +252,33 @@ export default function Reports() {
           >
             Momsrapport
           </button>
+          <button
+            onClick={() => setActiveTab('aging')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'aging'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Reskontra
+          </button>
+          <button
+            onClick={() => setActiveTab('cashflow')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'cashflow'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Kassaflöde
+          </button>
         </nav>
       </div>
+
+      {activeTab === 'aging' && selectedCompany && <AgingReport companyId={selectedCompany.id} />}
+      {activeTab === 'cashflow' && selectedCompany && selectedFiscalYear && (
+        <CashFlowReport companyId={selectedCompany.id} fiscalYearId={selectedFiscalYear.id} />
+      )}
 
       {/* Income Statement */}
       {activeTab === 'income' && incomeStatement && (
@@ -618,6 +646,12 @@ export default function Reports() {
               </div>
             )}
           </div>
+
+          {selectedCompany && selectedPeriod && (
+            <div className="mb-6">
+              <PeriodLockPanel companyId={selectedCompany.id} suggestedDate={selectedPeriod.end_date} compact />
+            </div>
+          )}
 
           {vatReport && (
             <>

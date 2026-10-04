@@ -53,6 +53,7 @@ from app.models.posting_template import PostingTemplate, PostingTemplateLine
 from app.models.user import CompanyUser, User
 from app.models.verification import TransactionLine, Verification
 from app.schemas import archive as fmt
+from app.services import audit_service
 from app.services.archive_export_service import AI_UPLOADS_SUBDIR, ATTACHMENTS_SUBDIR, LOGOS_SUBDIR
 from app.services.sie4_service import export_sie4
 
@@ -494,7 +495,7 @@ def load_archive(
 
     existing_org_numbers = {c.org_number for c in db.query(Company.org_number).all()}
 
-    with archive.open() as zf:
+    with archive.open() as zf, audit_service.suppressed():
         for data in archive.companies:
             if data.company.org_number in existing_org_numbers:
                 raise ArchiveError(f"A company with org number {data.company.org_number} already exists")
@@ -502,6 +503,15 @@ def load_archive(
             report.company_ids.append(company_id)
             existing_org_numbers.add(data.company.org_number)
 
+    db.flush()
+    for data, cid in zip(archive.companies, report.company_ids, strict=True):
+        audit_service.note(
+            db,
+            company_id=cid,
+            summary=f"import company {data.company.name} from archive {archive.path.name}",
+            table_name="companies",
+            record_id=cid,
+        )
     db.flush()
     return report
 

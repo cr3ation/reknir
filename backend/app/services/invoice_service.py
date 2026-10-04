@@ -9,7 +9,7 @@ from app.models.default_account import DefaultAccountType
 from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, SupplierInvoice
 from app.models.verification import TransactionLine, Verification
-from app.services import default_account_service
+from app.services import default_account_service, ledger_service
 
 
 def get_fiscal_year_for_date(db: Session, company_id: int, transaction_date: date) -> FiscalYear:
@@ -50,7 +50,8 @@ def create_invoice_verification(db: Session, invoice: Invoice, description: str 
     # Get next verification number
     from app.routers.verifications import get_next_verification_number
 
-    ver_number = get_next_verification_number(db, invoice.company_id, "A")
+    ledger_service.assert_period_open(db, invoice.company_id, invoice.invoice_date)
+    ver_number = get_next_verification_number(db, invoice.company_id, "A", fiscal_year.id)
 
     # Create verification
     verification = Verification(
@@ -165,10 +166,11 @@ def create_invoice_payment_verification(
 
     # Get fiscal year for payment date
     fiscal_year = get_fiscal_year_for_date(db, invoice.company_id, paid_date)
+    ledger_service.assert_period_open(db, invoice.company_id, paid_date)
 
     from app.routers.verifications import get_next_verification_number
 
-    ver_number = get_next_verification_number(db, invoice.company_id, "A")
+    ver_number = get_next_verification_number(db, invoice.company_id, "A", fiscal_year.id)
 
     verification = Verification(
         company_id=invoice.company_id,
@@ -297,10 +299,11 @@ def create_supplier_invoice_verification(
 
     # Get fiscal year for this invoice date
     fiscal_year = get_fiscal_year_for_date(db, supplier_invoice.company_id, supplier_invoice.invoice_date)
+    ledger_service.assert_period_open(db, supplier_invoice.company_id, supplier_invoice.invoice_date)
 
     from app.routers.verifications import get_next_verification_number
 
-    ver_number = get_next_verification_number(db, supplier_invoice.company_id, "A")
+    ver_number = get_next_verification_number(db, supplier_invoice.company_id, "A", fiscal_year.id)
 
     verification = Verification(
         company_id=supplier_invoice.company_id,
@@ -412,10 +415,11 @@ def create_supplier_invoice_payment_verification(
 
     # Get fiscal year for payment date
     fiscal_year = get_fiscal_year_for_date(db, supplier_invoice.company_id, paid_date)
+    ledger_service.assert_period_open(db, supplier_invoice.company_id, paid_date)
 
     from app.routers.verifications import get_next_verification_number
 
-    ver_number = get_next_verification_number(db, supplier_invoice.company_id, "A")
+    ver_number = get_next_verification_number(db, supplier_invoice.company_id, "A", fiscal_year.id)
 
     verification = Verification(
         company_id=supplier_invoice.company_id,
