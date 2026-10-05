@@ -19,6 +19,9 @@ Differences from the original proposal, as built:
 - `posting_templates`, `default_accounts`, `company_users` and `attachments`
   are exported as well; AI chat history and uploads under `ai/` unless
   `--no-ai`;
+- period locks, gap explanations, reversal links and the audit log (behandlingshistorik)
+  are part of the archive since October 2026 (`period_locks.json`, `gap_explanations.json`,
+  `audit_log.jsonl` per company, `instance/audit_log.jsonl` for instance-wide entries);
 - the SIE cross-check after import reports a warning rather than failing, since
   the ledger rows are inserted verbatim and already checked to balance.
 

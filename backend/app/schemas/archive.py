@@ -193,6 +193,8 @@ class VerificationRow(ArchiveModel):
     locked: bool
     created_at: Timestamp
     updated_at: Timestamp
+    reverses_verification_id: int | None = None
+    reversed_by_verification_id: int | None = None
     lines: list[TransactionLineRow]
 
 
@@ -386,6 +388,37 @@ class AttachmentRow(ArchiveModel):
     links: list[AttachmentLinkRow]
 
 
+class PeriodLockRow(ArchiveModel):
+    id: int
+    locked_through: date
+    note: str | None = None
+    created_by_email: str | None = None
+    created_at: Timestamp
+
+
+class GapExplanationRow(ArchiveModel):
+    id: int
+    fiscal_year_id: int
+    series: str
+    verification_number: int
+    explanation: str
+    created_by_email: str | None = None
+    created_at: Timestamp
+
+
+class AuditLogRow(ArchiveModel):
+    """Behandlingshistorik. record_id refers to the archive-local id of the row in table_name."""
+
+    id: int
+    user_email: str | None = None
+    action: str
+    table_name: str
+    record_id: int | None = None
+    summary: str
+    changes: dict[str, list] | None = None
+    created_at: Timestamp
+
+
 class ChatMessageRow(ArchiveModel):
     id: int
     role: str
@@ -434,6 +467,9 @@ SCHEMA_MODELS: dict[str, type[BaseModel]] = {
     "posting_template": PostingTemplateRow,
     "default_account": DefaultAccountRow,
     "attachment": AttachmentRow,
+    "period_lock": PeriodLockRow,
+    "gap_explanation": GapExplanationRow,
+    "audit_log": AuditLogRow,
     "chat_session": ChatSessionRow,
     "ai_upload": AIUploadRow,
 }

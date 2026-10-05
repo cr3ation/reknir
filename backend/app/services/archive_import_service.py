@@ -35,6 +35,7 @@ from app.models.ai_assistant import AISettings, AIUpload, ChatMessage, ChatSessi
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, AttachmentStatus, EntityType
 from app.models.backup_schedule import BackupSchedule
 from app.models.company import AccountingBasis, Company, PaymentType, VATReportingPeriod
+from app.models.compliance import AuditLog, PeriodLock, VerificationGapExplanation
 from app.models.customer import Customer, Supplier
 from app.models.default_account import DefaultAccount
 from app.models.expense import Expense, ExpenseStatus
@@ -87,6 +88,9 @@ class CompanyData:
     posting_templates: list[fmt.PostingTemplateRow]
     default_accounts: list[fmt.DefaultAccountRow]
     attachments: list[fmt.AttachmentRow]
+    period_locks: list[fmt.PeriodLockRow] = field(default_factory=list)
+    gap_explanations: list[fmt.GapExplanationRow] = field(default_factory=list)
+    audit_log: list[fmt.AuditLogRow] = field(default_factory=list)
     chat_sessions: list[fmt.ChatSessionRow] = field(default_factory=list)
     ai_uploads: list[fmt.AIUploadRow] = field(default_factory=list)
     sie: dict[str, str] = field(default_factory=dict)  # fiscal year label -> SIE text
@@ -99,6 +103,7 @@ class ArchiveData:
     users: list[fmt.UserRow]
     settings: fmt.InstanceSettings | None
     companies: list[CompanyData]
+    instance_audit_log: list[fmt.AuditLogRow] = field(default_factory=list)
 
     def open(self) -> zipfile.ZipFile:
         return zipfile.ZipFile(self.path, "r")
@@ -232,9 +237,11 @@ def _verify_open_archive(zf: zipfile.ZipFile, zip_path: Path) -> ArchiveData:
 
     users: list[fmt.UserRow] = []
     settings: fmt.InstanceSettings | None = None
+    instance_audit: list[fmt.AuditLogRow] = []
     if manifest.scope == "instance":
         users = _parse_json(zf, "instance/users.json", fmt.UserRow)
         settings = _parse_one(zf, "instance/settings.json", fmt.InstanceSettings, required=False)
+        instance_audit = _parse_jsonl(zf, "instance/audit_log.jsonl", fmt.AuditLogRow, required=False)
 
     companies: list[CompanyData] = []
     for entry in manifest.companies:
@@ -258,6 +265,9 @@ def _verify_open_archive(zf: zipfile.ZipFile, zip_path: Path) -> ArchiveData:
             posting_templates=_parse_json(zf, f"{base}/posting_templates.json", fmt.PostingTemplateRow),
             default_accounts=_parse_json(zf, f"{base}/default_accounts.json", fmt.DefaultAccountRow),
             attachments=_parse_jsonl(zf, f"{base}/attachments.jsonl", fmt.AttachmentRow),
+            period_locks=_parse_json(zf, f"{base}/period_locks.json", fmt.PeriodLockRow, required=False),
+            gap_explanations=_parse_json(zf, f"{base}/gap_explanations.json", fmt.GapExplanationRow, required=False),
+            audit_log=_parse_jsonl(zf, f"{base}/audit_log.jsonl", fmt.AuditLogRow, required=False),
         )
         if manifest.includes_ai:
             data.chat_sessions = _parse_jsonl(zf, f"{base}/ai/chat_sessions.jsonl", fmt.ChatSessionRow, required=False)
@@ -279,7 +289,14 @@ def _verify_open_archive(zf: zipfile.ZipFile, zip_path: Path) -> ArchiveData:
                 raise ArchiveError(f"{base}: attachment {att.id} file hash differs from its recorded checksum")
         companies.append(data)
 
-    return ArchiveData(path=zip_path, manifest=manifest, users=users, settings=settings, companies=companies)
+    return ArchiveData(
+        path=zip_path,
+        manifest=manifest,
+        users=users,
+        settings=settings,
+        companies=companies,
+        instance_audit_log=instance_audit,
+    )
 
 
 def _dirname(label: str) -> str:
@@ -322,6 +339,16 @@ def _check_references(data: CompanyData) -> None:
             need(
                 line.account_id in acc_ids, f"verification {v.series}{v.verification_number} references unknown account"
             )
+        for ref in (v.reverses_verification_id, v.reversed_by_verification_id):
+            need(
+                ref is None or ref in ver_ids,
+                f"verification {v.series}{v.verification_number} reversal link to unknown verification {ref}",
+            )
+    for g in data.gap_explanations:
+        need(
+            g.fiscal_year_id in fy_ids,
+            f"gap explanation {g.series}{g.verification_number} references unknown fiscal year",
+        )
     for i in data.invoices:
         need(i.customer_id in cust_ids, f"invoice {i.invoice_series}{i.invoice_number} references unknown customer")
         for ref in (i.invoice_verification_id, i.payment_verification_id):
@@ -472,6 +499,20 @@ def load_archive(
 
         if archive.settings:
             _apply_settings(db, archive.settings, users_by_email, report)
+        for a in archive.instance_audit_log:
+            db.add(
+                AuditLog(
+                    company_id=None,
+                    user_email=a.user_email,
+                    action=a.action,
+                    table_name=a.table_name,
+                    record_id=None,
+                    summary=a.summary,
+                    changes=json.dumps(a.changes, ensure_ascii=False) if a.changes else None,
+                    created_at=_naive(a.created_at),
+                )
+            )
+        report.bump("audit_log", len(archive.instance_audit_log))
 
     if fallback_user is None:
         fallback_user = next((u for u in users_by_email.values() if u.is_admin), None) or next(
@@ -723,6 +764,13 @@ def _load_company(
                     description=line.description,
                 )
             )
+    for v in data.verifications:
+        if v.reverses_verification_id is not None or v.reversed_by_verification_id is not None:
+            obj = db.query(Verification).get(ver_map.get_required(v.id))
+            obj.reverses_verification_id = ver_map.get_optional(v.reverses_verification_id)
+            obj.reversed_by_verification_id = ver_map.get_optional(v.reversed_by_verification_id)
+            obj.updated_at = _naive(v.updated_at)
+    db.flush()
     report.bump("verifications", len(data.verifications))
 
     # invoices
@@ -920,6 +968,58 @@ def _load_company(
         except KeyError:
             report.warnings.append(f"{tag}: logo file {c.logo_filename} not in archive, logo cleared")
             company.logo_filename = None
+
+    # period locks, gap explanations, processing history
+    for p in data.period_locks:
+        db.add(
+            PeriodLock(
+                company_id=company.id,
+                locked_through=p.locked_through,
+                note=p.note,
+                created_by=user_id(p.created_by_email, f"{tag} period lock"),
+                created_at=_naive(p.created_at),
+            )
+        )
+    report.bump("period_locks", len(data.period_locks))
+    for g in data.gap_explanations:
+        db.add(
+            VerificationGapExplanation(
+                company_id=company.id,
+                fiscal_year_id=fy_map.get_required(g.fiscal_year_id),
+                series=g.series,
+                verification_number=g.verification_number,
+                explanation=g.explanation,
+                created_by=user_id(g.created_by_email, f"{tag} gap explanation"),
+                created_at=_naive(g.created_at),
+            )
+        )
+    report.bump("gap_explanations", len(data.gap_explanations))
+    id_maps: dict[str, dict] = {
+        "verifications": ver_map,
+        "invoices": inv_map,
+        "supplier_invoices": sinv_map,
+        "expenses": exp_map,
+        "accounts": acc_map,
+        "fiscal_years": fy_map,
+        "customers": cust_map,
+        "suppliers": sup_map,
+        "companies": {c.id: company.id},
+    }
+    for a in data.audit_log:
+        mapping = id_maps.get(a.table_name)
+        db.add(
+            AuditLog(
+                company_id=company.id,
+                user_email=a.user_email,
+                action=a.action,
+                table_name=a.table_name,
+                record_id=(mapping.get(a.record_id) if mapping and a.record_id is not None else None),
+                summary=a.summary,
+                changes=json.dumps(a.changes, ensure_ascii=False) if a.changes else None,
+                created_at=_naive(a.created_at),
+            )
+        )
+    report.bump("audit_log", len(data.audit_log))
 
     # AI history
     if include_ai and archive.manifest.includes_ai:
