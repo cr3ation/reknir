@@ -22,6 +22,7 @@ from app.models.ai_assistant import AISettings, AIUpload, ChatMessage, ChatSessi
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, AttachmentStatus, EntityType
 from app.models.backup_schedule import BackupSchedule
 from app.models.company import Company
+from app.models.compliance import AuditLog, PeriodLock, VerificationGapExplanation
 from app.models.default_account import DefaultAccount
 from app.models.expense import Expense, ExpenseStatus
 from app.models.fiscal_year import FiscalYear
@@ -310,6 +311,46 @@ def seeded(db_session, test_company_with_fiscal_year, test_customer, test_suppli
         )
     )
     db_session.add(BackupSchedule(id=1, enabled=True, interval_hours=24, max_backups=14))
+    # compliance data: a reversal link, a period lock, a gap explanation and audit entries
+    pay_ver.reverses_verification_id = ver.id
+    ver.reversed_by_verification_id = pay_ver.id
+    db_session.add(
+        PeriodLock(company_id=company.id, locked_through=date(2025, 3, 31), note="Moms Q1", created_by=test_user.id)
+    )
+    db_session.add(
+        VerificationGapExplanation(
+            company_id=company.id,
+            fiscal_year_id=fy.id,
+            series="A",
+            verification_number=3,
+            explanation="Makulerad",
+            created_by=test_user.id,
+        )
+    )
+    db_session.add(
+        AuditLog(
+            company_id=company.id,
+            user_email=test_user.email,
+            action="insert",
+            table_name="verifications",
+            record_id=ver.id,
+            summary="insert verifications A1",
+            changes=None,
+            created_at=datetime(2025, 3, 4, 10, 0),
+        )
+    )
+    db_session.add(
+        AuditLog(
+            company_id=None,
+            user_email=test_user.email,
+            action="note",
+            table_name="system",
+            record_id=None,
+            summary="restore from backup",
+            changes=None,
+            created_at=datetime(2025, 3, 5, 10, 0),
+        )
+    )
     db_session.add(
         User(
             email="mcp-bot@service.local",
@@ -344,6 +385,8 @@ def _data_members(zip_path: Path) -> dict[str, object]:
     out = {}
     with zipfile.ZipFile(zip_path) as zf:
         for name in zf.namelist():
+            if name.endswith("audit_log.jsonl"):
+                continue  # the import itself adds history entries, so this file legitimately grows
             if name.startswith(("companies/", "instance/")) and name.endswith((".json", ".jsonl")):
                 text = zf.read(name).decode()
                 if name.endswith(".jsonl"):
@@ -356,7 +399,7 @@ def _data_members(zip_path: Path) -> dict[str, object]:
     return out
 
 
-def test_export_verify_import_roundtrip(db_session, seeded, tmp_path):
+def test_export_verify_import_roundtrip(db_session, seeded, tmp_path, test_user):
     company, uploads = seeded
     first = tmp_path / "first.zip"
     manifest = export_svc.export_archive(db_session, first, scope="instance", uploads_dir=uploads)
@@ -417,6 +460,21 @@ def test_export_verify_import_roundtrip(db_session, seeded, tmp_path):
 
     import_svc.cross_check_sie(target, archive, report)
     assert report.warnings == []
+
+    # compliance data survived, with ids remapped
+    imported_ver = target.query(Verification).filter(Verification.verification_number == 1).one()
+    imported_pay = target.query(Verification).filter(Verification.verification_number == 2).one()
+    assert imported_ver.reversed_by_verification_id == imported_pay.id
+    assert imported_pay.reverses_verification_id == imported_ver.id
+    assert target.query(PeriodLock).one().locked_through == date(2025, 3, 31)
+    assert target.query(VerificationGapExplanation).one().fiscal_year_id == imported_ver.fiscal_year_id
+    entry = (
+        target.query(AuditLog)
+        .filter(AuditLog.table_name == "verifications", AuditLog.user_email == test_user.email)
+        .one()
+    )
+    assert entry.record_id == imported_ver.id and entry.summary == "insert verifications A1"
+    assert target.query(AuditLog).filter(AuditLog.company_id.is_(None), AuditLog.action == "note").count() == 1
 
     imported = target.query(Company).one()
     assert imported.org_number == company.org_number

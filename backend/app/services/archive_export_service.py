@@ -50,6 +50,7 @@ from app.models.ai_assistant import AISettings, AIUpload, ChatSession
 from app.models.attachment import Attachment
 from app.models.backup_schedule import BackupSchedule
 from app.models.company import Company
+from app.models.compliance import AuditLog, PeriodLock, VerificationGapExplanation
 from app.models.customer import Customer, Supplier
 from app.models.default_account import DefaultAccount
 from app.models.expense import Expense
@@ -171,6 +172,19 @@ _EXPENSE_FIELDS = [
 ]  # fmt: skip
 
 
+def _audit_row(a: Any) -> fmt.AuditLogRow:
+    return fmt.AuditLogRow(
+        id=a.id,
+        user_email=a.user_email,
+        action=a.action,
+        table_name=a.table_name,
+        record_id=a.record_id,
+        summary=a.summary,
+        changes=json.loads(a.changes) if a.changes else None,
+        created_at=a.created_at,
+    )
+
+
 def _payment_row(p: Any) -> fmt.PaymentRow:
     d = _fields(p, _PAYMENT_FIELDS)
     d["bank_account_number"] = p.bank_account.account_number if p.bank_account else None
@@ -269,6 +283,8 @@ class CompanyExporter:
                     "locked",
                     "created_at",
                     "updated_at",
+                    "reverses_verification_id",
+                    "reversed_by_verification_id",
                 ],  # fmt: skip
             )
             rows.append(fmt.VerificationRow(**d, lines=lines))
@@ -398,6 +414,35 @@ class CompanyExporter:
             )
             rows.append(fmt.AttachmentRow(**d, created_by_email=self._email(a.created_by), links=links))
         return rows
+
+    def period_locks(self) -> list[fmt.PeriodLockRow]:
+        return [
+            fmt.PeriodLockRow(
+                id=p.id,
+                locked_through=p.locked_through,
+                note=p.note,
+                created_by_email=self._email(p.created_by),
+                created_at=p.created_at,
+            )
+            for p in self._q(PeriodLock).order_by(PeriodLock.id).all()
+        ]
+
+    def gap_explanations(self) -> list[fmt.GapExplanationRow]:
+        return [
+            fmt.GapExplanationRow(
+                id=g.id,
+                fiscal_year_id=g.fiscal_year_id,
+                series=g.series,
+                verification_number=g.verification_number,
+                explanation=g.explanation,
+                created_by_email=self._email(g.created_by),
+                created_at=g.created_at,
+            )
+            for g in self._q(VerificationGapExplanation).order_by(VerificationGapExplanation.id).all()
+        ]
+
+    def audit_log(self) -> list[fmt.AuditLogRow]:
+        return [_audit_row(a) for a in self._q(AuditLog).order_by(AuditLog.id).all()]
 
     def chat_sessions(self) -> list[fmt.ChatSessionRow]:
         rows = []
@@ -549,6 +594,12 @@ def export_archive(
                 ),
             )
             writer.write_text("instance/settings.json", settings_row.model_dump_json(indent=2) + "\n")
+            instance_audit = [
+                _audit_row(a)
+                for a in db.query(AuditLog).filter(AuditLog.company_id.is_(None)).order_by(AuditLog.id).all()
+            ]
+            writer.write_jsonl("instance/audit_log.jsonl", instance_audit)
+            counts["audit_log"] = len(instance_audit)
 
         # companies/
         for company in companies:
@@ -572,6 +623,9 @@ def export_archive(
                 ("posting_templates", "json", exp.posting_templates()),
                 ("default_accounts", "json", exp.default_accounts()),
                 ("attachments", "jsonl", exp.attachments()),
+                ("period_locks", "json", exp.period_locks()),
+                ("gap_explanations", "json", exp.gap_explanations()),
+                ("audit_log", "jsonl", exp.audit_log()),
             ]
             for name, kind, rows in tables:
                 (writer.write_jsonl if kind == "jsonl" else writer.write_json)(f"{base}/{name}.{kind}", rows)

@@ -55,8 +55,8 @@ import, restore) write a single summary entry instead.
     GET /api/audit-log/?company_id=&table_name=&record_id=&limit=
 
 Shown on each verification page (**Historik**) and under **Inställningar →
-Behandlingshistorik**. The log is not exported in the portable archive (it is
-instance history, not bookkeeping data).
+Behandlingshistorik**. The log, the period locks, the gap explanations and the
+reversal links are all part of the portable archive, so a restore keeps them.
 
 ## 6. Reports added
 
