@@ -5,16 +5,18 @@ Modern, self-hosted bookkeeping system for Swedish businesses with full BAS kont
 ## Features
 
 - Swedish BAS 2024 kontoplan
-- Double-entry bookkeeping (verifikationer)
+- Double-entry bookkeeping (verifikationer): immutable once posted, corrections by reversal, numbering per fiscal year, period locks, gap detection, audit log (see docs/COMPLIANCE.md)
 - Customer invoices with PDF generation
 - Supplier invoices with attachment support
 - Employee expense management with receipt uploads
 - VAT reporting (momsrapport)
-- Balance sheet and income statement
+- Balance sheet, income statement, general ledger, aging analysis and cash flow
 - SIE4 import/export for integration with other accounting software
 - AI bookkeeping assistant powered by Ollama (local LLM)
 - Multi-user authentication with role-based access
-- Backup and restore with calendar-based GUI and CLI support
+- Backup and restore as a portable JSON + files archive (all data, all documents, SIE4 per year), with GUI, scheduler and CLI
+- Per-company export/import archives for moving a company between installations
+- Bokio migration: `bokio-import` turns a Bokio data export into a company archive (see docs/BOKIO_IMPORT.md)
 - PostgreSQL with automatic backups
 
 ## Tech Stack
@@ -62,6 +64,9 @@ docker compose exec backend alembic upgrade head
 | [Authentication Setup](docs/AUTH_SETUP.md) | Configure user authentication |
 | [Cloudflare Setup](docs/CLOUDFLARE.md) | Cloudflare Tunnel configuration |
 | [Invoice Feature](docs/INVOICE_FEATURE.md) | Customer and supplier invoice system |
+| [Portable Archive](docs/PORTABLE_ARCHIVE.md) | Backup format and per-company export/import |
+| [Bokio Import](docs/BOKIO_IMPORT.md) | Migrating a company from Bokio |
+| [Compliance](docs/COMPLIANCE.md) | Bokföringslagen rules enforced: reversals, period locks, gaps, audit log |
 | [Roadmap](docs/ROADMAP.md) | Feature roadmap and future plans |
 | [Contributing](CONTRIBUTING.md) | CI pipeline, code style, and contribution guidelines |
 

@@ -2,6 +2,7 @@ from app.models.account import Account
 from app.models.ai_assistant import AISettings, AIUpload, ChatMessage, ChatSession
 from app.models.backup_schedule import BackupSchedule
 from app.models.company import Company
+from app.models.compliance import AuditLog, PeriodLock, VerificationGapExplanation
 from app.models.customer import Customer, Supplier
 from app.models.default_account import DefaultAccount
 from app.models.expense import Expense
@@ -19,6 +20,9 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "BackupSchedule",
+    "AuditLog",
+    "PeriodLock",
+    "VerificationGapExplanation",
     "Verification",
     "TransactionLine",
     "PostingTemplate",

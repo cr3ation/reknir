@@ -1,9 +1,15 @@
 """Backup service for creating and listing full system backups.
 
-A backup is a tar.gz archive containing:
-- manifest.json: version metadata
-- database_dump: pg_dump in custom format
-- files/: all attachment files
+The backup format is the portable JSON + files archive (``reknir_backup_*.zip``,
+see ``archive_export_service`` and docs/PORTABLE_ARCHIVE.md): every table as
+JSON, every stored file (attachments, logos, AI uploads), SIE4 per fiscal year,
+a manifest with SHA-256 for each member, and the JSON Schema of the format.
+It needs no PostgreSQL tooling to read and restores into any Reknir version
+that understands its ``format_version``.
+
+``create_sql_backup`` still produces the older ``reknir_backup_*.tar.gz``
+(pg_dump + attachments) for anyone who wants a byte-exact database copy, and
+``restore_service`` can restore both kinds.
 """
 
 import json
@@ -20,11 +26,27 @@ from urllib.parse import urlparse
 from app import __version__
 from app.config import settings
 from app.schema_version import get_applied_schema_version
-from app.services.attachment_service import ATTACHMENTS_DIR
+from app.services import archive_export_service, archive_import_service
+from app.services.storage import ATTACHMENTS_DIR
 
 logger = logging.getLogger(__name__)
 
 BACKUP_DIR = Path(settings.backup_dir)
+BACKUP_PATTERNS = ("reknir_backup_*.zip", "reknir_backup_*.tar.gz")
+
+
+def is_backup_filename(filename: str) -> bool:
+    import fnmatch
+
+    return any(fnmatch.fnmatch(filename, pattern) for pattern in BACKUP_PATTERNS)
+
+
+def _all_archives() -> list[Path]:
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    found: list[Path] = []
+    for pattern in BACKUP_PATTERNS:
+        found.extend(BACKUP_DIR.glob(pattern))
+    return sorted(found)
 
 
 def _parse_database_url(url: str) -> dict:
@@ -39,8 +61,38 @@ def _parse_database_url(url: str) -> dict:
     }
 
 
-def create_backup() -> Path:
-    """Create a full backup package as a tar.gz archive.
+def create_backup(include_ai: bool = True) -> Path:
+    """Create a full backup as a portable JSON + files archive (.zip).
+
+    Returns:
+        Path to the created backup archive.
+    """
+    from app.database import SessionLocal
+
+    now = datetime.now(UTC)
+    timestamp_label = now.strftime("%Y-%m-%d_%H.%M.%S")
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    archive_path = BACKUP_DIR / f"reknir_backup_{timestamp_label}.zip"
+    partial_path = archive_path.with_suffix(".zip.partial")
+
+    db = SessionLocal()
+    try:
+        manifest = archive_export_service.export_archive(db, partial_path, scope="instance", include_ai=include_ai)
+    except Exception:
+        partial_path.unlink(missing_ok=True)
+        raise
+    finally:
+        db.close()
+
+    partial_path.replace(archive_path)
+    if manifest.warnings:
+        logger.warning(f"Backup created with {len(manifest.warnings)} warning(s): {archive_path}")
+    logger.info(f"Backup created: {archive_path}")
+    return archive_path
+
+
+def create_sql_backup() -> Path:
+    """Create a legacy backup package as a tar.gz archive (pg_dump + attachments).
 
     Returns:
         Path to the created backup archive.
@@ -119,8 +171,7 @@ def enforce_retention(max_backups: int) -> int:
     Returns:
         Number of backups deleted.
     """
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    archives = sorted(BACKUP_DIR.glob("reknir_backup_*.tar.gz"))
+    archives = _all_archives()
     deleted = 0
     while len(archives) > max_backups:
         oldest = archives.pop(0)
@@ -134,24 +185,43 @@ def list_backups() -> list[dict]:
     """List all available backup archives with their manifest metadata.
 
     Returns:
-        List of dicts with created_at, app_version,
-        schema_version, filename, size_bytes.
+        List of dicts with created_at, app_version, schema_version, format
+        ("json" or "sql"), filename, size_bytes, and for json archives also
+        companies, counts and warnings.
     """
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     backups = []
 
-    for archive_path in sorted(BACKUP_DIR.glob("reknir_backup_*.tar.gz"), reverse=True):
+    for archive_path in reversed(_all_archives()):
         try:
-            with tarfile.open(archive_path, "r:gz") as tar:
-                manifest_member = tar.getmember("backup/manifest.json")
-                f = tar.extractfile(manifest_member)
-                if f is None:
-                    continue
-                manifest = json.loads(f.read())
-                manifest["filename"] = archive_path.name
-                manifest["size_bytes"] = archive_path.stat().st_size
-                backups.append(manifest)
+            backups.append(describe_backup(archive_path))
         except Exception as e:
             logger.warning(f"Could not read manifest from {archive_path}: {e}")
 
     return backups
+
+
+def describe_backup(archive_path: Path) -> dict:
+    """Read the manifest of one backup archive (either format)."""
+    if archive_path.suffix == ".zip":
+        manifest = archive_import_service.read_manifest(archive_path)
+        info = {
+            "created_at": manifest.created_at.isoformat(),
+            "app_version": manifest.app_version,
+            "schema_version": manifest.schema_version,
+            "format": "json",
+            "format_version": manifest.format_version,
+            "scope": manifest.scope,
+            "companies": [c.name for c in manifest.companies],
+            "counts": manifest.counts,
+            "warnings": manifest.warnings,
+        }
+    else:
+        with tarfile.open(archive_path, "r:gz") as tar:
+            f = tar.extractfile(tar.getmember("backup/manifest.json"))
+            if f is None:
+                raise RuntimeError("manifest not readable")
+            info = json.loads(f.read())
+        info["format"] = "sql"
+    info["filename"] = archive_path.name
+    info["size_bytes"] = archive_path.stat().st_size
+    return info

@@ -103,6 +103,95 @@ export interface Verification {
   transaction_lines: TransactionLine[]
   is_balanced?: boolean
   total_amount?: number
+  reverses_verification_id?: number | null
+  reversed_by_verification_id?: number | null
+}
+
+export interface VerificationGap {
+  series: string
+  verification_number: number
+  explanation: string | null
+}
+
+export interface PeriodLockEntry {
+  id: number
+  locked_through: string
+  note: string | null
+  created_by: number | null
+  created_at: string
+}
+
+export interface PeriodLockStatus {
+  locked_through: string | null
+  history: PeriodLockEntry[]
+}
+
+export interface AuditLogEntry {
+  id: number
+  company_id: number | null
+  user_email: string | null
+  action: string
+  table_name: string
+  record_id: number | null
+  summary: string
+  changes: Record<string, [unknown, unknown]> | null
+  created_at: string
+}
+
+export interface AgingBucket {
+  key: string
+  label: string
+  amount: number
+}
+
+export interface AgingParty {
+  name: string
+  total: number
+  not_due: number
+  d1_30: number
+  d31_60: number
+  d61_90: number
+  d90_plus: number
+}
+
+export interface AgingInvoice {
+  id: number
+  number: string
+  party: string
+  invoice_date: string
+  due_date: string
+  days_overdue: number
+  open_amount: number
+  bucket: string
+}
+
+export interface AgingReport {
+  kind: 'customer' | 'supplier'
+  as_of: string
+  buckets: AgingBucket[]
+  total: number
+  parties: AgingParty[]
+  invoices: AgingInvoice[]
+}
+
+export interface CashFlowMonth {
+  month: string
+  inflow: number
+  outflow: number
+  net: number
+  closing: number
+  by_category: Record<string, number>
+}
+
+export interface CashFlowReport {
+  fiscal_year_id: number
+  start_date: string
+  end_date: string
+  cash_accounts: number[]
+  opening: number
+  closing: number
+  categories: { key: string; label: string }[]
+  months: CashFlowMonth[]
 }
 
 export interface VerificationListItem {
@@ -697,6 +786,17 @@ export interface BackupInfo {
   schema_version: string
   filename: string
   size_bytes: number
+  format?: 'json' | 'sql'
+  scope?: string | null
+  companies?: string[]
+  counts?: Record<string, number>
+  warnings?: string[]
+}
+
+export interface CompanyImportResponse {
+  company_ids: number[]
+  created: Record<string, number>
+  warnings: string[]
 }
 
 export interface RestoreResponse {
@@ -704,6 +804,7 @@ export interface RestoreResponse {
   backup_filename: string
   message: string
   stages_completed: string[]
+  warnings?: string[]
 }
 
 export interface BackupScheduleResponse {

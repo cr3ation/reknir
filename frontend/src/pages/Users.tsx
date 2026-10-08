@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users as UsersIcon, Plus, Building2, Trash2 } from 'lucide-react'
+import { Users as UsersIcon, Plus, Building2, Trash2, Bot, RefreshCw, Copy, Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { getErrorMessage } from '../utils/errors'
 import { useToast } from '@/contexts/ToastContext'
@@ -10,6 +10,18 @@ interface User {
   full_name: string
   is_admin: boolean
   is_active: boolean
+  is_service_account?: boolean
+  created_at: string
+}
+
+interface ServiceAccount {
+  id: number
+  full_name: string
+  email: string
+  is_admin: boolean
+  is_active: boolean
+  is_service_account: boolean
+  owner_id: number | null
   created_at: string
 }
 
@@ -37,9 +49,18 @@ export default function Users() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
   const [selectedRole, setSelectedRole] = useState('user')
 
+  // Service account states
+  const [serviceAccounts, setServiceAccounts] = useState<ServiceAccount[]>([])
+  const [showCreateBotModal, setShowCreateBotModal] = useState(false)
+  const [newBotName, setNewBotName] = useState('')
+  const [createdApiKey, setCreatedApiKey] = useState<string | null>(null)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [rotatedApiKey, setRotatedApiKey] = useState<{ id: number; key: string } | null>(null)
+
   useEffect(() => {
     loadUsers()
     loadCompanies()
+    loadServiceAccounts()
   }, [])
 
   const loadUsers = async () => {
@@ -69,6 +90,52 @@ export default function Users() {
     } catch (error) {
       console.error('Failed to load user companies:', error)
     }
+  }
+
+  const loadServiceAccounts = async () => {
+    try {
+      const response = await api.get('/auth/service-accounts')
+      setServiceAccounts(response.data)
+    } catch (error) {
+      console.error('Failed to load service accounts:', error)
+    }
+  }
+
+  const handleCreateServiceAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const response = await api.post('/auth/service-accounts', { full_name: newBotName })
+      setCreatedApiKey(response.data.api_key)
+      setShowApiKey(true)
+      setNewBotName('')
+      loadServiceAccounts()
+    } catch (error) {
+      alert(getErrorMessage(error, 'Kunde inte skapa bot-konto'))
+    }
+  }
+
+  const handleDeactivateServiceAccount = async (id: number) => {
+    if (!confirm('Är du säker på att du vill inaktivera detta bot-konto?')) return
+    try {
+      await api.delete(`/auth/service-accounts/${id}`)
+      loadServiceAccounts()
+    } catch (error) {
+      alert(getErrorMessage(error, 'Kunde inte inaktivera bot-konto'))
+    }
+  }
+
+  const handleRotateKey = async (id: number) => {
+    if (!confirm('Är du säker? Den gamla API-nyckeln slutar fungera omedelbart.')) return
+    try {
+      const response = await api.post(`/auth/service-accounts/${id}/rotate-key`)
+      setRotatedApiKey({ id, key: response.data.api_key })
+    } catch (error) {
+      alert(getErrorMessage(error, 'Kunde inte rotera API-nyckel'))
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
   }
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -215,6 +282,199 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+
+      {/* Service Accounts Section */}
+      <div className="flex items-center justify-between mt-10">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Bot-konton</h2>
+          <p className="text-gray-500 mt-1">Hantera bot-användare för automatisering (t.ex. MCP)</p>
+        </div>
+        <button
+          onClick={() => setShowCreateBotModal(true)}
+          className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+        >
+          <Bot className="w-5 h-5" />
+          Skapa bot-konto
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bot</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Skapad</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Åtgärder</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {serviceAccounts.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  Inga bot-konton skapade ännu.
+                </td>
+              </tr>
+            ) : (
+              serviceAccounts.map((sa) => (
+                <tr key={sa.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                        <Bot className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{sa.full_name}</div>
+                        <div className="text-xs text-gray-400">ID: {sa.id}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(sa.created_at).toLocaleDateString('sv-SE')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        sa.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {sa.is_active ? 'Aktiv' : 'Inaktiv'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => openCompanyModal(sa as unknown as User)}
+                        className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                      >
+                        <Building2 className="w-4 h-4" />
+                        Företag
+                      </button>
+                      <button
+                        onClick={() => handleRotateKey(sa.id)}
+                        className="text-amber-600 hover:text-amber-900 flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Rotera nyckel
+                      </button>
+                      {sa.is_active && (
+                        <button
+                          onClick={() => handleDeactivateServiceAccount(sa.id)}
+                          className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Inaktivera
+                        </button>
+                      )}
+                    </div>
+                    {rotatedApiKey && rotatedApiKey.id === sa.id && (
+                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs text-amber-800 font-medium mb-1">Ny API-nyckel (visas bara en gång):</p>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-amber-100 px-2 py-1 rounded flex-1 break-all">
+                            {rotatedApiKey.key}
+                          </code>
+                          <button
+                            onClick={() => copyToClipboard(rotatedApiKey.key)}
+                            className="text-amber-700 hover:text-amber-900"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Create Bot Account Modal */}
+      {showCreateBotModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            {createdApiKey ? (
+              <>
+                <h2 className="text-xl font-bold mb-4 text-emerald-700">Bot-konto skapat!</h2>
+                <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-amber-800 font-medium mb-2">
+                    Kopiera API-nyckeln nu. Den visas bara en gång!
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-white px-3 py-2 rounded border flex-1 break-all">
+                      {showApiKey ? createdApiKey : '••••••••••••••••••••••••'}
+                    </code>
+                    <button
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="text-gray-600 hover:text-gray-800"
+                    >
+                      {showApiKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(createdApiKey)}
+                      className="text-gray-600 hover:text-gray-800"
+                    >
+                      <Copy className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Glöm inte att ge bot-kontot åtkomst till rätt företag via "Företag"-knappen.
+                </p>
+                <button
+                  onClick={() => {
+                    setShowCreateBotModal(false)
+                    setCreatedApiKey(null)
+                    setShowApiKey(false)
+                  }}
+                  className="w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+                >
+                  Stäng
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold mb-4">Skapa bot-konto</h2>
+                <form onSubmit={handleCreateServiceAccount} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Namn
+                    </label>
+                    <input
+                      type="text"
+                      value={newBotName}
+                      onChange={(e) => setNewBotName(e.target.value)}
+                      placeholder="t.ex. MCP Bot"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ett beskrivande namn som visas i granskningsloggen.
+                    </p>
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+                    >
+                      Skapa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateBotModal(false)}
+                      className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+                    >
+                      Avbryt
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Create User Modal */}
       {showCreateModal && (

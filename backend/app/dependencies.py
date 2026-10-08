@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import CompanyUser, User
+from app.services import audit_service
 from app.services.auth_service import decode_access_token
 
 # OAuth2 scheme for token extraction
@@ -49,6 +50,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
 
     print(f"DEBUG: User found: {user.email}")
+    audit_service.current_user_email.set(user.email)
     return user
 
 

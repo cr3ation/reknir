@@ -17,6 +17,7 @@ from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, InvoiceStatus, PaymentStatus
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
+from app.services import ledger_service
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -369,5 +370,9 @@ async def get_dashboard_overview(
         "overdue_invoices": {"count": overdue_count, "amount": overdue_amount},
         "pending_expenses": {"count": pending_expenses_count, "amount": pending_expenses_amount},
         "recent_verifications": recent_verifications_data,
+        "verification_gaps": [
+            g for g in ledger_service.find_gaps(db, company_id, fiscal_year.id) if not g["explanation"]
+        ],
+        "locked_through": (lock.isoformat() if (lock := ledger_service.locked_through(db, company_id)) else None),
         "monthly_trend": trend_data,
     }

@@ -8,15 +8,18 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_active_user, get_user_company_ids
+from app.dependencies import get_current_active_user, get_user_company_ids, verify_company_access
 from app.models.account import Account
 from app.models.company import Company, PaymentType
+from app.models.compliance import PeriodLock
 from app.models.default_account import DefaultAccount
 from app.models.fiscal_year import FiscalYear
 from app.models.user import CompanyUser, User
 from app.models.verification import Verification
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
-from app.services import default_account_service
+from app.schemas.compliance import PeriodLockCreate, PeriodLockResponse, PeriodLockStatus
+from app.services import company_service, default_account_service, ledger_service
+from app.services.storage import LOGOS_DIR
 
 router = APIRouter()
 
@@ -243,9 +246,45 @@ def delete_company(
             detail="You don't have access to this company",
         )
 
-    db.delete(company)
+    company_service.delete_company(db, company)
     db.commit()
     return None
+
+
+@router.get("/{company_id}/period-locks", response_model=PeriodLockStatus)
+async def get_period_locks(
+    company_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Effective period lock and the lock history."""
+    await verify_company_access(company_id, current_user, db)
+    history = (
+        db.query(PeriodLock).filter(PeriodLock.company_id == company_id).order_by(PeriodLock.created_at.desc()).all()
+    )
+    return PeriodLockStatus(locked_through=ledger_service.locked_through(db, company_id), history=history)
+
+
+@router.post("/{company_id}/period-locks", response_model=PeriodLockResponse, status_code=status.HTTP_201_CREATED)
+async def lock_period(
+    company_id: int,
+    body: PeriodLockCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Lock the books through a date (typically the end of a declared VAT period).
+
+    Nothing can be posted on or before that date afterwards; corrections go on a
+    later date. Locks only move forward.
+    """
+    await verify_company_access(company_id, current_user, db)
+    try:
+        lock = ledger_service.lock_period(db, company_id, body.locked_through, current_user, body.note)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    db.commit()
+    db.refresh(lock)
+    return lock
 
 
 @router.post("/{company_id}/seed-bas", status_code=status.HTTP_200_OK)
@@ -537,7 +576,7 @@ async def upload_company_logo(
         )
 
     # Create uploads directory if it doesn't exist
-    upload_dir = "/app/uploads/logos"
+    upload_dir = str(LOGOS_DIR)
     os.makedirs(upload_dir, exist_ok=True)
 
     # Generate unique filename
@@ -591,7 +630,7 @@ async def get_company_logo(
             detail="No logo found for this company",
         )
 
-    file_path = f"/app/uploads/logos/{company.logo_filename}"
+    file_path = str(LOGOS_DIR / company.logo_filename)
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -638,7 +677,7 @@ async def delete_company_logo(
         )
 
     # Remove file from disk
-    file_path = f"/app/uploads/logos/{company.logo_filename}"
+    file_path = str(LOGOS_DIR / company.logo_filename)
     if os.path.exists(file_path):
         os.remove(file_path)
 

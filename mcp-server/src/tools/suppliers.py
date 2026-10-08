@@ -11,6 +11,7 @@ def get_supplier_tools() -> list[Tool]:
             name="find_supplier",
             description=(
                 "Find a supplier by organization number or name. "
+                "You must provide at least one of org_number or name. "
                 "Returns supplier details if found, otherwise returns null. "
                 "Use this before creating a new supplier to avoid duplicates."
             ),
@@ -26,10 +27,7 @@ def get_supplier_tools() -> list[Tool]:
                         "description": "Supplier name (partial match supported)",
                     },
                 },
-                "oneOf": [
-                    {"required": ["org_number"]},
-                    {"required": ["name"]},
-                ],
+                "additionalProperties": False,
             },
         ),
         Tool(

@@ -87,6 +87,8 @@ class VerificationResponse(VerificationBase):
     transaction_lines: list[TransactionLineResponse]
     is_balanced: bool
     total_amount: Decimal
+    reverses_verification_id: int | None = None
+    reversed_by_verification_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True, json_encoders={Decimal: float})
 

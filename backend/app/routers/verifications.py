@@ -10,31 +10,27 @@ from app.database import get_db
 from app.dependencies import get_current_active_user, verify_company_access
 from app.models.account import Account
 from app.models.attachment import Attachment, AttachmentLink, AttachmentRole, EntityType
+from app.models.compliance import VerificationGapExplanation
 from app.models.fiscal_year import FiscalYear
 from app.models.invoice import Invoice, SupplierInvoice
 from app.models.user import User
 from app.models.verification import TransactionLine, Verification
 from app.schemas.attachment import AttachmentLinkCreate, EntityAttachmentItem
+from app.schemas.compliance import GapExplanationCreate, GapItem, ReversalCreate
 from app.schemas.verification import (
     VerificationCreate,
     VerificationListItem,
     VerificationResponse,
     VerificationUpdate,
 )
+from app.services import ledger_service
 
 router = APIRouter()
 
 
-def get_next_verification_number(db: Session, company_id: int, series: str) -> int:
-    """Helper function to get next verification number for a series"""
-    last_ver = (
-        db.query(Verification)
-        .filter(Verification.company_id == company_id, Verification.series == series)
-        .order_by(desc(Verification.verification_number))
-        .first()
-    )
-
-    return (last_ver.verification_number + 1) if last_ver else 1
+def get_next_verification_number(db: Session, company_id: int, series: str, fiscal_year_id: int) -> int:
+    """Next number in a series. Numbering restarts every fiscal year (see ledger_service)."""
+    return ledger_service.next_verification_number(db, company_id, series, fiscal_year_id)
 
 
 @router.post("/", response_model=VerificationResponse, status_code=status.HTTP_201_CREATED)
@@ -47,8 +43,11 @@ async def create_verification(
     # Verify user has access to this company
     await verify_company_access(verification.company_id, current_user, db)
 
-    # Get next verification number for this series
-    next_number = get_next_verification_number(db, verification.company_id, verification.series)
+    # Period lock and sequential numbering within the fiscal year
+    ledger_service.assert_period_open(db, verification.company_id, verification.transaction_date)
+    next_number = get_next_verification_number(
+        db, verification.company_id, verification.series, verification.fiscal_year_id
+    )
 
     # Create verification
     db_verification = Verification(
@@ -160,6 +159,64 @@ async def list_verifications(
     ]
 
 
+@router.get("/gaps", response_model=list[GapItem])
+async def list_gaps(
+    company_id: int = Query(...),
+    fiscal_year_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Missing numbers per series in a fiscal year, with explanations where recorded."""
+    await verify_company_access(company_id, current_user, db)
+    return ledger_service.find_gaps(db, company_id, fiscal_year_id)
+
+
+@router.post("/gaps/explain", response_model=GapItem, status_code=status.HTTP_201_CREATED)
+async def explain_gap(
+    body: GapExplanationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Record why a verification number is missing (BFNAR 2013:2)."""
+    await verify_company_access(body.company_id, current_user, db)
+    exists = (
+        db.query(Verification)
+        .filter(
+            Verification.company_id == body.company_id,
+            Verification.fiscal_year_id == body.fiscal_year_id,
+            Verification.series == body.series,
+            Verification.verification_number == body.verification_number,
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Numret finns, det är ingen lucka")
+    row = (
+        db.query(VerificationGapExplanation)
+        .filter(
+            VerificationGapExplanation.company_id == body.company_id,
+            VerificationGapExplanation.fiscal_year_id == body.fiscal_year_id,
+            VerificationGapExplanation.series == body.series,
+            VerificationGapExplanation.verification_number == body.verification_number,
+        )
+        .first()
+    )
+    if row:
+        row.explanation = body.explanation
+    else:
+        row = VerificationGapExplanation(
+            company_id=body.company_id,
+            fiscal_year_id=body.fiscal_year_id,
+            series=body.series,
+            verification_number=body.verification_number,
+            explanation=body.explanation,
+            created_by=current_user.id,
+        )
+        db.add(row)
+    db.commit()
+    return GapItem(series=row.series, verification_number=row.verification_number, explanation=row.explanation)
+
+
 @router.get("/{verification_id}", response_model=VerificationResponse)
 async def get_verification(
     verification_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
@@ -189,7 +246,11 @@ async def update_verification(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Update a verification (only if not locked)"""
+    """Posted verifications are immutable (Bokföringslagen 5 kap. 5 §).
+
+    Corrections are made with POST /{id}/reverse. Editing is only possible with
+    DEBUG=True, for development databases.
+    """
     verification = db.query(Verification).filter(Verification.id == verification_id).first()
     if not verification:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Verification {verification_id} not found")
@@ -199,6 +260,11 @@ async def update_verification(
 
     if verification.locked:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify locked verification")
+    if not settings.debug:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bokförda verifikationer ändras inte. Skapa en rättelse (vändning) i stället.",
+        )
 
     # Update fields
     update_data = verification_update.model_dump(exclude_unset=True)
@@ -284,6 +350,48 @@ async def delete_verification(
     db.delete(verification)
     db.commit()
     return None
+
+
+# =============================================================================
+# Corrections and numbering gaps
+# =============================================================================
+
+
+def _response(db: Session, verification: Verification) -> VerificationResponse:
+    response = VerificationResponse.model_validate(verification)
+    for i, line in enumerate(response.transaction_lines):
+        account = db.query(Account).filter(Account.id == verification.transaction_lines[i].account_id).first()
+        line.account_number = account.account_number
+        line.account_name = account.name
+    return response
+
+
+@router.post("/{verification_id}/reverse", response_model=VerificationResponse, status_code=status.HTTP_201_CREATED)
+async def reverse_verification(
+    verification_id: int,
+    body: ReversalCreate | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create the correcting verification that cancels this one (ändringsverifikation).
+
+    Debit and credit are swapped on the same accounts. The reversal is dated today
+    unless a date in an open period is given, and both verifications link to each other.
+    """
+    verification = db.query(Verification).filter(Verification.id == verification_id).first()
+    if not verification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Verification {verification_id} not found")
+    await verify_company_access(verification.company_id, current_user, db)
+    body = body or ReversalCreate()
+    try:
+        reversal = ledger_service.create_reversal(
+            db, verification, current_user, description=body.description, transaction_date=body.transaction_date
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    db.commit()
+    db.refresh(reversal)
+    return _response(db, reversal)
 
 
 # =============================================================================

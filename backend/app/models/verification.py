@@ -31,6 +31,10 @@ class Verification(Base):
     # Status
     locked = Column(Boolean, default=False, nullable=False)  # Locked after period close
 
+    # Corrections: a posted verification is never edited, it is reversed by a new one
+    reverses_verification_id = Column(Integer, ForeignKey("verifications.id"), nullable=True)
+    reversed_by_verification_id = Column(Integer, ForeignKey("verifications.id"), nullable=True)
+
     # Audit trail
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -39,6 +43,12 @@ class Verification(Base):
     company = relationship("Company", back_populates="verifications")
     fiscal_year = relationship("FiscalYear", back_populates="verifications")
     transaction_lines = relationship("TransactionLine", back_populates="verification", cascade="all, delete-orphan")
+    reverses = relationship(
+        "Verification", foreign_keys=[reverses_verification_id], remote_side="Verification.id", uselist=False
+    )
+    reversed_by = relationship(
+        "Verification", foreign_keys=[reversed_by_verification_id], remote_side="Verification.id", uselist=False
+    )
 
     def __repr__(self):
         return f"<Verification {self.series}{self.verification_number} - {self.description[:30]}>"

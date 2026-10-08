@@ -41,6 +41,13 @@ import type {
   ChatSession,
   ChatSessionDetail,
   AIUpload,
+  CompanyImportResponse,
+  VerificationGap,
+  PeriodLockStatus,
+  PeriodLockEntry,
+  AuditLogEntry,
+  AgingReport,
+  CashFlowReport,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
@@ -86,6 +93,9 @@ export const companyApi = {
   create: (data: Omit<Company, 'id'>) => api.post<Company>('/companies/', data),
   update: (id: number, data: Partial<Company>) => api.patch<Company>(`/companies/${id}`, data),
   delete: (id: number) => api.delete(`/companies/${id}`),
+  periodLocks: (id: number) => api.get<PeriodLockStatus>(`/companies/${id}/period-locks`),
+  lockPeriod: (id: number, data: { locked_through: string; note?: string }) =>
+    api.post<PeriodLockEntry>(`/companies/${id}/period-locks`, data),
   initializeDefaults: (id: number, fiscalYearId?: number) =>
     api.post<{ message: string; default_accounts_configured: number }>(
       `/companies/${id}/initialize-defaults`,
@@ -161,6 +171,12 @@ export const verificationApi = {
   update: (id: number, data: Partial<Verification>) =>
     api.patch<Verification>(`/verifications/${id}`, data),
   delete: (id: number) => api.delete(`/verifications/${id}`),
+  reverse: (id: number, data?: { description?: string; transaction_date?: string }) =>
+    api.post<Verification>(`/verifications/${id}/reverse`, data ?? {}),
+  gaps: (companyId: number, fiscalYearId: number) =>
+    api.get<VerificationGap[]>('/verifications/gaps', { params: { company_id: companyId, fiscal_year_id: fiscalYearId } }),
+  explainGap: (data: { company_id: number; fiscal_year_id: number; series: string; verification_number: number; explanation: string }) =>
+    api.post<VerificationGap>('/verifications/gaps/explain', data),
   // Attachment link methods
   listAttachments: (id: number) => api.get<EntityAttachment[]>(`/verifications/${id}/attachments`),
   linkAttachment: (id: number, attachmentId: number, role?: AttachmentRole) =>
@@ -190,8 +206,18 @@ export const postingTemplateApi = {
     api.patch(`/posting-templates/reorder?company_id=${companyId}`, templateOrders),
 }
 
+// Audit log (behandlingshistorik)
+export const auditApi = {
+  list: (params: { company_id?: number; table_name?: string; record_id?: number; limit?: number; offset?: number }) =>
+    api.get<AuditLogEntry[]>('/audit-log/', { params }),
+}
+
 // Reports
 export const reportApi = {
+  aging: (companyId: number, kind: 'customer' | 'supplier', asOf?: string) =>
+    api.get<AgingReport>('/reports/aging', { params: { company_id: companyId, kind, as_of: asOf } }),
+  cashFlow: (companyId: number, fiscalYearId: number) =>
+    api.get<CashFlowReport>('/reports/cash-flow', { params: { company_id: companyId, fiscal_year_id: fiscalYearId } }),
   balanceSheet: (companyId: number, fiscalYearId?: number) =>
     api.get<BalanceSheet>('/reports/balance-sheet', { params: { company_id: companyId, fiscal_year_id: fiscalYearId } }),
   incomeStatement: (companyId: number, fiscalYearId?: number) =>
@@ -402,6 +428,17 @@ export const backupApi = {
     const formData = new FormData()
     formData.append('file', file)
     return api.post<RestoreResponse>('/backup/restore', formData, {
+      timeout: BACKUP_TIMEOUT,
+    })
+  },
+
+  exportCompany: (companyId: number) =>
+    api.get(`/backup/export-company/${companyId}`, { responseType: 'blob', timeout: BACKUP_TIMEOUT }),
+
+  importCompany: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<CompanyImportResponse>('/backup/import-company', formData, {
       timeout: BACKUP_TIMEOUT,
     })
   },

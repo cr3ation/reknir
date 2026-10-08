@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, FileText, Lock, CheckCircle, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Lock, CheckCircle, AlertCircle, Undo2 } from 'lucide-react'
 import { verificationApi, accountApi, attachmentApi } from '@/services/api'
 import type { Verification, Account, EntityAttachment } from '@/types'
 import { EntityType } from '@/types'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
 import AttachmentManager from '@/components/AttachmentManager'
+import AuditHistory from '@/components/compliance/AuditHistory'
 import { useToast } from '@/contexts/ToastContext'
 
 export default function VerificationDetail() {
@@ -19,6 +20,28 @@ export default function VerificationDetail() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [attachments, setAttachments] = useState<EntityAttachment[]>([])
   const [loading, setLoading] = useState(true)
+  const [showReversal, setShowReversal] = useState(false)
+  const [reversalDate, setReversalDate] = useState(new Date().toISOString().slice(0, 10))
+  const [reversalText, setReversalText] = useState('')
+  const [reversing, setReversing] = useState(false)
+
+  const handleReverse = async () => {
+    if (!verification?.id) return
+    setReversing(true)
+    try {
+      const res = await verificationApi.reverse(verification.id, {
+        transaction_date: reversalDate,
+        description: reversalText.trim() || undefined,
+      })
+      showToast(`Rättelse ${res.data.series}${res.data.verification_number} skapad`, 'success')
+      setShowReversal(false)
+      navigate(`/verifications/${res.data.id}`)
+    } catch (error: any) {
+      showToast(error.response?.data?.detail || 'Kunde inte skapa rättelsen', 'error')
+    } finally {
+      setReversing(false)
+    }
+  }
 
   const loadVerification = useCallback(async () => {
     try {
@@ -347,23 +370,68 @@ export default function VerificationDetail() {
           {/* Actions */}
           <div className="card">
             <h2 className="text-xl font-bold mb-4">Åtgärder</h2>
-            <div className="space-y-2">
-              {!verification.locked && (
-                <Link
-                  to="/verifications"
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Bokförda verifikationer ändras inte. Fel rättas med en ny verifikation som vänder den här (Bokföringslagen 5 kap. 5 §).
+              </p>
+              {verification.reversed_by_verification_id ? (
+                <p className="text-sm text-amber-700">
+                  Rättad av{' '}
+                  <Link to={`/verifications/${verification.reversed_by_verification_id}`} className="underline font-medium">
+                    verifikation #{verification.reversed_by_verification_id}
+                  </Link>
+                  .
+                </p>
+              ) : !showReversal ? (
+                <button
+                  onClick={() => setShowReversal(true)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
-                  <FileText className="w-4 h-4" />
-                  Redigera
-                </Link>
+                  <Undo2 className="w-4 h-4" />
+                  Skapa rättelse (vändning)
+                </button>
+              ) : (
+                <div className="space-y-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+                  <label className="block text-xs font-medium text-gray-600">Rättelsens datum</label>
+                  <input
+                    type="date"
+                    value={reversalDate}
+                    onChange={(e) => setReversalDate(e.target.value)}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
+                  />
+                  <label className="block text-xs font-medium text-gray-600">Text (valfri)</label>
+                  <input
+                    type="text"
+                    value={reversalText}
+                    onChange={(e) => setReversalText(e.target.value)}
+                    placeholder={`Rättelse av ${verification.series}${verification.verification_number}`}
+                    className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleReverse} disabled={reversing} className="btn btn-primary text-sm flex-1">
+                      {reversing ? 'Skapar...' : 'Bokför rättelsen'}
+                    </button>
+                    <button onClick={() => setShowReversal(false)} className="btn btn-secondary text-sm">
+                      Avbryt
+                    </button>
+                  </div>
+                </div>
               )}
-              {verification.locked && (
+              {verification.reverses_verification_id && (
                 <p className="text-sm text-gray-600">
-                  Låsta verifikationer kan inte redigeras.
+                  Den här verifikationen rättar{' '}
+                  <Link to={`/verifications/${verification.reverses_verification_id}`} className="underline font-medium">
+                    verifikation #{verification.reverses_verification_id}
+                  </Link>
+                  .
                 </p>
               )}
             </div>
           </div>
+
+          {verification.id && (
+            <AuditHistory companyId={verification.company_id} tableName="verifications" recordId={verification.id} limit={20} title="Historik" />
+          )}
 
           {/* Summary */}
           <div className="card">

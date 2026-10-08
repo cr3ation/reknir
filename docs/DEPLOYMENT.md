@@ -143,13 +143,39 @@ Visit your domain: `https://reknir.yourdomain.com`
 
 ### Setup Automated Backups
 
-Automatic backups are configured via **Settings → Import/Export → Automatisk backup**. Options include backup interval (6h to 14 days) and maximum number of backups to retain.
+Automatic backups are configured via **Settings → Systembackup → Automatisk backup**. Options include backup interval (6h to 14 days) and maximum number of backups to retain.
 
-Manual backups can also be created via CLI:
+A backup is a self-contained `reknir_backup_<timestamp>.zip` in `./backups/`:
+every table as JSON (all companies, users with bcrypt password hashes, AI and
+backup settings), every stored file (attachments, archived invoice PDFs,
+receipts, logos, AI uploads), one SIE4 file per fiscal year, JSON Schema for
+the format, and a manifest with a SHA-256 for every member. It does not depend
+on PostgreSQL tooling and restores into a fresh installation of the same or a
+newer Reknir version. See [docs/PORTABLE_ARCHIVE.md](PORTABLE_ARCHIVE.md).
+
+Manual backups and restores via CLI:
 
 ```bash
-docker compose exec backend python -m app.cli backup create
+docker compose exec backend python -m app.cli backup                 # create JSON + files backup
+docker compose exec backend python -m app.cli backup --sql           # legacy pg_dump backup
+docker compose exec backend python -m app.cli list-backups
+docker compose exec backend python -m app.cli verify-backup /backups/reknir_backup_xxx.zip
+docker compose exec -it backend python -m app.cli restore /backups/reknir_backup_xxx.zip
 ```
+
+Restore is all-or-nothing: the archive is verified, loaded into a temporary
+database and a temporary files directory, validated, and only then swapped in.
+The previous database is kept as `reknir_pre_restore` and the previous upload
+folders as `uploads/<name>_pre_restore` until the next restore. Backups made
+with the old `.tar.gz` format can still be restored.
+
+Keep copies of `./backups/*.zip` off the server (download them from Settings or
+copy them with `scp`/`rsync`); the backup directory itself is on the same disk
+as the data it protects.
+
+To move a single company to another Reknir instance, use
+`python -m app.cli export-company <id>` and `import-company <archive.zip>`, or
+the **Företagsarkiv** buttons on the Settings page.
 
 ### Monitoring
 

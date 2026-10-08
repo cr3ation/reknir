@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.config import settings
@@ -10,6 +11,7 @@ from app.routers import (
     accounts,
     ai_assistant,
     attachments,
+    audit,
     auth,
     backup,
     companies,
@@ -29,6 +31,7 @@ from app.routers import (
     verifications,
 )
 from app.services.backup_scheduler import backup_scheduler_loop
+from app.services.ledger_service import PeriodLockedError
 
 
 @asynccontextmanager
@@ -97,6 +100,13 @@ app.include_router(default_accounts.router)
 
 # Backup and restore
 app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
+app.include_router(audit.router, prefix="/api/audit-log", tags=["audit"])
+
+
+@app.exception_handler(PeriodLockedError)
+async def _period_locked(request, exc: PeriodLockedError):
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
+
 
 # AI assistant
 app.include_router(ai_assistant.router, prefix="/api/ai", tags=["ai-assistant"])

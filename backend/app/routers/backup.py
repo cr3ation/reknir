@@ -1,6 +1,5 @@
 """Backup and restore API endpoints. Admin only."""
 
-import fnmatch
 import logging
 import shutil
 import tempfile
@@ -12,14 +11,15 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.database import get_db
 from app.dependencies import require_admin
 from app.models.backup_schedule import BackupSchedule
 from app.models.user import User
-from app.services import backup_service, restore_service
+from app.services import archive_export_service, archive_import_service, backup_service, restore_service
 from app.services.backup_scheduler import signal_reconfigure
-from app.services.backup_service import BACKUP_DIR
+from app.services.storage import UPLOADS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,11 @@ class BackupInfo(BaseModel):
     schema_version: str
     filename: str
     size_bytes: int
+    format: Literal["json", "sql"] = "json"
+    scope: str | None = None
+    companies: list[str] = []
+    counts: dict[str, int] = {}
+    warnings: list[str] = []
 
 
 class RestoreResponse(BaseModel):
@@ -42,6 +47,25 @@ class RestoreResponse(BaseModel):
     backup_filename: str
     message: str
     stages_completed: list[str]
+    warnings: list[str] = []
+
+
+class CompanyImportResponse(BaseModel):
+    company_ids: list[int]
+    created: dict[str, int]
+    warnings: list[str]
+
+
+def _check_backup_filename(filename: str) -> Path:
+    # Security: reject path traversal attempts
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+    if not backup_service.is_backup_filename(filename):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid backup filename format")
+    archive_path = backup_service.BACKUP_DIR / filename
+    if not archive_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Backup not found: {filename}")
+    return archive_path
 
 
 class BackupScheduleResponse(BaseModel):
@@ -70,19 +94,7 @@ async def create_backup(
     """Create a full backup on the server. Admin only."""
     try:
         archive_path = backup_service.create_backup()
-        # Read manifest to return metadata
-        backups = backup_service.list_backups()
-        for b in backups:
-            if b["filename"] == archive_path.name:
-                return b
-        # Fallback if manifest read fails
-        return BackupInfo(
-            created_at=datetime.now(UTC).isoformat(),
-            app_version="unknown",
-            schema_version="unknown",
-            filename=archive_path.name,
-            size_bytes=archive_path.stat().st_size,
-        )
+        return backup_service.describe_backup(archive_path)
     except Exception as e:
         logger.error(f"Backup creation failed: {e}")
         raise HTTPException(
@@ -105,31 +117,11 @@ async def download_backup(
     admin: User = Depends(require_admin),
 ):
     """Download a specific backup file from server. Admin only."""
-    # Security: reject path traversal attempts
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename",
-        )
-
-    # Validate filename pattern
-    if not fnmatch.fnmatch(filename, "reknir_backup_*.tar.gz"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid backup filename format",
-        )
-
-    archive_path = BACKUP_DIR / filename
-    if not archive_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Backup not found: {filename}",
-        )
-
+    archive_path = _check_backup_filename(filename)
     return FileResponse(
         path=str(archive_path),
         filename=filename,
-        media_type="application/gzip",
+        media_type="application/zip" if archive_path.suffix == ".zip" else "application/gzip",
     )
 
 
@@ -146,26 +138,7 @@ async def restore_from_server(
 
     Admin only.
     """
-    # Security: reject path traversal attempts
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename",
-        )
-
-    # Validate filename pattern
-    if not fnmatch.fnmatch(filename, "reknir_backup_*.tar.gz"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid backup filename format",
-        )
-
-    archive_path = BACKUP_DIR / filename
-    if not archive_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Backup not found: {filename}",
-        )
+    archive_path = _check_backup_filename(filename)
 
     try:
         result = restore_service.restore_from_archive(
@@ -178,6 +151,7 @@ async def restore_from_server(
             backup_filename=result.backup_filename,
             message=result.message,
             stages_completed=result.stages_completed,
+            warnings=result.warnings,
         )
 
     except restore_service.RestoreError as e:
@@ -213,9 +187,11 @@ async def restore_backup(
     Admin only.
     """
     temp_archive = None
+    name = file.filename or ""
+    suffix = ".zip" if name.endswith(".zip") else ".tar.gz"
     try:
         # Save uploaded file to temp location
-        with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False, prefix="reknir_restore_upload_") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, prefix="reknir_restore_upload_") as tmp:
             shutil.copyfileobj(file.file, tmp)
             temp_archive = Path(tmp.name)
 
@@ -226,9 +202,10 @@ async def restore_backup(
 
         return RestoreResponse(
             success=result.success,
-            backup_filename=result.backup_filename,
+            backup_filename=name or result.backup_filename,
             message=result.message,
             stages_completed=result.stages_completed,
+            warnings=result.warnings,
         )
 
     except restore_service.RestoreError as e:
@@ -254,6 +231,58 @@ async def restore_backup(
             temp_archive.unlink()
 
 
+# ---- Company archives ----
+
+
+@router.get("/export-company/{company_id}")
+async def export_company_archive(
+    company_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Download one company as a portable archive (no users, no credentials). Admin only."""
+    stamp = datetime.now(UTC).strftime("%Y-%m-%d_%H.%M.%S")
+    out_dir = Path(tempfile.mkdtemp(prefix="reknir_company_export_"))
+    out_path = out_dir / f"reknir_company_{company_id}_{stamp}.zip"
+    try:
+        archive_export_service.export_archive(db, out_path, scope="company", company_ids=[company_id])
+    except ValueError as e:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return FileResponse(
+        path=str(out_path),
+        filename=out_path.name,
+        media_type="application/zip",
+        background=BackgroundTask(shutil.rmtree, out_dir, ignore_errors=True),
+    )
+
+
+@router.post("/import-company", response_model=CompanyImportResponse)
+async def import_company_archive(
+    file: UploadFile = File(...),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Import a company archive as a new company. Existing data is untouched. Admin only."""
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False, prefix="reknir_company_import_") as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        temp_archive = Path(tmp.name)
+    try:
+        archive = archive_import_service.verify_archive(temp_archive)
+        report = archive_import_service.load_archive(
+            db, archive, uploads_target=UPLOADS_DIR, import_users=False, fallback_user=admin
+        )
+        db.commit()
+        archive_import_service.cross_check_sie(db, archive, report)
+    except archive_import_service.ArchiveError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    finally:
+        temp_archive.unlink(missing_ok=True)
+    logger.info(f"Company archive imported by {admin.email}: companies {report.company_ids}")
+    return CompanyImportResponse(company_ids=report.company_ids, created=report.created, warnings=report.warnings)
+
+
 # ---- Delete ----
 
 
@@ -263,25 +292,7 @@ async def delete_backup(
     admin: User = Depends(require_admin),
 ):
     """Delete a backup file from the server. Admin only."""
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename",
-        )
-
-    if not fnmatch.fnmatch(filename, "reknir_backup_*.tar.gz"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid backup filename format",
-        )
-
-    archive_path = BACKUP_DIR / filename
-    if not archive_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Backup not found: {filename}",
-        )
-
+    archive_path = _check_backup_filename(filename)
     archive_path.unlink()
     logger.info(f"Backup deleted by {admin.email}: {filename}")
 

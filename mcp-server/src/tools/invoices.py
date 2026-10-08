@@ -168,7 +168,18 @@ async def handle_invoice_tool(
     """Handle invoice tool calls"""
 
     if name == "create_supplier_invoice":
-        invoice = await client.create_supplier_invoice(arguments)
+        # Remap MCP tool field names to backend schema field names
+        api_data = {
+            "company_id": arguments["company_id"],
+            "supplier_id": arguments["supplier_id"],
+            "supplier_invoice_number": arguments["invoice_number"],
+            "invoice_date": arguments["invoice_date"],
+            "due_date": arguments.get("due_date", arguments["invoice_date"]),
+            "supplier_invoice_lines": arguments["lines"],
+        }
+        if arguments.get("description"):
+            api_data["notes"] = arguments["description"]
+        invoice = await client.create_supplier_invoice(api_data)
 
         # Format the response
         total_net = sum(
@@ -183,7 +194,7 @@ async def handle_invoice_tool(
         result = (
             f"✓ Supplier invoice created successfully!\n\n"
             f"Invoice ID: {invoice['id']}\n"
-            f"Invoice Number: {invoice['invoice_number']}\n"
+            f"Invoice Number: {invoice.get('supplier_invoice_number', 'N/A')}\n"
             f"Supplier: {invoice.get('supplier_name', 'N/A')}\n"
             f"Date: {invoice['invoice_date']}\n"
             f"Status: {invoice['status']}\n\n"
@@ -202,7 +213,7 @@ async def handle_invoice_tool(
                 type="text",
                 text=(
                     f"✓ Invoice registered (booked) successfully!\n\n"
-                    f"Invoice: {invoice['invoice_number']}\n"
+                    f"Invoice: {invoice.get('supplier_invoice_number', 'N/A')}\n"
                     f"Status: {invoice['status']}\n"
                     f"Verification created: Yes\n\n"
                     f"The invoice is now in accounts payable."
@@ -221,7 +232,7 @@ async def handle_invoice_tool(
                 type="text",
                 text=(
                     f"✓ Invoice marked as paid!\n\n"
-                    f"Invoice: {invoice['invoice_number']}\n"
+                    f"Invoice: {invoice.get('supplier_invoice_number', 'N/A')}\n"
                     f"Status: {invoice['status']}\n"
                     f"Paid date: {invoice.get('paid_date', 'N/A')}\n"
                     f"Amount: {invoice.get('paid_amount', invoice.get('total_amount', 0)):.2f} SEK"
@@ -251,7 +262,7 @@ async def handle_invoice_tool(
             }.get(inv.get("status", ""), "")
 
             result += (
-                f"{status_emoji} {inv['invoice_number']} - "
+                f"{status_emoji} {inv.get('supplier_invoice_number', inv.get('invoice_number', 'N/A'))} - "
                 f"{inv.get('supplier_name', 'Unknown')} - "
                 f"{inv.get('total_amount', 0):.2f} SEK "
                 f"({inv.get('status', 'unknown')})\n"
@@ -267,7 +278,7 @@ async def handle_invoice_tool(
 
         result = (
             f"Invoice Details:\n\n"
-            f"Invoice Number: {invoice['invoice_number']}\n"
+            f"Invoice Number: {invoice.get('supplier_invoice_number', 'N/A')}\n"
             f"Supplier: {invoice.get('supplier_name', 'N/A')}\n"
             f"Date: {invoice['invoice_date']}\n"
             f"Due Date: {invoice.get('due_date', 'N/A')}\n"

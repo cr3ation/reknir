@@ -8,6 +8,8 @@ import RevenueExpenseChart from '../components/RevenueExpenseChart'
 import MonthVerificationsModal from '../components/MonthVerificationsModal'
 import FiscalYearSelector from '../components/FiscalYearSelector'
 import { useToast } from '@/contexts/ToastContext'
+import GapsPanel from '@/components/compliance/GapsPanel'
+import type { VerificationGap } from '@/types'
 
 interface MonthVerification {
   id: number
@@ -20,6 +22,8 @@ interface MonthVerification {
 }
 
 interface DashboardData {
+  verification_gaps?: VerificationGap[]
+  locked_through?: string | null
   fiscal_year: {
     id: number
     label: string
@@ -231,6 +235,19 @@ export default function Dashboard() {
           color={data.liquidity >= 0 ? 'blue' : 'red'}
         />
       </div>
+
+      {/* Compliance */}
+      {selectedCompany && data.verification_gaps && data.verification_gaps.length > 0 && (
+        <GapsPanel
+          companyId={selectedCompany.id}
+          fiscalYearId={data.fiscal_year.id}
+          gaps={data.verification_gaps}
+          onChange={() => loadDashboardData()}
+        />
+      )}
+      {data.locked_through && (
+        <p className="text-sm text-gray-500">Bokföringen är låst t.o.m. {data.locked_through}.</p>
+      )}
 
       {/* Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

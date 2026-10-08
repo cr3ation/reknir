@@ -5,6 +5,8 @@ import { VATReportingPeriod, AccountingBasis, PaymentType, AttachmentRole } from
 import { Plus, Trash2, GripVertical, Building2, Edit2, Save, X, Calendar, Upload, Image, Layout, Download, HardDrive, RotateCcw, Loader2, CreditCard, Paperclip, Clock, Bot } from 'lucide-react'
 import RestoreModal from '@/components/RestoreModal'
 import SIE4ImportModal from '@/components/SIE4ImportModal'
+import PeriodLockPanel from '@/components/compliance/PeriodLockPanel'
+import AuditHistory from '@/components/compliance/AuditHistory'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCompany } from '@/contexts/CompanyContext'
 import { useFiscalYear } from '@/contexts/FiscalYearContext'
@@ -44,6 +46,8 @@ export default function SettingsPage() {
   const [downloadingBackup, setDownloadingBackup] = useState<string | null>(null)
   const [showRestoreModal, setShowRestoreModal] = useState(false)
   const [showSIE4ImportModal, setShowSIE4ImportModal] = useState(false)
+  const [exportingCompany, setExportingCompany] = useState(false)
+  const [importingCompany, setImportingCompany] = useState(false)
   const [schedule, setSchedule] = useState<BackupScheduleResponse | null>(null)
   const [scheduleForm, setScheduleForm] = useState({ enabled: false, interval_hours: 24, max_backups: 30, preferred_time: '03:00' })
   const [savingSchedule, setSavingSchedule] = useState(false)
@@ -508,6 +512,60 @@ export default function SettingsPage() {
       showToast(formatErrorMessage(error), 'error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleExportCompany = async () => {
+    if (!selectedCompany) {
+      showToast('Välj ett företag först', 'error')
+      return
+    }
+    try {
+      setExportingCompany(true)
+      const response = await backupApi.exportCompany(selectedCompany.id)
+      const blob = new Blob([response.data], { type: 'application/zip' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `reknir_company_${selectedCompany.org_number.replace(/[^0-9A-Za-z-]/g, '')}_${new Date().toISOString().split('T')[0]}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      showToast('Företagsarkiv exporterat', 'success')
+    } catch (error: any) {
+      console.error('Company export failed:', error)
+      showToast(error.response?.data?.detail || 'Export misslyckades', 'error')
+    } finally {
+      setExportingCompany(false)
+    }
+  }
+
+  const handleImportCompany = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.name.endsWith('.zip')) {
+      showToast('Filen måste vara ett .zip-arkiv', 'error')
+      return
+    }
+    try {
+      setImportingCompany(true)
+      const response = await backupApi.importCompany(file)
+      const warnings = response.data.warnings || []
+      showToast(
+        warnings.length > 0
+          ? `Företag importerat med ${warnings.length} varning(ar) – se konsolen`
+          : 'Företag importerat som nytt företag',
+        warnings.length > 0 ? 'error' : 'success',
+      )
+      if (warnings.length > 0) console.warn('Company import warnings:', warnings)
+      await loadCompanies()
+    } catch (error: any) {
+      console.error('Company import failed:', error)
+      showToast(error.response?.data?.detail || 'Import misslyckades', 'error')
+    } finally {
+      setImportingCompany(false)
     }
   }
 
@@ -1822,6 +1880,14 @@ export default function SettingsPage() {
       {/* Import/Export Tab */}
       {activeTab === 'import' && (
         <div>
+          {/* Compliance: period lock + processing history */}
+          {selectedCompany && (
+            <div className="mb-6 space-y-6">
+              <PeriodLockPanel companyId={selectedCompany.id} />
+              <AuditHistory companyId={selectedCompany.id} limit={50} />
+            </div>
+          )}
+
           {/* Backup Section */}
           <div className="card mb-6">
             <div className="flex items-center gap-2 mb-4">
@@ -1829,7 +1895,9 @@ export default function SettingsPage() {
               <h2 className="text-xl font-semibold">Systembackup</h2>
             </div>
             <p className="text-gray-600 mb-4">
-              Skapa fullständiga backups av hela systemet, inklusive databas och bilagor.
+              Skapa fullständiga backups av hela systemet: alla företag, användare och inställningar som JSON,
+              samt alla bilagor, fakturor, kvitton och logotyper. Arkivet är fristående (zip med JSON, filer och
+              SIE4 per räkenskapsår) och kan återställas i en ny installation.
             </p>
 
             {/* Create Backup */}
@@ -1985,7 +2053,12 @@ export default function SettingsPage() {
                           <td className="px-3 py-2 text-sm text-gray-900">
                             {formatBackupDate(backup.created_at)}
                           </td>
-                          <td className="px-3 py-2 text-sm text-gray-600">{backup.app_version}</td>
+                          <td className="px-3 py-2 text-sm text-gray-600">
+                            {backup.app_version}
+                            {backup.format === 'sql' && (
+                              <span className="ml-1 text-xs text-amber-600" title="Äldre pg_dump-format">(SQL)</span>
+                            )}
+                          </td>
                           <td className="px-3 py-2 text-sm text-gray-600">{backup.schema_version}</td>
                           <td className="px-3 py-2 text-sm text-gray-600">
                             {formatFileSize(backup.size_bytes)}
@@ -2047,6 +2120,32 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+
+          {/* Company archive Section */}
+      <div className="card mb-6">
+        <h2 className="text-xl font-semibold mb-4">Företagsarkiv</h2>
+        <p className="text-gray-600 mb-4">
+          Exportera hela företaget som ett fristående arkiv (JSON + alla bilagor, fakturor och kvitton, samt SIE4 per
+          räkenskapsår), eller importera ett sådant arkiv som ett nytt företag. Användare och lösenord ingår inte.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleExportCompany}
+            disabled={exportingCompany || !selectedCompany}
+            className="btn btn-primary inline-flex items-center"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {exportingCompany ? 'Exporterar...' : `Exportera ${selectedCompany?.name ?? 'företag'}`}
+          </button>
+          {user?.is_admin && (
+            <label className={`btn btn-secondary inline-flex items-center cursor-pointer ${importingCompany ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Upload className="w-4 h-4 mr-2" />
+              {importingCompany ? 'Importerar...' : 'Importera företagsarkiv'}
+              <input type="file" accept=".zip" onChange={handleImportCompany} className="hidden" disabled={importingCompany} />
+            </label>
+          )}
+        </div>
+      </div>
 
           {/* SIE4 Import/Export Section */}
       <div className="card mb-6">

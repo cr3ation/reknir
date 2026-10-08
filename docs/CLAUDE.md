@@ -45,7 +45,7 @@ reknir/
 ├── invoices/                 # Fakturabilagor
 ├── uploads/                  # Uppladdade filer (logotyper)
 │   └── logos/                # Företagslogotyper
-├── backups/                  # Backup-arkiv (.tar.gz)
+├── backups/                  # Backup-arkiv (.zip = JSON + filer; äldre .tar.gz)
 └── docker-compose.dev.yml    # Container orchestration (dev)
 ```
 
@@ -333,25 +333,36 @@ Detta innebär att en mall skapad år 2024 automatiskt fungerar år 2025, förut
 **Routes:**
 - `/settings` - Inställningar (fliken "Konteringsmallar")
 
+### 10b. Bokföringsregler (docs/COMPLIANCE.md)
+- Verifikationer ändras inte (PATCH 403 i produktion); rättelse via `POST /api/verifications/{id}/reverse` (`ledger_service.create_reversal`)
+- Numrering per serie **och räkenskapsår** (`ledger_service.next_verification_number`)
+- Periodlås: `period_locks`, `ledger_service.assert_period_open` i alla bokföringsvägar; `POST /api/companies/{id}/period-locks`
+- Luckor: `GET /api/verifications/gaps`, förklaringar i `verification_gap_explanations`, visas på dashboard
+- Audit log: `audit_log` via mapper events i `audit_service` (användare via contextvar från auth); `GET /api/audit-log/`
+- Rapporter: `GET /api/reports/aging`, `GET /api/reports/cash-flow`
+
 ### 11. Backup & Restore
-- Komplett backup-system med databas + bilagor i .tar.gz-arkiv
+- Backup = portabelt arkiv (`reknir_backup_*.zip`): alla tabeller som JSON/JSONL, alla filer
+  (bilagor, arkiverade faktura-PDF:er, kvitton, logotyper, AI-uppladdningar), SIE4 per räkenskapsår,
+  JSON Schema för formatet och manifest med SHA-256 per fil. Se `docs/PORTABLE_ARCHIVE.md`.
+- Format: `app/schemas/archive.py` (Pydantic-modellerna ÄR formatet, `format_version`).
+  Export: `app/services/archive_export_service.py`. Verifiering + import: `archive_import_service.py`.
+  Fullständig återställning: `restore_service.py` (verify → temp-DB + alembic → load → validering → swap).
 - Manuell och schemalagd backup (konfigurerbart intervall och retention)
-- Restore med wizard (5 steg: källa → välj → bekräfta → progress → resultat)
 - Kalenderbaserad backup-väljare med snabbåtkomst till senaste backuper
-- Restore från server eller filuppladdning
+- Restore från server eller uppladdad fil (.zip, eller äldre .tar.gz med pg_dump)
 - Radering av backuper
-- CLI-stöd (`backup create`, `backup list`, `backup restore`)
-- Metadata per backup: appversion, schemaversion, storlek, tidpunkt
+- Företagsarkiv: export/import av ett enskilt företag (utan användare/lösenord) som nytt företag
+- CLI: `backup [--sql] [--no-ai]`, `list-backups`, `verify-backup`, `restore`, `export-company`, `import-company`, `bokio-import` (`docs/BOKIO_IMPORT.md`, `app/services/bokio_import_service.py`)
+- Metadata per backup: appversion, schemaversion, format, företag, antal poster, storlek, tidpunkt
+- Filer lagras under `settings.uploads_dir` (`/app/uploads`): `attachments/`, `logos/`, `ai_uploads/` (`app/services/storage.py`)
 
-**Backup-arkiv innehåller:**
-- SQL-dump av hela databasen (pg_dump custom format)
-- Alla uppladdade filer (logotyper, bilagor, kvitton)
-- Metadata-fil (JSON) med version och schemainformation
-
-**API Endpoints:**
+**API endpoints:**
 - `POST /api/backup/create` - Skapa ny backup (returnerar metadata)
 - `GET /api/backup/list` - Lista alla backuper
 - `GET /api/backup/download/{filename}` - Ladda ner backup
+- `GET /api/backup/export-company/{company_id}` - Exportera ett företag som arkiv
+- `POST /api/backup/import-company` - Importera företagsarkiv som nytt företag
 - `DELETE /api/backup/{filename}` - Radera backup
 - `POST /api/backup/restore/{filename}` - Återställ från server-backup
 - `POST /api/backup/restore` - Återställ från uppladdad fil
